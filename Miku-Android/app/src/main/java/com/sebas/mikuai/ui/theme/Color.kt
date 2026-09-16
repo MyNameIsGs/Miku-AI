@@ -2,10 +2,11 @@ package com.sebas.mikuai.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val MikuTeal      = Color(0xFF39C5BB)
+val MikuTealDark  = Color(0xFF2A9490)
+val MikuBg        = Color(0xFF080B12)
+val MikuSurface   = Color(0xFF0F1320)
+val MikuSurface2  = Color(0xFF161C2E)
+val MikuBorder    = Color(0x2E39C5BB)
+val MikuTextDim   = Color(0xFF7A88A0)
+val MikuText      = Color(0xFFDDE3F0)

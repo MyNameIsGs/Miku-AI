@@ -46,6 +46,31 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+
+    // NUEVA — íconos extendidos de Material
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // NUEVA — ViewModel + Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+
+    // NUEVA — Navegación Compose
+    implementation("androidx.navigation:navigation-compose:2.8.5")
+
+    // NUEVA — WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // NUEVA — EncryptedSharedPreferences
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // NUEVA — OkHttp (para GitHub API y OpenRouter)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // NUEVA — Coroutines Android
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // NUEVA — Coil (para mostrar imágenes)
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

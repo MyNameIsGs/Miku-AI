@@ -9,9 +9,9 @@ class MikuRepository(ghToken: String, orKey: String) {
 
     suspend fun loadMemory(): MikuMemory {
         return MikuMemory(
-            world       = ghApi.getFile("memory/world.md"),
-            personality = ghApi.getFile("memory/personality.md"),
-            memories    = ghApi.getFile("memory/memories.md")
+            world       = ghApi.getFile("Miku-AI/memory/world.md"),
+            personality = ghApi.getFile("Miku-AI/memory/personality.md"),
+            memories    = ghApi.getFile("Miku-AI/memory/memories.md")
         )
     }
 
@@ -20,7 +20,7 @@ class MikuRepository(ghToken: String, orKey: String) {
         key: String,
         text: String
     ): GitHubFile {
-        val path    = "memory/$key.md"
+        val path    = "Miku-AI/memory/$key.md"
         val date    = LocalDate.now().toString()
         val current = when (key) {
             "personality" -> memory.personality
@@ -46,6 +46,7 @@ class MikuRepository(ghToken: String, orKey: String) {
     suspend fun chat(
         systemPrompt: String,
         history: List<ChatMessage>,
-        userMessage: String
-    ): String = orApi.chat(systemPrompt, history, userMessage)
+        userMessage: String,
+        userImageBase64: String? = null
+    ): String = orApi.chat(systemPrompt, history, userMessage, userImageBase64)
 }

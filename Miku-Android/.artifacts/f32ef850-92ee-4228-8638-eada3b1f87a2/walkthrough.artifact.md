@@ -1,34 +1,33 @@
-# Walkthrough — Miku-AI Android App Implementation
+# Walkthrough — Multimodal (Vision) Support for Miku-AI Android
 
-Successfully implemented all core layers and components of the MikuAI application following the provided specification. The application builds cleanly and is ready for deployment.
+Successfully added the ability for users to send photos to Hatsune Miku. The app now supports image selection, local previewing, and multimodal communication with the OpenRouter Vision API.
 
 ## Key Changes Made
 
-### Configuration & Manifests
-- **Gradle Dependencies**: Configured [build.gradle.kts](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/build.gradle.kts) with Material Icons Extended, LifeCycle ViewModel, Compose Navigation, WorkManager, Security Crypto, OkHttp, and Android Coroutines.
-- **Manifest Setup**: Replaced [AndroidManifest.xml](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/AndroidManifest.xml) to grant `INTERNET`, `POST_NOTIFICATIONS`, and `RECEIVE_BOOT_COMPLETED` permissions, define the custom application name, and register the WorkManager receiver.
+### Configuration & Dependencies
+- **Coil Integration**: Added `io.coil-kt:coil-compose:2.7.0` to [build.gradle.kts](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/build.gradle.kts) for efficient asynchronous image loading in the chat thread.
 
-### Application & Main Activity
-- **Custom Application Class**: Created [MikuApp.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/MikuApp.kt) to initialize the standard notification channel for Miku's status updates.
-- **Entry Point & Navigation**: Updated [MainActivity.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/MainActivity.kt) to manage runtime notification permissions, schedule the background `MikuNotificationWorker`, and handle navigation routing between setup and chat modes based on the presence of stored credentials.
+### Data Layer
+- **Multimodal Models**: Updated [Models.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/Models.kt) to allow storing optional `imageUrlBase64` data within conversation history.
+- **Vision API Serialization**: Refactored [OpenRouterApi.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/OpenRouterApi.kt) to detect images and construct the standard Multimodal content array (text + image_url) for OpenAI/OpenRouter compliant requests.
+- **Repository Passthrough**: Updated [MikuRepository.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/MikuRepository.kt) to delegate image payloads to the API layer.
 
-### Data Layer Implementation
-- **Models**: Created data models in [Models.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/Models.kt).
-- **Secure Preferences**: Built secure preference storage using EncryptedSharedPreferences in [SecurePrefs.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/SecurePrefs.kt).
-- **Network APIs**: Implemented high-performance HTTP networking for [GitHubApi.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/GitHubApi.kt) and [OpenRouterApi.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/OpenRouterApi.kt).
-- **Prompts & Logic**: Added system instructions and conversation constructors in [Prompts.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/Prompts.kt), tag filtering and extraction in [MarkerParser.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/MarkerParser.kt), and structural flow orchestration inside [MikuRepository.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/data/MikuRepository.kt).
-
-### Background Infrastructure
-- **Idle Worker**: Created [MikuNotificationWorker.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/worker/MikuNotificationWorker.kt) to periodically check if Miku has statements or observations to make when active.
-
-### UI & Theme Components
-- **Color Palette & Dark Scheme**: Added modern neon-teal themed attributes in [Color.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/ui/theme/Color.kt) and configured [Theme.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/ui/theme/Theme.kt).
-- **ViewModel Architecture**: Structured chat sessions, history constraints, and fire-and-forget GitHub persistence in [ChatViewModel.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/ui/ChatViewModel.kt).
-- **Composable Screens**: Developed the input onboarding view inside [SetupScreen.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/ui/SetupScreen.kt) and the fluid message thread/bottom-sheet options inside [ChatScreen.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/ui/ChatScreen.kt).
+### UI & Logic
+- **Base64 Optimization**: Implemented image scaling and JPEG compression logic in [ChatViewModel.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/ui/ChatViewModel.kt) to ensure that photos sent to the API do not exceed payload limits while maintaining visibility.
+- **Photo Picker**: Integrated `ActivityResultContracts.PickVisualMedia` in [ChatScreen.kt](file:///C:/Users/sebas/MikuAI-Project/Miku-Android/app/src/main/java/com/sebas/mikuai/ui/ChatScreen.kt) with a new camera button.
+- **Preview & Display**: Added a "floating" preview of the selected image above the input field and updated the user's message bubble to render the sent image using Coil's `AsyncImage`.
 
 ---
 
 ## Verification Results
 
 ### Automated Builds
-- Executed `gradle app:assembleDebug` successfully. All code compiles with zero compilation errors.
+- Executed `gradle app:assembleDebug` successfully. All multimodal logic and new UI components compile without errors.
+
+### Manual Verification Instructions
+1. Open the Miku chat.
+2. Tap the new **Photo/Camera** icon next to the input field.
+3. Select an image from your device.
+4. Verify the small preview with a "Close" (X) button appears above the text box.
+5. Send a message like *"¿Qué ves en esta foto?"*.
+6. Confirm Miku responds based on the visual content of the image.

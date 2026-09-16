@@ -27,19 +27,50 @@ class OpenRouterApi(private val apiKey: String) {
         systemPrompt: String,
         history: List<ChatMessage>,
         userMessage: String,
+        userImageBase64: String? = null,
         attempt: Int = 1
     ): String = withContext(Dispatchers.IO) {
         val messages = JSONArray().apply {
             put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
             history.forEach { msg ->
-                put(JSONObject().apply { put("role", msg.role); put("content", msg.content) })
+                if (msg.imageUrlBase64 != null) {
+                    val contentArray = JSONArray().apply {
+                        put(JSONObject().apply { put("type", "text"); put("text", msg.content) })
+                        put(JSONObject().apply {
+                            put("type", "image_url")
+                            put("image_url", JSONObject().apply {
+                                put("url", "data:image/jpeg;base64,${msg.imageUrlBase64}")
+                            })
+                        })
+                    }
+                    put(JSONObject().apply { put("role", msg.role); put("content", contentArray) })
+                } else {
+                    put(JSONObject().apply { put("role", msg.role); put("content", msg.content) })
+                }
             }
-            put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
+            
+            // Mensaje del turno actual
+            if (userImageBase64 != null) {
+                val contentArray = JSONArray().apply {
+                    put(JSONObject().apply { put("type", "text"); put("text", userMessage) })
+                    put(JSONObject().apply {
+                        put("type", "image_url")
+                        put("image_url", JSONObject().apply {
+                            put("url", "data:image/jpeg;base64,$userImageBase64")
+                        })
+                    })
+                }
+                put(JSONObject().apply { put("role", "user"); put("content", contentArray) })
+            } else {
+                put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
+            }
         }
 
-        val bodyJson = JSONObject().apply {
+                val bodyJson = JSONObject().apply {
             put("model", MODEL)
-            put("max_tokens", 1000)
+            // No hardcodeamos max_tokens para evitar truncamiento, o usamos un límite alto si el modelo lo requiere.
+            // Al removerlo o subirlo, permitimos respuestas completas y detalladas.
+            put("max_tokens", 4000)
             put("messages", messages)
         }.toString().toRequestBody("application/json".toMediaType())
 
@@ -54,7 +85,7 @@ class OpenRouterApi(private val apiKey: String) {
 
         if (response.code == 429 && attempt < 4) {
             delay(1500L * attempt)
-            return@withContext chat(systemPrompt, history, userMessage, attempt + 1)
+            return@withContext chat(systemPrompt, history, userMessage, userImageBase64, attempt + 1)
         }
         if (!response.isSuccessful) throw IOException("OpenRouter ${response.code}")
 
