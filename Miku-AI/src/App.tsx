@@ -6,11 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { load } from "@tauri-apps/plugin-store";
 import "./App.css";
-import {
-  loadMemoryContext,
-  appendToMemoryFile,
-  backupAndOverwriteMemoryFile,
-} from "./lib/memory";
+import { loadMemoryContext } from "./lib/memory";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useVoiceServer } from "./hooks/useVoiceServer";
@@ -19,19 +15,18 @@ import { useMovement } from "./hooks/useMovement";
 import { useFace } from "./hooks/useFace";
 import { useSpeech } from "./hooks/useSpeech";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
+import { useMemoryFiles } from "./hooks/useMemoryFiles";
+import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { ChatContentPart, ChatContent, ChatMessage } from "./types";
 import {
   OPENROUTER_MODEL,
   MAX_HISTORY_TURNS,
-  MEMORY_CONSOLIDATION_THRESHOLD,
   VOICE_PITCH_MIN,
   VOICE_PITCH_MAX,
   VOICE_RATE_MIN,
   VOICE_RATE_MAX,
-  IDLE_QUIRK_INTERVAL_MS,
 } from "./config/constants";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
-import { buildIdlePrompt, getHeldPoseSummary } from "./prompts/idlePrompt";
 import { fetchOpenRouterWithRetry } from "./lib/openrouter";
 import {
   parseMovementMarker,
@@ -70,16 +65,6 @@ function App() {
 
   const conversationHistoryRef = useRef<ChatMessage[]>([]);
 
-  const memoryWriteCountRef = useRef(0);
-  const isMemoryCountLoaded = useRef(false);
-
-  // Tarea 3.1, Paso 3: silencio se mide desde lo último de estas dos cosas
-  // que haya pasado -- una interacción real, o el último quirk (para que
-  // los quirks no se disparen en cadena sin pausa).
-  const lastInteractionTimeRef = useRef(performance.now());
-  const lastQuirkTimeRef = useRef(performance.now());
-  const isQuirkPendingRef = useRef(false);
-
   const movementBonesRef = useRef<Record<string, THREE.Object3D | null>>({});
   const fingerBonesRef = useRef<Record<string, THREE.Object3D | null>>({});
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -97,15 +82,11 @@ function App() {
         const store = await load(".settings.dat", { autoSave: false });
         const savedPitch = await store.get<number>("voicePitch");
         const savedRate = await store.get<number>("voiceRate");
-        const savedCount = await store.get<number>("memoryWriteCount");
         if (savedPitch !== null && savedPitch !== undefined)
           setVoicePitch(savedPitch);
         if (savedRate !== null && savedRate !== undefined)
           setVoiceRate(savedRate);
-        if (savedCount !== null && savedCount !== undefined)
-          memoryWriteCountRef.current = savedCount;
         isVoiceSettingsLoaded.current = true;
-        isMemoryCountLoaded.current = true;
       } catch (err) {
         console.error("Error cargando configuración de voz guardada:", err);
       }
@@ -235,48 +216,11 @@ function App() {
 
   const face = useFace({ vrmRef, gazeTargetObjectRef });
 
-  // --- Tarea 3.1, Paso 3: consulta aparte al LLM para un quirk idle. No
-  // se agrega al historial de conversación (no es una respuesta a
-  // Sebastián), y usa un prompt liviano -- solo identidad/personalidad y
-  // el marcador de movimiento, sin el resto de la documentación de manos,
-  // voz, etc., para no gastar tokens de más en algo que puede no producir
-  // ningún movimiento.
-  async function askForIdleQuirk() {
-    isQuirkPendingRef.current = true;
-    try {
-      const { personality, world } = await loadMemoryContext();
-      const heldPoseSummary = getHeldPoseSummary(
-        movement.boneTransitionsRef.current,
-        boneRestRotationRef.current,
-      );
-      const idleSystemPrompt = buildIdlePrompt({
-        world,
-        personality,
-        heldPoseSummary,
-      });
-
-      const response = await fetchOpenRouterWithRetry({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "system", content: idleSystemPrompt }],
-      });
-
-      const data = await response.json();
-      const reply: string = data.choices?.[0]?.message?.content ?? "";
-      console.log("[DEBUG-QUIRK] Respuesta idle cruda:", reply);
-
-      const parsed = parseMovementMarker(reply);
-      console.log("[DEBUG-QUIRK] Quirk parseado:", parsed);
-      if (parsed) {
-        // El doble de su propia duración de entrada antes de volver sola.
-        movement.scheduleMovement(parsed, "idle", parsed.durationMs);
-      }
-    } catch (err) {
-      console.error("Error en el quirk idle:", err);
-    } finally {
-      lastQuirkTimeRef.current = performance.now();
-      isQuirkPendingRef.current = false;
-    }
-  }
+  const idleQuirks = useIdleQuirks({
+    boneTransitionsRef: movement.boneTransitionsRef,
+    boneRestRotationRef,
+    scheduleMovement: movement.scheduleMovement,
+  });
 
   // Captura el canvas como imagen después de que la animación probablemente
   // ya se asentó, para que la próxima consulta al LLM pueda incluir cómo
@@ -295,87 +239,12 @@ function App() {
     isSpeakingRef: face.isSpeakingRef,
   });
 
-  async function consolidateMemoryFile(
-    file: "personality" | "memories",
-    currentContent: string,
-  ): Promise<string> {
-    const instruction =
-      file === "personality"
-        ? `Este es tu archivo de personalidad actual. Reescríbelo completo de forma más concisa: fusiona ideas repetidas en una sola línea, elimina duplicados, conserva todo lo genuinamente distinto. Responde SOLO con el contenido nuevo del archivo, sin explicaciones ni comentarios adicionales.`
-        : `Este es tu archivo de memorias actual. Reescríbelo completo: agrupa eventos similares antiguos en resúmenes breves (por ejemplo, "hubo varias sesiones de pruebas técnicas de voz y lipsync"), pero conserva los eventos más recientes con su detalle original. Elimina duplicados. Responde SOLO con el contenido nuevo del archivo, sin explicaciones ni comentarios adicionales.`;
-
-    const response = await fetchOpenRouterWithRetry({
-      model: OPENROUTER_MODEL,
-      messages: [
-        { role: "system", content: instruction },
-        { role: "user", content: currentContent },
-      ],
-    });
-
-    const data = await response.json();
-    const newContent: string | undefined =
-      data.choices?.[0]?.message?.content?.trim();
-
-    if (!newContent || newContent.length < 20) {
-      throw new Error(
-        `Consolidación de ${file}.md devolvió contenido vacío o sospechosamente corto`,
-      );
-    }
-
-    return newContent;
-  }
-
-  async function consolidateMemoryIfNeeded() {
-    if (memoryWriteCountRef.current < MEMORY_CONSOLIDATION_THRESHOLD) return;
-
-    try {
-      const { personality, memories } = await loadMemoryContext();
-
-      const [newPersonality, newMemories] = await Promise.allSettled([
-        consolidateMemoryFile("personality", personality),
-        consolidateMemoryFile("memories", memories),
-      ]);
-
-      if (newPersonality.status === "fulfilled") {
-        await backupAndOverwriteMemoryFile("personality", newPersonality.value);
-      } else {
-        console.error(
-          "Error consolidando personality.md, se conserva el original:",
-          newPersonality.reason,
-        );
-      }
-
-      if (newMemories.status === "fulfilled") {
-        await backupAndOverwriteMemoryFile("memories", newMemories.value);
-      } else {
-        console.error(
-          "Error consolidando memories.md, se conserva el original:",
-          newMemories.reason,
-        );
-      }
-
-      console.log("[INFO] Consolidación de memoria completada.");
-    } catch (err) {
-      console.error(
-        "Error inesperado durante la consolidación de memoria:",
-        err,
-      );
-    } finally {
-      memoryWriteCountRef.current = 0;
-      try {
-        const store = await load(".settings.dat", { autoSave: false });
-        await store.set("memoryWriteCount", 0);
-        await store.save();
-      } catch (err) {
-        console.error("Error guardando contador de memoria:", err);
-      }
-    }
-  }
+  const memoryFiles = useMemoryFiles();
 
   async function askMiku(userMessage: string, imageDataUrl?: string | null) {
     if (!isVoiceReady) return;
     setIsThinking(true);
-    lastInteractionTimeRef.current = performance.now();
+    idleQuirks.lastInteractionTimeRef.current = performance.now();
     try {
       const { personality, world, memories } = await loadMemoryContext();
 
@@ -442,19 +311,7 @@ function App() {
       let reply = data.choices?.[0]?.message?.content ?? "No obtuve respuesta.";
       console.log("[DEBUG-MOV] Respuesta cruda:", reply);
 
-      const personalityMatches = [
-        ...reply.matchAll(/\[GUARDAR_PERSONALIDAD:\s*([\s\S]*?)\]/g),
-      ];
-      for (const match of personalityMatches) {
-        await appendToMemoryFile("personality", match[1].trim());
-      }
-
-      const memoryMatches = [
-        ...reply.matchAll(/\[GUARDAR_MEMORIA:\s*([\s\S]*?)\]/g),
-      ];
-      for (const match of memoryMatches) {
-        await appendToMemoryFile("memories", match[1].trim());
-      }
+      await memoryFiles.processMemoryMarkers(reply);
 
       const expressionMatches = [
         ...reply.matchAll(
@@ -569,23 +426,11 @@ function App() {
           conversationHistoryRef.current.slice(-maxMessages);
       }
 
-      const newWrites = personalityMatches.length + memoryMatches.length;
-      if (newWrites > 0 && isMemoryCountLoaded.current) {
-        memoryWriteCountRef.current += newWrites;
-        try {
-          const store = await load(".settings.dat", { autoSave: false });
-          await store.set("memoryWriteCount", memoryWriteCountRef.current);
-          await store.save();
-        } catch (err) {
-          console.error("Error guardando contador de memoria:", err);
-        }
-      }
-
       setLlmResponse(reply);
 
       await speech.speak(reply, messagePitch, messageRate, expression);
 
-      consolidateMemoryIfNeeded();
+      memoryFiles.consolidateMemoryIfNeeded();
     } catch (err) {
       console.error("Error al consultar el LLM:", err);
       setLlmResponse("Hubo un error al conectar con el modelo.");
@@ -626,20 +471,9 @@ function App() {
     // importa si corre antes o después de updateMovement().
     movement.updateMovement(now, delta, elapsed);
 
-    // Tarea 3.1, Paso 3: si pasó suficiente silencio (sin interacción
-    // ni quirk previo) y no hay ya un quirk en curso, dispara uno
-    // nuevo. Es una llamada real al LLM, por eso el intervalo es largo
-    // y no se dispara si ya hay uno pendiente.
-    const silenceBase = Math.max(
-      lastInteractionTimeRef.current,
-      lastQuirkTimeRef.current,
-    );
-    if (
-      !isQuirkPendingRef.current &&
-      now - silenceBase > IDLE_QUIRK_INTERVAL_MS
-    ) {
-      askForIdleQuirk();
-    }
+    // Etapa 9: el temporizador de silencio y el disparo del quirk idle
+    // ahora los procesa useIdleQuirks.
+    idleQuirks.checkIdleQuirk(now);
 
     // Etapa 7: suavizado de expresiones, parpadeo y mirada errante ahora
     // los procesa useFace.
