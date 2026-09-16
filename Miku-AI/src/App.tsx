@@ -268,7 +268,7 @@ function App() {
       }));
 
       // Si hay una imagen de sí misma pendiente de un movimiento anterior,
-      // se adjunta acá -- así ve cómo quedó antes de responder este turno.
+      // se adjunta aquí -- así ve cómo quedó antes de responder este turno.
       const selfImage = lastSelfImageRef.current;
       lastSelfImageRef.current = null;
       const contentParts: ChatContentPart[] = [

@@ -24,7 +24,7 @@ type UseFaceParams = {
 export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
   const activeExpressionRef = useRef<string>("neutral");
   // Escrito por quien reproduce el audio (hoy speak() en App.tsx), leído
-  // acá para pausar la mirada errante mientras Miku habla.
+  // aquí para pausar la mirada errante mientras Miku habla.
   const isSpeakingRef = useRef(false);
 
   const expressionWeightsRef = useRef<Record<string, number>>({

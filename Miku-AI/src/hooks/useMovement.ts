@@ -285,7 +285,7 @@ export function useMovement({
       } else {
         // Tarea 3.1, Paso 2b: oscilación de dedos para gestos
         // "animados" -- más rápida y notoria que el balanceo ambiente
-        // del cuerpo, porque acá SÍ debe leerse como un movimiento
+        // del cuerpo, porque aquí SÍ debe leerse como un movimiento
         // activo, no como un tic de fondo.
         const side: "left" | "right" = boneName.startsWith("left")
           ? "left"
