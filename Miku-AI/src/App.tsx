@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { VRMLoaderPlugin, VRM, VRMUtils } from "@pixiv/three-vrm";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { VRM } from "@pixiv/three-vrm";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
@@ -15,6 +14,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useVoiceServer } from "./hooks/useVoiceServer";
+import { useVRMScene } from "./hooks/useVRMScene";
 import {
   MovementOrigin,
   BoneTransition,
@@ -27,8 +27,6 @@ import {
   ChatMessage,
 } from "./types";
 import {
-  WIDTH,
-  HEIGHT,
   OPENROUTER_MODEL,
   MAX_HISTORY_TURNS,
   MEMORY_CONSOLIDATION_THRESHOLD,
@@ -43,10 +41,8 @@ import {
 } from "./config/constants";
 import {
   BONE_RANGES_DEG,
-  MOVEMENT_BONE_NAMES,
   FINGER_KEY_TO_VRM_NAME,
   FINGER_PHALANX_MAX_DEG,
-  HAND_FINGER_BONE_NAMES,
 } from "./config/boneRanges";
 import { HAND_PRESET_SEEDS } from "./config/handPresets";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
@@ -81,8 +77,12 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
   const appWindow = getCurrentWindow();
   const vrmRef = useRef<VRM | null>(null);
+  const chestBoneRef = useRef<THREE.Object3D | null>(null);
+  const headBoneRef = useRef<THREE.Object3D | null>(null);
+  const gazeTargetObjectRef = useRef<THREE.Object3D | null>(null);
   const activeExpressionRef = useRef<string>("neutral");
   const isSpeakingRef = useRef(false);
   const [voicePitch, setVoicePitch] = useState(10);
@@ -96,8 +96,6 @@ function App() {
   const [transcript, setTranscript] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   const { isVoiceReady, handleCloseApp } = useVoiceServer();
-  const [isVrmLoaded, setIsVrmLoaded] = useState(false);
-  const isMikuReady = isVoiceReady && isVrmLoaded;
 
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
@@ -129,6 +127,25 @@ function App() {
   const boneRestRotationRef = useRef<
     Record<string, { x: number; y: number; z: number }>
   >({});
+
+  const expressionWeightsRef = useRef<Record<string, number>>({
+    happy: 0,
+    angry: 0,
+    sad: 0,
+    relaxed: 0,
+  });
+  const blinkStateRef = useRef({
+    nextBlinkTime: 2 + Math.random() * 3,
+    blinkElapsed: 0,
+    isBlinking: false,
+    currentBlinkDuration: 0.15,
+    doubleBlinkPending: false,
+  });
+  const gazeStateRef = useRef({
+    offsetCurrent: { x: 0, y: 0 },
+    target: null as string | null,
+    nextChangeTime: 3 + Math.random() * 4,
+  });
 
   // --- Tarea 3.1, Paso 2b: gestos de mano personalizados y animación ---
   // Gestos creados por Miku, persistidos en .settings.dat (no en memory.ts:
@@ -936,373 +953,252 @@ function App() {
     );
   };
 
-  useEffect(() => {
-    if (!canvasRef.current) return;
+  const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
+    lookUp: { x: 0, y: 0.7 },
+    lookDown: { x: 0, y: -0.7 },
+    lookLeft: { x: 0.7, y: 0 },
+    lookRight: { x: -0.7, y: 0 },
+  };
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(28, WIDTH / HEIGHT, 0.1, 20);
-    camera.position.set(-0.35, 1.0, 1.3);
-    cameraRef.current = camera;
+  // --- Etapa 5: el contrato del loop animate() vive en useVRMScene. Estas
+  // dos funciones son las que hoy corrían inline dentro del useEffect de
+  // la escena -- se mueven tal cual, solo leyendo de refs en lugar de
+  // variables de closure locales, porque el loop mismo pasó a vivir en el
+  // hook. onBeforeRender corre ANTES de vrm.update(delta) (escribe
+  // rotaciones de huesos y pesos de expresión); onAfterRender corre
+  // DESPUÉS de renderer.render() (captura de imagen de sí misma). El hook
+  // pasa "elapsed" (segundos, THREE.Clock) además de "now"
+  // (performance.now(), igual que espera selfImageCaptureAtRef) porque
+  // este código usa ambas fuentes de tiempo tal como estaban.
+  function onBeforeRender(now: number, delta: number, elapsed: number) {
+    const chestBone = chestBoneRef.current;
+    const headBone = headBoneRef.current;
 
-    const renderer = new THREE.WebGLRenderer({
-      canvas: canvasRef.current,
-      alpha: true,
-      antialias: true,
-      preserveDrawingBuffer: true,
-    });
-    renderer.setSize(WIDTH, HEIGHT);
-    rendererRef.current = renderer;
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1.28, 0);
-    controls.enabled = false;
-    controls.update();
-    controlsRef.current = controls;
-    (async () => {
-      try {
-        const store = await load(".settings.dat", { autoSave: false });
-        const saved = await store.get<{
-          position: [number, number, number];
-          target: [number, number, number];
-        }>("cameraPosition");
-        if (saved) {
-          camera.position.set(...saved.position);
-          controls.target.set(...saved.target);
-          controls.update();
-        }
-      } catch (err) {
-        console.error("Error cargando posición de cámara guardada:", err);
-      }
-    })();
+    if (chestBone) {
+      chestBone.rotation.x = Math.sin(elapsed * 1.2) * 0.025;
+    }
 
-    const light = new THREE.DirectionalLight(0xffffff, 1.2);
-    light.position.set(1, 1, 1).normalize();
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    if (headBone) {
+      headBone.rotation.y =
+        Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04;
+      headBone.rotation.x = Math.sin(elapsed * 0.3) * 0.03;
+    }
 
-    let currentVrm: VRM | undefined;
-    let chestBone: THREE.Object3D | null = null;
-    let headBone: THREE.Object3D | null = null;
-
-    let nextBlinkTime = 2 + Math.random() * 3;
-    let blinkElapsed = 0;
-    let isBlinking = false;
-    let currentBlinkDuration = 0.15;
-    let doubleBlinkPending = false;
-
-    const expressionWeights: Record<string, number> = {
-      happy: 0,
-      angry: 0,
-      sad: 0,
-      relaxed: 0,
-    };
-
-    let gazeTargetObject: THREE.Object3D | null = null;
-    const gazeOffsets: Record<string, { x: number; y: number }> = {
-      lookUp: { x: 0, y: 0.7 },
-      lookDown: { x: 0, y: -0.7 },
-      lookLeft: { x: 0.7, y: 0 },
-      lookRight: { x: -0.7, y: 0 },
-    };
-    const gazeOffsetCurrent = { x: 0, y: 0 };
-    let gazeTarget: string | null = null;
-    let nextGazeChangeTime = 3 + Math.random() * 4;
-
-    const loader = new GLTFLoader();
-    loader.register((parser) => new VRMLoaderPlugin(parser));
-
-    loader.load(
-      "/HatsuneMikuNT.vrm",
-      (gltf) => {
-        const vrm = gltf.userData.vrm as VRM;
-
-        currentVrm = vrm;
-        vrmRef.current = vrm;
-        VRMUtils.rotateVRM0(vrm);
-        scene.add(vrm.scene);
-
-        const leftUpperArm =
-          vrm.humanoid?.getNormalizedBoneNode("leftUpperArm");
-        const rightUpperArm =
-          vrm.humanoid?.getNormalizedBoneNode("rightUpperArm");
-        if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
-        if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
-
-        chestBone =
-          vrm.humanoid?.getNormalizedBoneNode("chest") ??
-          vrm.humanoid?.getNormalizedBoneNode("upperChest") ??
-          vrm.humanoid?.getNormalizedBoneNode("spine") ??
-          null;
-
-        headBone = vrm.humanoid?.getNormalizedBoneNode("head") ?? null;
-
-        for (const boneName of MOVEMENT_BONE_NAMES) {
-          movementBonesRef.current[boneName] =
-            vrm.humanoid?.getNormalizedBoneNode(boneName as any) ?? null;
-        }
-
-        for (const boneName of HAND_FINGER_BONE_NAMES) {
-          fingerBonesRef.current[boneName] =
-            vrm.humanoid?.getNormalizedBoneNode(boneName as any) ?? null;
-        }
-
-        for (const boneName of [
-          ...MOVEMENT_BONE_NAMES,
-          ...HAND_FINGER_BONE_NAMES,
-        ]) {
-          const node =
-            movementBonesRef.current[boneName] ??
-            fingerBonesRef.current[boneName];
-          if (node) {
-            boneRestRotationRef.current[boneName] = {
-              x: node.rotation.x,
-              y: node.rotation.y,
-              z: node.rotation.z,
-            };
-          }
-        }
-
-        gazeTargetObject = new THREE.Object3D();
-        gazeTargetObject.position.set(0, 1.4, 1);
-        scene.add(gazeTargetObject);
-        vrm.lookAt!.target = gazeTargetObject;
-        vrm.lookAt!.autoUpdate = true;
-
-        setIsVrmLoaded(true);
-      },
-      undefined,
-      (error) => console.error("Error cargando el VRM:", error),
+    // Tarea 3.1, Paso 3: si pasó suficiente silencio (sin interacción
+    // ni quirk previo) y no hay ya un quirk en curso, dispara uno
+    // nuevo. Es una llamada real al LLM, por eso el intervalo es largo
+    // y no se dispara si ya hay uno pendiente.
+    const silenceBase = Math.max(
+      lastInteractionTimeRef.current,
+      lastQuirkTimeRef.current,
     );
+    if (
+      !isQuirkPendingRef.current &&
+      now - silenceBase > IDLE_QUIRK_INTERVAL_MS
+    ) {
+      askForIdleQuirk();
+    }
 
-    const clock = new THREE.Clock();
-    let animationId: number;
+    // Tarea 3.1, Paso 3: procesa los regresos automáticos de quirks
+    // pendientes -- cuando llega su momento, programa una transición
+    // normal de vuelta a lo que tenía antes del quirk.
+    for (const key of Object.keys(pendingQuirkRevertsRef.current)) {
+      const revert = pendingQuirkRevertsRef.current[key];
+      if (now >= revert.revertAt) {
+        delete pendingQuirkRevertsRef.current[key];
+        const [boneName, axis] = key.split(".") as [string, "x" | "y" | "z"];
+        const boneNode = movementBonesRef.current[boneName];
+        if (!boneNode) continue;
+        boneTransitionsRef.current[key] = {
+          startValue: boneNode.rotation[axis],
+          targetValue: revert.revertToValue,
+          startTime: now,
+          duration: revert.revertDuration,
+          origin: "idle",
+          animated: false,
+        };
+      }
+    }
 
-    const animate = () => {
-      animationId = requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-      const elapsed = clock.getElapsedTime();
+    for (const key of Object.keys(boneTransitionsRef.current)) {
+      const transition = boneTransitionsRef.current[key];
+      const [boneName, axis] = key.split(".") as [string, "x" | "y" | "z"];
+      const boneNode =
+        movementBonesRef.current[boneName] ?? fingerBonesRef.current[boneName];
+      if (!boneNode) continue;
 
-      if (currentVrm) {
-        if (chestBone) {
-          chestBone.rotation.x = Math.sin(elapsed * 1.2) * 0.025;
+      let value: number;
+      if (transition.animated) {
+        // Oscila entre el punto de partida y el objetivo, ida y
+        // vuelta, con "duration" como período del ciclo completo -- no
+        // se "termina" nunca, sigue así hasta la próxima orden para
+        // este mismo hueso.
+        const cyclePos =
+          ((now - transition.startTime) % transition.duration) /
+          transition.duration;
+        const oscillation = Math.sin(cyclePos * 2 * Math.PI);
+        const amplitude = (transition.targetValue - transition.startValue) / 2;
+        const center =
+          transition.startValue +
+          (transition.targetValue - transition.startValue) / 2;
+        value = center + amplitude * oscillation;
+      } else {
+        const t = (now - transition.startTime) / transition.duration;
+        const eased = smoothstep(t);
+        value =
+          transition.startValue +
+          (transition.targetValue - transition.startValue) * eased;
+      }
+
+      const isFinger = !movementBonesRef.current[boneName];
+      let sway = 0;
+      if (!isFinger) {
+        // Balanceo ambiente del cuerpo (Paso 1) -- que ninguna pose,
+        // ni siquiera una "permanente", quede completamente congelada.
+        let seed = 0;
+        for (let i = 0; i < key.length; i++) seed += key.charCodeAt(i);
+        const freq = 0.3 + (seed % 7) * 0.05;
+        const phase = seed % 10;
+        const swayRad = (1.5 * Math.PI) / 180;
+        sway = Math.sin(elapsed * freq + phase) * swayRad;
+      } else {
+        // Tarea 3.1, Paso 2b: oscilación de dedos para gestos
+        // "animados" -- más rápida y notoria que el balanceo ambiente
+        // del cuerpo, porque acá SÍ debe leerse como un movimiento
+        // activo, no como un tic de fondo.
+        const side: "left" | "right" = boneName.startsWith("left")
+          ? "left"
+          : "right";
+        if (animatedHandSidesRef.current[side]) {
+          let seed = 0;
+          for (let i = 0; i < key.length; i++) seed += key.charCodeAt(i);
+          const freq = 1.5 + (seed % 5) * 0.3;
+          const phase = seed % 10;
+          const wiggleRad = (8 * Math.PI) / 180;
+          sway = Math.sin(elapsed * freq + phase) * wiggleRad;
         }
+      }
 
-        if (headBone) {
-          headBone.rotation.y =
-            Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04;
-          headBone.rotation.x = Math.sin(elapsed * 0.3) * 0.03;
+      boneNode.rotation[axis] = value + sway;
+    }
+
+    const expressionManager = vrmRef.current?.expressionManager;
+    if (expressionManager) {
+      const expressionWeights = expressionWeightsRef.current;
+      const blinkState = blinkStateRef.current;
+      const expressionActive =
+        activeExpressionRef.current !== "neutral" ||
+        Object.values(expressionWeights).some((w) => w > 0.05);
+
+      if (!blinkState.isBlinking) {
+        if (!expressionActive) {
+          blinkState.nextBlinkTime -= delta;
+          if (blinkState.nextBlinkTime <= 0) {
+            blinkState.isBlinking = true;
+            blinkState.blinkElapsed = 0;
+            blinkState.currentBlinkDuration = 0.12 + Math.random() * 0.08;
+          }
         }
-
-        // Tarea 3.1, Paso 3: si pasó suficiente silencio (sin interacción
-        // ni quirk previo) y no hay ya un quirk en curso, dispara uno
-        // nuevo. Es una llamada real al LLM, por eso el intervalo es largo
-        // y no se dispara si ya hay uno pendiente.
-        const nowForIdleCheck = performance.now();
-        const silenceBase = Math.max(
-          lastInteractionTimeRef.current,
-          lastQuirkTimeRef.current,
+      } else {
+        blinkState.blinkElapsed += delta;
+        const t = blinkState.blinkElapsed / blinkState.currentBlinkDuration;
+        const blinkValue = t < 0.5 ? t * 2 : (1 - t) * 2;
+        expressionManager.setValue(
+          "blink",
+          Math.max(0, Math.min(1, blinkValue)),
         );
-        if (
-          !isQuirkPendingRef.current &&
-          nowForIdleCheck - silenceBase > IDLE_QUIRK_INTERVAL_MS
-        ) {
-          askForIdleQuirk();
-        }
 
-        // Tarea 3.1, Paso 3: procesa los regresos automáticos de quirks
-        // pendientes -- cuando llega su momento, programa una transición
-        // normal de vuelta a lo que tenía antes del quirk.
-        for (const key of Object.keys(pendingQuirkRevertsRef.current)) {
-          const revert = pendingQuirkRevertsRef.current[key];
-          if (nowForIdleCheck >= revert.revertAt) {
-            delete pendingQuirkRevertsRef.current[key];
-            const [boneName, axis] = key.split(".") as [
-              string,
-              "x" | "y" | "z",
+        if (blinkState.blinkElapsed >= blinkState.currentBlinkDuration) {
+          blinkState.isBlinking = false;
+          expressionManager.setValue("blink", 0);
+
+          if (blinkState.doubleBlinkPending) {
+            blinkState.doubleBlinkPending = false;
+            blinkState.nextBlinkTime = 0.1 + Math.random() * 0.15;
+          } else {
+            blinkState.doubleBlinkPending = Math.random() < DOUBLE_BLINK_CHANCE;
+            blinkState.nextBlinkTime = 2 + Math.random() * 4;
+          }
+        }
+      }
+      const targetExpression = activeExpressionRef.current;
+      for (const shape of Object.keys(expressionWeights)) {
+        const target = shape === targetExpression ? 1 : 0;
+        expressionWeights[shape] +=
+          (target - expressionWeights[shape]) * EXPRESSION_SMOOTHING;
+        expressionManager.setValue(shape, expressionWeights[shape]);
+      }
+
+      const gazeTargetObject = gazeTargetObjectRef.current;
+      if (gazeTargetObject) {
+        const gazeState = gazeStateRef.current;
+        if (!isSpeakingRef.current) {
+          gazeState.nextChangeTime -= delta;
+          if (gazeState.nextChangeTime <= 0) {
+            const directions = [
+              "center",
+              "lookUp",
+              "lookDown",
+              "lookLeft",
+              "lookRight",
             ];
-            const boneNode = movementBonesRef.current[boneName];
-            if (!boneNode) continue;
-            boneTransitionsRef.current[key] = {
-              startValue: boneNode.rotation[axis],
-              targetValue: revert.revertToValue,
-              startTime: nowForIdleCheck,
-              duration: revert.revertDuration,
-              origin: "idle",
-              animated: false,
-            };
+            const choice =
+              directions[Math.floor(Math.random() * directions.length)];
+            gazeState.target = choice === "center" ? null : choice;
+            gazeState.nextChangeTime = 3 + Math.random() * 5;
           }
+        } else {
+          gazeState.target = null;
         }
 
-        const now = performance.now();
-        for (const key of Object.keys(boneTransitionsRef.current)) {
-          const transition = boneTransitionsRef.current[key];
-          const [boneName, axis] = key.split(".") as [string, "x" | "y" | "z"];
-          const boneNode =
-            movementBonesRef.current[boneName] ??
-            fingerBonesRef.current[boneName];
-          if (!boneNode) continue;
-
-          let value: number;
-          if (transition.animated) {
-            // Oscila entre el punto de partida y el objetivo, ida y
-            // vuelta, con "duration" como período del ciclo completo -- no
-            // se "termina" nunca, sigue así hasta la próxima orden para
-            // este mismo hueso.
-            const cyclePos =
-              ((now - transition.startTime) % transition.duration) /
-              transition.duration;
-            const oscillation = Math.sin(cyclePos * 2 * Math.PI);
-            const amplitude =
-              (transition.targetValue - transition.startValue) / 2;
-            const center =
-              transition.startValue +
-              (transition.targetValue - transition.startValue) / 2;
-            value = center + amplitude * oscillation;
-          } else {
-            const t = (now - transition.startTime) / transition.duration;
-            const eased = smoothstep(t);
-            value =
-              transition.startValue +
-              (transition.targetValue - transition.startValue) * eased;
-          }
-
-          const isFinger = !movementBonesRef.current[boneName];
-          let sway = 0;
-          if (!isFinger) {
-            // Balanceo ambiente del cuerpo (Paso 1) -- que ninguna pose,
-            // ni siquiera una "permanente", quede completamente congelada.
-            let seed = 0;
-            for (let i = 0; i < key.length; i++) seed += key.charCodeAt(i);
-            const freq = 0.3 + (seed % 7) * 0.05;
-            const phase = seed % 10;
-            const swayRad = (1.5 * Math.PI) / 180;
-            sway = Math.sin(elapsed * freq + phase) * swayRad;
-          } else {
-            // Tarea 3.1, Paso 2b: oscilación de dedos para gestos
-            // "animados" -- más rápida y notoria que el balanceo ambiente
-            // del cuerpo, porque acá SÍ debe leerse como un movimiento
-            // activo, no como un tic de fondo.
-            const side: "left" | "right" = boneName.startsWith("left")
-              ? "left"
-              : "right";
-            if (animatedHandSidesRef.current[side]) {
-              let seed = 0;
-              for (let i = 0; i < key.length; i++) seed += key.charCodeAt(i);
-              const freq = 1.5 + (seed % 5) * 0.3;
-              const phase = seed % 10;
-              const wiggleRad = (8 * Math.PI) / 180;
-              sway = Math.sin(elapsed * freq + phase) * wiggleRad;
-            }
-          }
-
-          boneNode.rotation[axis] = value + sway;
-        }
-
-        const expressionManager = currentVrm.expressionManager;
-        if (expressionManager) {
-          const expressionActive =
-            activeExpressionRef.current !== "neutral" ||
-            Object.values(expressionWeights).some((w) => w > 0.05);
-
-          if (!isBlinking) {
-            if (!expressionActive) {
-              nextBlinkTime -= delta;
-              if (nextBlinkTime <= 0) {
-                isBlinking = true;
-                blinkElapsed = 0;
-                currentBlinkDuration = 0.12 + Math.random() * 0.08;
-              }
-            }
-          } else {
-            blinkElapsed += delta;
-            const t = blinkElapsed / currentBlinkDuration;
-            const blinkValue = t < 0.5 ? t * 2 : (1 - t) * 2;
-            expressionManager.setValue(
-              "blink",
-              Math.max(0, Math.min(1, blinkValue)),
-            );
-
-            if (blinkElapsed >= currentBlinkDuration) {
-              isBlinking = false;
-              expressionManager.setValue("blink", 0);
-
-              if (doubleBlinkPending) {
-                doubleBlinkPending = false;
-                nextBlinkTime = 0.1 + Math.random() * 0.15;
-              } else {
-                doubleBlinkPending = Math.random() < DOUBLE_BLINK_CHANCE;
-                nextBlinkTime = 2 + Math.random() * 4;
-              }
-            }
-          }
-          const targetExpression = activeExpressionRef.current;
-          for (const shape of Object.keys(expressionWeights)) {
-            const target = shape === targetExpression ? 1 : 0;
-            expressionWeights[shape] +=
-              (target - expressionWeights[shape]) * EXPRESSION_SMOOTHING;
-            expressionManager.setValue(shape, expressionWeights[shape]);
-          }
-
-          if (gazeTargetObject) {
-            if (!isSpeakingRef.current) {
-              nextGazeChangeTime -= delta;
-              if (nextGazeChangeTime <= 0) {
-                const directions = [
-                  "center",
-                  "lookUp",
-                  "lookDown",
-                  "lookLeft",
-                  "lookRight",
-                ];
-                const choice =
-                  directions[Math.floor(Math.random() * directions.length)];
-                gazeTarget = choice === "center" ? null : choice;
-                nextGazeChangeTime = 3 + Math.random() * 5;
-              }
-            } else {
-              gazeTarget = null;
-            }
-
-            const targetOffset = gazeTarget
-              ? gazeOffsets[gazeTarget]
-              : { x: 0, y: 0 };
-            gazeOffsetCurrent.x +=
-              (targetOffset.x - gazeOffsetCurrent.x) * GAZE_SMOOTHING;
-            gazeOffsetCurrent.y +=
-              (targetOffset.y - gazeOffsetCurrent.y) * GAZE_SMOOTHING;
-            gazeTargetObject.position.x = gazeOffsetCurrent.x;
-            gazeTargetObject.position.y = 1.4 + gazeOffsetCurrent.y;
-          }
-        }
-
-        currentVrm.update(delta);
+        const targetOffset = gazeState.target
+          ? GAZE_OFFSETS[gazeState.target]
+          : { x: 0, y: 0 };
+        gazeState.offsetCurrent.x +=
+          (targetOffset.x - gazeState.offsetCurrent.x) * GAZE_SMOOTHING;
+        gazeState.offsetCurrent.y +=
+          (targetOffset.y - gazeState.offsetCurrent.y) * GAZE_SMOOTHING;
+        gazeTargetObject.position.x = gazeState.offsetCurrent.x;
+        gazeTargetObject.position.y = 1.4 + gazeState.offsetCurrent.y;
       }
+    }
+  }
 
-      controls.update();
-      renderer.render(scene, camera);
-
-      if (
-        selfImageCaptureAtRef.current !== null &&
-        performance.now() >= selfImageCaptureAtRef.current
-      ) {
-        selfImageCaptureAtRef.current = null;
-        try {
-          lastSelfImageRef.current = renderer.domElement.toDataURL("image/png");
-          console.log(
-            "[DEBUG-SELF] Data URL capturada (pégala en una pestaña nueva del navegador):",
-            lastSelfImageRef.current,
-          );
-        } catch (err) {
-          console.error("Error capturando imagen de sí misma:", err);
-        }
+  function onAfterRender(renderer: THREE.WebGLRenderer, now: number) {
+    if (
+      selfImageCaptureAtRef.current !== null &&
+      now >= selfImageCaptureAtRef.current
+    ) {
+      selfImageCaptureAtRef.current = null;
+      try {
+        lastSelfImageRef.current = renderer.domElement.toDataURL("image/png");
+        console.log(
+          "[DEBUG-SELF] Data URL capturada (pégala en una pestaña nueva del navegador):",
+          lastSelfImageRef.current,
+        );
+      } catch (err) {
+        console.error("Error capturando imagen de sí misma:", err);
       }
-    };
-    animate();
+    }
+  }
 
-    return () => {
-      cancelAnimationFrame(animationId);
-      renderer.dispose();
-    };
-  }, []);
+  const { isVrmLoaded } = useVRMScene({
+    canvasRef,
+    vrmRef,
+    rendererRef,
+    sceneRef,
+    cameraRef,
+    controlsRef,
+    boneRestRotationRef,
+    movementBonesRef,
+    fingerBonesRef,
+    chestBoneRef,
+    headBoneRef,
+    gazeTargetObjectRef,
+    onBeforeRender,
+    onAfterRender,
+  });
+  const isMikuReady = isVoiceReady && isVrmLoaded;
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0 && !freeCamera) {
