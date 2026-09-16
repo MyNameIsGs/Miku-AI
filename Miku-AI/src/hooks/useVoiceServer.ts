@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Command, Child } from "@tauri-apps/plugin-shell";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { REPO_ROOT } from "../config/constants";
 
 export function useVoiceServer() {
   const [isVoiceReady, setIsVoiceReady] = useState(false);
@@ -101,6 +102,9 @@ export function useVoiceServer() {
     const appWindow = getCurrentWindow();
     const unlisten = appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
+      await invoke("sync_memory_to_github", { repoRoot: REPO_ROOT }).catch(
+        () => {},
+      );
       await shutdownVoiceServer();
       await appWindow.destroy();
     });

@@ -22,3 +22,4 @@ export const GAZE_SMOOTHING = 0.03;
 export const DOUBLE_BLINK_CHANCE = 0.05;
 
 export const VOICE_SERVER_URL = "http://127.0.0.1:8899";
+export const REPO_ROOT = import.meta.env.VITE_REPO_ROOT ?? "";

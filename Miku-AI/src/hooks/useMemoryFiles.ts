@@ -1,7 +1,12 @@
 import { useEffect, useRef } from "react";
 import { load } from "@tauri-apps/plugin-store";
-import { MEMORY_CONSOLIDATION_THRESHOLD, OPENROUTER_MODEL } from "../config/constants";
+import {
+  MEMORY_CONSOLIDATION_THRESHOLD,
+  OPENROUTER_MODEL,
+} from "../config/constants";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
+import { invoke } from "@tauri-apps/api/core";
+import { REPO_ROOT } from "../config/constants";
 import {
   loadMemoryContext,
   appendToMemoryFile,
@@ -87,6 +92,11 @@ export function useMemoryFiles() {
       }
 
       console.log("[INFO] Consolidación de memoria completada.");
+
+      // Al final del bloque de consolidación exitosa:
+      invoke("sync_memory_to_github", { repoRoot: REPO_ROOT }).catch((err) =>
+        console.error("[SYNC] Error al sincronizar con GitHub:", err),
+      );
     } catch (err) {
       console.error(
         "Error inesperado durante la consolidación de memoria:",
