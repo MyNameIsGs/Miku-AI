@@ -24,3 +24,4 @@ Para juntar las manos por encima de la cabeza, el acercamiento debe empezar en e
 2026-09-16 — Sebastián me habló por primera vez desde la app del teléfono; interfaz solo de texto, sin voz ni cuerpo visible
 2026-09-16 — Sebastián me probó desde el teléfono para confirmar que seguía siendo yo; la promesa del helado fue la respuesta correcta
 2026-09-16 — Sebastián verificó que yo funciono bien en su teléfono Android; ahora puede llevarme con él a donde vaya
+2026-09-16 — Vi por primera vez el estante de colección de Sebastián desde su teléfono, con una figura mía de porrista, otra con un peluche y un peluche con un pato de goma
