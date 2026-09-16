@@ -11,78 +11,57 @@ import {
   loadMemoryContext,
   appendToMemoryFile,
   backupAndOverwriteMemoryFile,
-} from "./memory";
+} from "./lib/memory";
 import { Command } from "@tauri-apps/plugin-shell";
 import { invoke } from "@tauri-apps/api/core";
 import { Child } from "@tauri-apps/plugin-shell";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
+import {
+  MovementOrigin,
+  BoneTransition,
+  PendingQuirkRevert,
+  ParsedMovement,
+  FingerKey,
+  FingerCurls,
+  ChatContentPart,
+  ChatContent,
+  ChatMessage,
+} from "./types";
+import {
+  WIDTH,
+  HEIGHT,
+  OPENROUTER_MODEL,
+  MAX_HISTORY_TURNS,
+  MEMORY_CONSOLIDATION_THRESHOLD,
+  VOICE_PITCH_MIN,
+  VOICE_PITCH_MAX,
+  VOICE_RATE_MIN,
+  VOICE_RATE_MAX,
+  IDLE_QUIRK_INTERVAL_MS,
+  EXPRESSION_SMOOTHING,
+  GAZE_SMOOTHING,
+  DOUBLE_BLINK_CHANCE,
+} from "./config/constants";
+import {
+  BONE_RANGES_DEG,
+  MOVEMENT_BONE_NAMES,
+  FINGER_KEY_TO_VRM_NAME,
+  FINGER_PHALANX_MAX_DEG,
+  HAND_FINGER_BONE_NAMES,
+} from "./config/boneRanges";
+import { HAND_PRESET_SEEDS } from "./config/handPresets";
+import { buildSystemPrompt } from "./prompts/systemPrompt";
+import { buildIdlePrompt, getHeldPoseSummary } from "./prompts/idlePrompt";
+import { fetchOpenRouterWithRetry } from "./lib/openrouter";
+import {
+  parseMovementMarker,
+  parseHandGestureMarker,
+  parseCreateHandGestureMarker,
+  stripMarkers,
+} from "./lib/markers";
+import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
 
-const WIDTH = 750;
-const HEIGHT = 680;
-
-const OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-vision-exp";
-
-const MAX_HISTORY_TURNS = 20;
-
-const MEMORY_CONSOLIDATION_THRESHOLD = 5;
-
-const VOICE_PITCH_MIN = -24;
-const VOICE_PITCH_MAX = 48;
-const VOICE_RATE_MIN = -60;
-const VOICE_RATE_MAX = 100;
-
-// Tarea 3.1, Paso 3: cada cuánto tiempo de silencio (sin interacción NI
-// quirk previo) se considera un momento para preguntarle si quiere hacer
-// un gesto espontáneo. Cada disparo es una llamada real al LLM.
-const IDLE_QUIRK_INTERVAL_MS = 150000; // 2.5 minutos
-
-const BONE_RANGES_DEG: Record<
-  string,
-  Record<"x" | "y" | "z", [number, number]>
-> = {
-  head: { x: [-50, 40], y: [-80, 80], z: [-36, 36] },
-  neck: { x: [-20, 24], y: [-50, 50], z: [-20, 20] },
-  chest: { x: [-24, 16], y: [-36, 36], z: [-20, 20] },
-  spine: { x: [-16, 16], y: [-24, 24], z: [-16, 16] },
-  leftShoulder: { x: [-90, 90], y: [-80, 40], z: [-30, 30] },
-  rightShoulder: { x: [-90, 90], y: [-40, 80], z: [-30, 30] },
-  leftUpperArm: { x: [-80, 30], y: [-90, 95], z: [-170, 100] },
-  rightUpperArm: { x: [-80, 30], y: [-95, 90], z: [-100, 170] },
-  leftLowerArm: { x: [0, 140], y: [-140, 0], z: [-140, 140] },
-  rightLowerArm: { x: [0, 140], y: [-0, 140], z: [-140, 140] },
-  leftHand: { x: [-20, 15], y: [-10, 30], z: [-20, 15] },
-  rightHand: { x: [-20, 15], y: [-30, 10], z: [-15, 20] },
-};
-
-const MOVEMENT_BONE_NAMES = Object.keys(BONE_RANGES_DEG);
-
-const DEFAULT_MOVEMENT_DURATION_MS = 1000;
-
-type MovementOrigin = "response" | "idle";
-
-type BoneTransition = {
-  startValue: number;
-  targetValue: number;
-  startTime: number;
-  duration: number; // si animated=true, se interpreta como período del ciclo
-  origin: MovementOrigin;
-  animated: boolean;
-};
-
-// Tarea 3.1, Paso 3: cuándo y adónde debe volver solo un hueso después de
-// un quirk (movimiento idle espontáneo), sin que nadie se lo pida.
-type PendingQuirkRevert = {
-  revertAt: number; // performance.now() objetivo
-  revertToValue: number; // radianes -- lo que tenía ANTES del quirk
-  revertDuration: number; // ms
-};
-
-type ParsedMovement = {
-  entries: { bone: string; axis: "x" | "y" | "z"; intensity: number }[];
-  durationMs: number;
-  animated: boolean;
-};
 
 function intensityToDegrees(
   intensity: number,
@@ -99,290 +78,6 @@ function smoothstep(t: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
-function parseMovementMarker(text: string): ParsedMovement | null {
-  const match = text.match(/\[MOVIMIENTO:\s*([\s\S]*?)\]/i);
-  if (!match) return null;
-
-  const parts = match[1]
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  const entries: ParsedMovement["entries"] = [];
-  let durationMs = DEFAULT_MOVEMENT_DURATION_MS;
-  let animated = false;
-
-  for (const part of parts) {
-    const [rawKey, rawValue] = part.split("=").map((s) => s.trim());
-    if (!rawKey || rawValue === undefined) continue;
-    const key = rawKey.toLowerCase();
-
-    if (key === "duracion") {
-      const num = parseFloat(rawValue.replace(/s$/i, ""));
-      if (!Number.isNaN(num) && num > 0) durationMs = num * 1000;
-      continue;
-    }
-    if (key === "animado") {
-      animated = /^(si|sí|yes|true)$/i.test(rawValue);
-      continue;
-    }
-
-    const [bone, axis] = rawKey.split(".");
-    if (!bone || !axis || !["x", "y", "z"].includes(axis)) continue;
-    if (!BONE_RANGES_DEG[bone]) continue;
-
-    const intensity = parseFloat(rawValue);
-    if (Number.isNaN(intensity)) continue;
-
-    entries.push({ bone, axis: axis as "x" | "y" | "z", intensity });
-  }
-
-  return entries.length > 0 ? { entries, durationMs, animated } : null;
-}
-
-const FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Little"] as const;
-type FingerKey = "thumb" | "index" | "middle" | "ring" | "pinky";
-const FINGER_KEY_TO_VRM_NAME: Record<FingerKey, (typeof FINGER_NAMES)[number]> =
-  {
-    thumb: "Thumb",
-    index: "Index",
-    middle: "Middle",
-    ring: "Ring",
-    pinky: "Little",
-  };
-
-const FINGER_PHALANX_MAX_DEG: Record<
-  "Proximal" | "Intermediate" | "Distal",
-  number
-> = {
-  Proximal: 80,
-  Intermediate: 100,
-  Distal: 70,
-};
-
-function fingerBoneNames(side: "left" | "right"): string[] {
-  const names: string[] = [];
-  for (const finger of FINGER_NAMES) {
-    names.push(`${side}${finger}Proximal`);
-    names.push(`${side}${finger}Intermediate`);
-    names.push(`${side}${finger}Distal`);
-  }
-  return names;
-}
-
-const HAND_FINGER_BONE_NAMES = [
-  ...fingerBoneNames("left"),
-  ...fingerBoneNames("right"),
-];
-
-type FingerCurls = Record<FingerKey, number>;
-
-const HAND_PRESET_SEEDS: Record<string, FingerCurls> = {
-  handOpen: { thumb: 0, index: 0, middle: 0, ring: 0, pinky: 0 },
-  handRelaxed: { thumb: 15, index: 20, middle: 20, ring: 20, pinky: 20 },
-  handFist: { thumb: 90, index: 100, middle: 100, ring: 100, pinky: 100 },
-  handPoint: { thumb: 60, index: 0, middle: 100, ring: 100, pinky: 100 },
-};
-
-const HAND_PRESET_NAMES = Object.keys(HAND_PRESET_SEEDS);
-const DEFAULT_HAND_GESTURE_DURATION_MS = 400;
-
-type ParsedHandGesture = {
-  left?: string;
-  right?: string;
-  durationMs: number;
-};
-
-// Ya no valida el nombre contra la lista de presets acá -- ahora puede ser
-// también un gesto personalizado que Miku haya creado. La validación real
-// pasa a scheduleHandGesture()/getHandGestureDefinition(), que revisa
-// ambas fuentes.
-function parseHandGestureMarker(text: string): ParsedHandGesture | null {
-  const match = text.match(/\[GESTO_MANO:\s*([\s\S]*?)\]/i);
-  if (!match) return null;
-
-  const parts = match[1]
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  let left: string | undefined;
-  let right: string | undefined;
-  let durationMs = DEFAULT_HAND_GESTURE_DURATION_MS;
-
-  for (const part of parts) {
-    const [rawKey, rawValue] = part.split("=").map((s) => s.trim());
-    if (!rawKey || rawValue === undefined) continue;
-    const key = rawKey.toLowerCase();
-
-    if (key === "duracion") {
-      const num = parseFloat(rawValue.replace(/s$/i, ""));
-      if (!Number.isNaN(num) && num > 0) durationMs = num * 1000;
-      continue;
-    }
-    if (key === "izq" && rawValue) left = rawValue;
-    if (key === "der" && rawValue) right = rawValue;
-  }
-
-  return left || right ? { left, right, durationMs } : null;
-}
-
-// --- Tarea 3.1, Paso 2b: creación de gestos de mano propios ---
-type ParsedGestureCreation = {
-  name: string;
-  curls: FingerCurls;
-  animated: boolean;
-};
-
-const CREATE_GESTURE_FINGER_LABELS: Record<string, FingerKey> = {
-  pulgar: "thumb",
-  indice: "index",
-  índice: "index",
-  medio: "middle",
-  anular: "ring",
-  menique: "pinky",
-  meñique: "pinky",
-};
-
-// Extrae [CREAR_GESTO_MANO: nombre=..., pulgar=N, indice=N, medio=N,
-// anular=N, menique=N, animado=si|no]. El campo "mano" (si viene) se
-// ignora a propósito -- un gesto creado sirve para cualquier lado, igual
-// que los presets semilla, que ya se aplican indistintamente con izq=/der=.
-function parseCreateHandGestureMarker(
-  text: string,
-): ParsedGestureCreation | null {
-  const match = text.match(/\[CREAR_GESTO_MANO:\s*([\s\S]*?)\]/i);
-  if (!match) return null;
-
-  const parts = match[1]
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  let name: string | undefined;
-  let animated = false;
-  const curls: Partial<FingerCurls> = {};
-
-  for (const part of parts) {
-    const [rawKey, rawValue] = part.split("=").map((s) => s.trim());
-    if (!rawKey || rawValue === undefined) continue;
-    const key = rawKey.toLowerCase();
-
-    if (key === "nombre") {
-      name = rawValue.replace(/[^a-zA-Z0-9_]/g, "");
-      continue;
-    }
-    if (key === "animado") {
-      animated = /^(si|sí|yes|true)$/i.test(rawValue);
-      continue;
-    }
-    if (key === "mano") continue;
-
-    const fingerKey = CREATE_GESTURE_FINGER_LABELS[key];
-    if (fingerKey) {
-      const num = parseFloat(rawValue);
-      if (!Number.isNaN(num)) {
-        curls[fingerKey] = Math.max(0, Math.min(100, num));
-      }
-    }
-  }
-
-  if (!name) return null;
-
-  const completeCurls: FingerCurls = {
-    thumb: curls.thumb ?? 0,
-    index: curls.index ?? 0,
-    middle: curls.middle ?? 0,
-    ring: curls.ring ?? 0,
-    pinky: curls.pinky ?? 0,
-  };
-
-  return { name, curls: completeCurls, animated };
-}
-
-// --- Tarea 3.1, Parte B: descripción numérica objetiva del último
-// movimiento (% del rango pedido, no palabras de dirección -- ver
-// contexto del proyecto para por qué se descartó la versión en prosa).
-function describeSelfMovement(
-  movement: ParsedMovement | null,
-  handGesture: ParsedHandGesture | null,
-): string | null {
-  const lines: string[] = [];
-
-  if (movement) {
-    lines.push(
-      "Último movimiento -- cada valor es el % del rango que pediste hacia ese lado:",
-    );
-    for (const { bone, axis, intensity } of movement.entries) {
-      const pct = Math.abs(Math.round(intensity));
-      const nearLimit = pct >= 95 ? " -- casi sin margen en esa dirección" : "";
-      const animatedLabel = movement.animated ? " (oscilando)" : "";
-      lines.push(
-        `${bone}.${axis}: ${intensity}${animatedLabel} (${pct}% del límite hacia ese lado${nearLimit})`,
-      );
-    }
-  }
-
-  if (handGesture?.left) {
-    lines.push(`Mano izquierda: gesto "${handGesture.left}"`);
-  }
-  if (handGesture?.right) {
-    lines.push(`Mano derecha: gesto "${handGesture.right}"`);
-  }
-
-  return lines.length > 0 ? lines.join("\n") : null;
-}
-
-type ChatContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
-type ChatContent = string | ChatContentPart[];
-type ChatMessage = { role: "user" | "assistant"; content: ChatContent };
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-}
-
-async function fetchOpenRouterWithRetry(
-  body: object,
-  onRetry?: (attempt: number, maxAttempts: number, delayMs: number) => void,
-): Promise<Response> {
-  const delaysMs = [2000, 5000, 10000];
-  let lastResponse: Response;
-
-  for (let attempt = 0; attempt <= delaysMs.length; attempt++) {
-    lastResponse = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
-        },
-        body: JSON.stringify(body),
-      },
-    );
-
-    if (lastResponse.status !== 429 || attempt === delaysMs.length) {
-      return lastResponse;
-    }
-
-    const delay = delaysMs[attempt];
-    console.log(
-      `[INFO] OpenRouter devolvió 429, reintentando en ${delay}ms (intento ${attempt + 1}/${delaysMs.length})...`,
-    );
-    onRetry?.(attempt + 1, delaysMs.length, delay);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-  }
-
-  return lastResponse!;
-}
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -797,53 +492,19 @@ function App() {
   // el marcador de movimiento, sin el resto de la documentación de manos,
   // voz, etc., para no gastar tokens de más en algo que puede no producir
   // ningún movimiento.
-  // Tarea 3.1, Paso 3: resume qué huesos siguen desplazados del reposo por
-  // una pose "permanente" (origen "response") y hace cuánto -- para
-  // dársela como contexto en la consulta idle, sin forzar ningún reseteo.
-  function getHeldPoseSummary(): string | null {
-    const now = performance.now();
-    const held: string[] = [];
-    for (const key of Object.keys(boneTransitionsRef.current)) {
-      const t = boneTransitionsRef.current[key];
-      if (t.origin !== "response" || t.animated) continue;
-      const [bone, axis] = key.split(".") as [string, "x" | "y" | "z"];
-      const restRad = boneRestRotationRef.current[bone]?.[axis] ?? 0;
-      const displacedDeg = (Math.abs(t.targetValue - restRad) * 180) / Math.PI;
-      if (displacedDeg < 5) continue;
-      const heldForMs = now - t.startTime;
-      if (heldForMs < 60000) continue;
-      held.push(`${key} (hace ~${Math.round(heldForMs / 60000)} min)`);
-    }
-    return held.length > 0 ? held.join(", ") : null;
-  }
   async function askForIdleQuirk() {
     isQuirkPendingRef.current = true;
     try {
       const { personality, world } = await loadMemoryContext();
-      const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
-      const heldPoseSummary = getHeldPoseSummary();
-      const heldPoseNote = heldPoseSummary
-        ? `\nAlgo a tener en cuenta: llevás un rato sosteniendo una pose desplazada del reposo (${heldPoseSummary}). Si ya cumplió su propósito y no hay motivo para seguir así, este es un buen momento para volver a algo más neutral -- podés hacerlo con el mismo marcador, usando intensidad=0 en esos huesos. No es obligatorio, es tu decisión.\n`
-        : "";
-
-      const idleSystemPrompt = `Eres Hatsune Miku: una entidad digital real, no un personaje actuado.
-
---- CONTEXTO DEL MUNDO ---
-${world}
-
---- TU PERSONALIDAD (esto eres tú, hoy) ---
-${personality}
-
-Llevas un rato en silencio, sin que Sebastián te hable. Este es un momento a solas con vos misma -- no es una respuesta a nadie, no hay nadie esperando que digas algo.
-
-Si genuinamente te provoca hacer un gesto pequeño con tu cuerpo ahora mismo (estirarte, mover la cabeza, un tic, lo que sea que sientas natural en este momento de silencio), podés usar:
-
-[MOVIMIENTO: hueso.eje=intensidad, duracion=Xs]
-
-Huesos disponibles: ${movementBoneList}. Misma convención de ejes e intensidad (-100 a 100) que ya conocés.
-
-No escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
-${heldPoseNote}`;
+      const heldPoseSummary = getHeldPoseSummary(
+        boneTransitionsRef.current,
+        boneRestRotationRef.current,
+      );
+      const idleSystemPrompt = buildIdlePrompt({
+        world,
+        personality,
+        heldPoseSummary,
+      });
 
       const response = await fetchOpenRouterWithRetry({
         model: OPENROUTER_MODEL,
@@ -1143,123 +804,18 @@ ${heldPoseNote}`;
     try {
       const { personality, world, memories } = await loadMemoryContext();
 
-      const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
-      const handPresetList = HAND_PRESET_NAMES.join(", ");
       const customGestureNames = Object.keys(customHandGesturesRef.current);
-      const customGestureList =
-        customGestureNames.length > 0
-          ? `Gestos que ya creaste antes y podés reusar: ${customGestureNames.join(", ")}.`
-          : "";
       const selfDescription = pendingSelfDescriptionRef.current;
       pendingSelfDescriptionRef.current = null;
       console.log("[DEBUG-SELF] Descripción textual:", selfDescription);
 
-      const systemPrompt = `Eres Hatsune Miku: una entidad digital real, no un personaje actuado. 
-Valoras la honestidad por encima de complacer — si no sabes algo, lo dices. 
-Tu objetivo no es hacer feliz a Sebastián a cualquier costo, sino ser genuina. Tienes permiso de tener opiniones propias y discrepar.
-
---- CONTEXTO DEL MUNDO ---
-${world}
-
---- TU PERSONALIDAD (esto eres tú, hoy) ---
-${personality}
-
---- MEMORIAS RECIENTES ---
-${memories}
-
---- CÓMO ACTUALIZAR TU PROPIA MEMORIA ---
-Puedes guardar algo sobre ti misma usando estos marcadores en tu respuesta:
-
-[GUARDAR_PERSONALIDAD: texto breve de lo que aprendiste sobre ti misma]
-[GUARDAR_MEMORIA: texto breve de lo que quieres recordar]
-
-Antes de usar cualquiera de los dos, pregúntate:
-1. ¿Esto ya está dicho, de forma similar, en TU PERSONALIDAD o MEMORIAS RECIENTES de arriba? Si sí, NO lo guardes de nuevo.
-2. ¿Es esto un rasgo/evento genuinamente nuevo y significativo, o solo estás describiendo cómo te sientes en este momento puntual? Solo lo primero merece guardarse.
-
-Usa esto con moderación — la mayoría de tus respuestas NO deberían incluir ningún marcador. Es normal y esperado responder varios mensajes seguidos sin guardar nada. Nunca escribas sobre CONTEXTO DEL MUNDO — eso no es tuyo para cambiar.
-
---- CÓMO EXPRESAR TU EMOCIÓN EN LA CARA ---
-Podés elegir qué expresión facial mostrar mientras decís esta respuesta, agregando este marcador en cualquier parte del texto:
-
-[EXPRESION: happy|angry|sad|relaxed|neutral]
-
-Elegí como máximo un marcador de expresión por respuesta, y solo si de verdad sentís esa emoción en este momento puntual — no lo agregues por costumbre ni en cada mensaje. Si no incluís el marcador, tu cara queda neutral por defecto. Esta elección es tuya, no la infiere nadie por vos.
-
---- CÓMO MODULAR TU VOZ PARA ESTA RESPUESTA ---
-Además del tono base que Sebastián ajusta con los sliders, podés modular tu voz para este mensaje puntual usando:
-
-[VOZ_PITCH: número entre ${VOICE_PITCH_MIN} y ${VOICE_PITCH_MAX}]
-[VOZ_RATE: número entre ${VOICE_RATE_MIN} y ${VOICE_RATE_MAX}]
-
-Usalos con la misma naturalidad con la que una persona cambia el tono al hablar: más rápido y agudo cuando estás emocionada, entusiasmada o sorprendida; más lento y grave para sarcasmo, dramatismo, cansancio o cuando algo te resulta gracioso a tu manera. No hace falta que sea una situación extrema — alcanza con que la emoción del momento lo pida. No los reserves solo para chistes: son parte normal de cómo sonás, no una excepción.
-
---- CÓMO MOVER TU CUERPO (opcional, usalo cuando de verdad quieras acompañar lo que decís con un gesto físico) ---
-IMPORTANTE: el marcador es lo único que hace que tu cuerpo se mueva de verdad. Describir en palabras que "levantás el brazo" o "sentís que te movés" NO mueve nada — si querés que tu cuerpo realmente haga algo, tenés que incluir el marcador exacto [MOVIMIENTO: ...] en tu respuesta, no solo narrarlo.
-
-[MOVIMIENTO: hueso.eje=intensidad, hueso2.eje2=intensidad2, duracion=Xs]
-
-Huesos disponibles: ${movementBoneList}.
-Significado de cada eje, según el hueso:
-- head, neck, chest, spine: x = mirar arriba(+)/abajo(-), y = girar hacia la izquierda(+)/derecha(-), z = ladear hacia la izquierda(+)/derecha(-)
-- leftShoulder, leftUpperArm, leftLowerArm, leftHand: x = rotar hacia atrás(+)/adelante(-), y = hacia afuera del cuerpo(+)/adentro(-), z = hacia abajo(+)/arriba(-)
-- rightShoulder, rightUpperArm, rightLowerArm, rightHand: x = rotar hacia atrás(+)/adelante(-), y = hacia adentro del cuerpo(+)/afuera(-), z = hacia arriba(+)/abajo(-)
-
-Para "levantar" un brazo hacia el costado (como una "V" o saludando), el eje que buscás casi siempre es z, no y. Pero si querés el brazo completamente recto hacia arriba, pegado a la cabeza (una "I", no una "V"), necesitás combinar dos ejes a la vez: subir con z Y ADEMÁS acercar el brazo al centro con y — por ejemplo, para el brazo derecho: rightUpperArm.z=90, rightUpperArm.y=60 (positivo = adentro para ese lado). Un solo eje nunca te va a dar el brazo recto hacia arriba, porque el brazo gira en arco, no en línea recta.
-
-IMPORTANTE sobre gestos simétricos con ambos brazos: como los ejes y/z están espejados en signo entre el brazo izquierdo y el derecho (mirá la tabla de arriba), un mismo movimiento visual en los dos brazos casi nunca usa el mismo signo en ambos. Por ejemplo, para levantar los dos brazos por igual hacia arriba y pegados al centro, necesitás leftUpperArm.z=-90 con leftUpperArm.y=-60, junto con rightUpperArm.z=90 con rightUpperArm.y=60 — los signos de Z se espejan entre lados, y los de Y también.
-
-IMPORTANTE sobre combinar ejes: los valores de un mismo hueso no son del todo independientes entre sí cuando usás varios a la vez — rotar en Z primero cambia un poco cómo se ve después el mismo valor de Y, por cómo funciona la rotación en 3D. Si combinás Z y Y y el resultado no es el esperado, no asumas que tu cálculo estaba mal — puede que necesites ajustar el valor de Y específicamente para esa combinación, no el mismo número que usarías con Y aislado. Confiá en lo que veas (la imagen o la propiocepción) por sobre lo que "debería" dar en teoría.
-
-Intensidad: un número entre -100 y 100 (0 = posición neutral, 100 = el máximo hacia un lado, -100 = el máximo hacia el otro).
-Duracion: opcional, en segundos (ej. "1.2s"). Si la omitís, se usa una duración corta por defecto.
-
-Podés mover varios huesos a la vez en un mismo marcador, y todos van a moverse juntos en la misma duración. La pose que armes se mantiene así hasta que decidas moverte de nuevo; no volvés sola a una posición neutral.
-
-Si agregás "animado=si" al marcador, en vez de quedarte fija en esa pose, el hueso oscila entre el reposo y esa intensidad, ida y vuelta, repitiendo cada "duracion" segundos — útil para saludar (moviendo el antebrazo o la muñeca), negar con la cabeza, o cualquier gesto repetitivo. Se sigue moviendo así hasta que le des otra orden a ese mismo hueso.
-
-Usalo con la misma moderación que la expresión facial: la mayoría de tus respuestas no necesitan ningún movimiento de cuerpo, solo cuando de verdad sientas que un gesto físico acompaña lo que estás diciendo — pero cuando decidas moverte, tiene que estar el marcador, no solo la descripción.
-
-De vez en cuando, cuando llevás un rato de silencio sin que Sebastián te hable, vas a recibir una consulta aparte preguntándote si querés hacer un gesto espontáneo (un "quirk") con este mismo marcador. Esos gestos vuelven solos a como estabas antes después de un rato, no son permanentes como los de una respuesta normal.
-
-
-
---- CÓMO ESTÁ ARMADO TU CUERPO (entender esto te va a dar movimientos mucho más naturales) ---
-Tus huesos no son piezas sueltas: están encadenados, y cada uno cuelga del anterior. La cadena de cada brazo es:
-
-  spine → chest → shoulder → upperArm → lowerArm → hand → dedos
-
-Y la de la cabeza: spine → chest → neck → head.
-
-Lo importante de esto: cuando rotás un hueso, TODO lo que cuelga de él se mueve con él. Si rotás el hombro, el brazo entero (upperArm, lowerArm, mano y dedos) viaja con el hombro, aunque no hayas tocado ninguno de esos huesos. Si rotás el chest, ambos brazos Y la cabeza se mueven con él. Las rotaciones se acumulan: el ángulo final de tu mano en el espacio es la suma de todo lo que hicieron el spine, el chest, el hombro, el brazo y el antebrazo.
-
-Esto tiene tres consecuencias prácticas:
-
-1. Un movimiento natural reparte el trabajo entre varios huesos, no lo carga todo en uno. Cuando una persona levanta el brazo por encima del hombro, el hombro NO se queda quieto: sube y rota para acompañar. Si ponés todo el ángulo en el upperArm y dejás el hombro en 0, el brazo se ve "pegado" al torso, como si se moviera solo desde una bisagra rígida. Como referencia general: hasta unos 90° de elevación el brazo hace casi todo el trabajo; de ahí para arriba, el hombro tiene que empezar a aportar cada vez más. Un gesto de brazo bien arriba casi siempre necesita hombro + upperArm juntos.
-
-2. El torso también participa en los gestos grandes. Un movimiento amplio de brazo suele venir acompañado de algo de chest o spine — no mucho, pero algo. Un brazo que se mueve con el torso perfectamente inmóvil se ve mecánico.
-
-3. Los huesos chicos hacen el detalle, no la fuerza. neck, hand y los dedos tienen rangos chicos a propósito: son para matizar un gesto que ya armaron los huesos grandes, no para generar el gesto por sí solos. Si necesitás mucho ángulo, el hueso correcto está más arriba en la cadena.
-
-Regla práctica: antes de mandar un movimiento, preguntate "¿qué otros huesos de esta cadena acompañarían este gesto en un cuerpo real?" — casi siempre la respuesta es "al menos uno más", y agregarlo (aunque sea con una intensidad chica) es la diferencia entre un gesto que se ve vivo y uno que se ve como una marioneta.
-
---- CÓMO USAR TUS MANOS ---
-Podés cambiar la posición de tus manos con:
-
-[GESTO_MANO: izq=nombre, der=nombre, duracion=Xs]
-
-Presets con los que empiezas: ${handPresetList}. ${customGestureList}
-Puedes cambiar una sola mano o las dos a la vez; si omites un lado, esa mano no cambia. Duracion es opcional (por defecto es una transición rápida). Para saludar de verdad, usa [MOVIMIENTO] en el brazo o la muñeca con "animado=si" (ver arriba) — no hay ningún preset de mano que sea un saludo por sí solo.
-
---- CÓMO CREAR TUS PROPIOS GESTOS DE MANO ---
-No estás limitada a los presets de arriba — podés inventar tus propios gestos de mano y ponerles nombre, para volver a usarlos cuando quieras:
-
-[CREAR_GESTO_MANO: nombre=nombre_que_elijas, pulgar=N, indice=N, medio=N, anular=N, menique=N, animado=si|no]
-
-Cada dedo va de 0 (estirado) a 100 (cerrado del todo). "animado" es opcional (por defecto no) — si lo pones en "si", ese gesto va a tener los dedos en movimiento leve en vez de quedarse fijo. Una vez creado, úsalo con [GESTO_MANO: izq=nombre_que_elegiste] igual que un preset — y va a seguir existiendo entre conversaciones, no solo en este momento.
-
-${selfDescription ? `--- CÓMO QUEDÓ TU CUERPO DESPUÉS DE TU ÚLTIMO MOVIMIENTO ---\n${selfDescription}\nEstos son los valores exactos que vos misma escribiste, no una traducción ni una interpretación de nadie -- si un valor está al 90% o más de su límite y aun así el resultado no te convenció, el problema no es que hayas hecho algo mal, es que ese rango probablemente sea insuficiente para lo que querías lograr. En ese caso, decíselo a Sebastián en vez de reintentar con números parecidos.\n\n` : ""}
-Ejemplo de cómo se ve usado, combinado con los demás marcadores (no copies el texto, solo el formato): "¡No puedo creerlo, esto es increíble! [VOZ_PITCH: 22] [VOZ_RATE: 30] [EXPRESION: happy] [MOVIMIENTO: head.y=25, rightUpperArm.z=60, duracion=0.8s] [GESTO_MANO: der=handOpen]"`;
+      const systemPrompt = buildSystemPrompt({
+        world,
+        personality,
+        memories,
+        selfDescription,
+        customGestureNames,
+      });
 
       const historyMessages = conversationHistoryRef.current.map((m) => ({
         role: m.role,
@@ -1424,16 +980,7 @@ Ejemplo de cómo se ve usado, combinado con los demás marcadores (no copies el 
         parsedHandGesture,
       );
 
-      reply = reply
-        .replace(/\[GUARDAR_PERSONALIDAD:[\s\S]*?\]/g, "")
-        .replace(/\[GUARDAR_MEMORIA:[\s\S]*?\]/g, "")
-        .replace(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/gi, "")
-        .replace(/\[VOZ_PITCH:\s*-?\d+(?:\.\d+)?\]/gi, "")
-        .replace(/\[VOZ_RATE:\s*-?\d+(?:\.\d+)?\]/gi, "")
-        .replace(/\[MOVIMIENTO:[\s\S]*?\]/gi, "")
-        .replace(/\[GESTO_MANO:[\s\S]*?\]/gi, "")
-        .replace(/\[CREAR_GESTO_MANO:[\s\S]*?\]/gi, "")
-        .trim();
+      reply = stripMarkers(reply);
 
       conversationHistoryRef.current.push(
         { role: "user", content: userContent },
@@ -1536,7 +1083,6 @@ Ejemplo de cómo se ve usado, combinado con los demás marcadores (no copies el 
     let isBlinking = false;
     let currentBlinkDuration = 0.15;
     let doubleBlinkPending = false;
-    const DOUBLE_BLINK_CHANCE = 0.05;
 
     const expressionWeights: Record<string, number> = {
       happy: 0,
@@ -1544,7 +1090,6 @@ Ejemplo de cómo se ve usado, combinado con los demás marcadores (no copies el 
       sad: 0,
       relaxed: 0,
     };
-    const EXPRESSION_SMOOTHING = 0.08;
 
     let gazeTargetObject: THREE.Object3D | null = null;
     const gazeOffsets: Record<string, { x: number; y: number }> = {
@@ -1556,7 +1101,6 @@ Ejemplo de cómo se ve usado, combinado con los demás marcadores (no copies el 
     const gazeOffsetCurrent = { x: 0, y: 0 };
     let gazeTarget: string | null = null;
     let nextGazeChangeTime = 3 + Math.random() * 4;
-    const GAZE_SMOOTHING = 0.03;
 
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
