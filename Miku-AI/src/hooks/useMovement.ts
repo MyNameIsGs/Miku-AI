@@ -91,9 +91,6 @@ export function useMovement({
     for (const { bone, axis, intensity } of parsed.entries) {
       const range = BONE_RANGES_DEG[bone]?.[axis];
       const boneNode = movementBonesRef.current[bone];
-      console.log(
-        `[DEBUG-MOV] ${bone}.${axis}=${intensity} → range=${range ? range.join(",") : "SIN RANGO"} boneNode=${boneNode ? "OK" : "NULL"}`,
-      );
       if (!range || !boneNode) continue;
 
       const key = `${bone}.${axis}`;

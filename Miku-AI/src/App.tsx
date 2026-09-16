@@ -253,7 +253,6 @@ function App() {
       );
       const selfDescription = pendingSelfDescriptionRef.current;
       pendingSelfDescriptionRef.current = null;
-      console.log("[DEBUG-SELF] Descripción textual:", selfDescription);
 
       const systemPrompt = buildSystemPrompt({
         world,
@@ -272,10 +271,6 @@ function App() {
       // se adjunta acá -- así ve cómo quedó antes de responder este turno.
       const selfImage = lastSelfImageRef.current;
       lastSelfImageRef.current = null;
-      console.log(
-        "[DEBUG-SELF] ¿Hay imagen de sí misma?",
-        selfImage ? `sí (${selfImage.length} caracteres)` : "no",
-      );
       const contentParts: ChatContentPart[] = [
         { type: "text", text: userMessage },
       ];
@@ -309,7 +304,6 @@ function App() {
 
       const data = await response.json();
       let reply = data.choices?.[0]?.message?.content ?? "No obtuve respuesta.";
-      console.log("[DEBUG-MOV] Respuesta cruda:", reply);
 
       await memoryFiles.processMemoryMarkers(reply);
 
@@ -349,7 +343,6 @@ function App() {
       }
 
       const parsedMovement = parseMovementMarker(reply);
-      console.log("[DEBUG-MOV] Marcador parseado:", parsedMovement);
       if (parsedMovement) {
         movement.scheduleMovement(parsedMovement, "response");
       }
@@ -358,10 +351,6 @@ function App() {
       // incluye. Se guarda ANTES de procesar [GESTO_MANO], por si en la
       // misma respuesta ella crea un gesto y lo usa de inmediato.
       const parsedCreateGesture = parseCreateHandGestureMarker(reply);
-      console.log(
-        "[DEBUG-MOV] Creación de gesto parseada:",
-        parsedCreateGesture,
-      );
       if (parsedCreateGesture) {
         await movement.saveCustomHandGesture(
           parsedCreateGesture.name,
@@ -371,7 +360,6 @@ function App() {
       }
 
       const parsedHandGesture = parseHandGestureMarker(reply);
-      console.log("[DEBUG-MOV] Gesto de mano parseado:", parsedHandGesture);
       if (parsedHandGesture) {
         if (parsedHandGesture.left) {
           movement.scheduleHandGesture(
@@ -488,10 +476,6 @@ function App() {
       selfImageCaptureAtRef.current = null;
       try {
         lastSelfImageRef.current = renderer.domElement.toDataURL("image/png");
-        console.log(
-          "[DEBUG-SELF] Data URL capturada (pégala en una pestaña nueva del navegador):",
-          lastSelfImageRef.current,
-        );
       } catch (err) {
         console.error("Error capturando imagen de sí misma:", err);
       }

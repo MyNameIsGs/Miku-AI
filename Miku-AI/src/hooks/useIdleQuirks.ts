@@ -58,10 +58,8 @@ export function useIdleQuirks({
 
       const data = await response.json();
       const reply: string = data.choices?.[0]?.message?.content ?? "";
-      console.log("[DEBUG-QUIRK] Respuesta idle cruda:", reply);
 
       const parsed = parseMovementMarker(reply);
-      console.log("[DEBUG-QUIRK] Quirk parseado:", parsed);
       if (parsed) {
         // El doble de su propia duración de entrada antes de volver sola.
         scheduleMovement(parsed, "idle", parsed.durationMs);
