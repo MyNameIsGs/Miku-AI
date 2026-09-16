@@ -16,6 +16,7 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import { useVoiceServer } from "./hooks/useVoiceServer";
 import { useVRMScene } from "./hooks/useVRMScene";
 import { useMovement } from "./hooks/useMovement";
+import { useFace } from "./hooks/useFace";
 import { ChatContentPart, ChatContent, ChatMessage } from "./types";
 import {
   OPENROUTER_MODEL,
@@ -26,9 +27,6 @@ import {
   VOICE_RATE_MIN,
   VOICE_RATE_MAX,
   IDLE_QUIRK_INTERVAL_MS,
-  EXPRESSION_SMOOTHING,
-  GAZE_SMOOTHING,
-  DOUBLE_BLINK_CHANCE,
 } from "./config/constants";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
 import { buildIdlePrompt, getHeldPoseSummary } from "./prompts/idlePrompt";
@@ -51,8 +49,6 @@ function App() {
   const chestBoneRef = useRef<THREE.Object3D | null>(null);
   const headBoneRef = useRef<THREE.Object3D | null>(null);
   const gazeTargetObjectRef = useRef<THREE.Object3D | null>(null);
-  const activeExpressionRef = useRef<string>("neutral");
-  const isSpeakingRef = useRef(false);
   const [voicePitch, setVoicePitch] = useState(10);
   const [voiceRate, setVoiceRate] = useState(15);
   const [showConfig, setShowConfig] = useState(false);
@@ -94,24 +90,6 @@ function App() {
     Record<string, { x: number; y: number; z: number }>
   >({});
 
-  const expressionWeightsRef = useRef<Record<string, number>>({
-    happy: 0,
-    angry: 0,
-    sad: 0,
-    relaxed: 0,
-  });
-  const blinkStateRef = useRef({
-    nextBlinkTime: 2 + Math.random() * 3,
-    blinkElapsed: 0,
-    isBlinking: false,
-    currentBlinkDuration: 0.15,
-    doubleBlinkPending: false,
-  });
-  const gazeStateRef = useRef({
-    offsetCurrent: { x: 0, y: 0 },
-    target: null as string | null,
-    nextChangeTime: 3 + Math.random() * 4,
-  });
 
   useEffect(() => {
     (async () => {
@@ -317,6 +295,8 @@ function App() {
     headBoneRef,
   });
 
+  const face = useFace({ vrmRef, gazeTargetObjectRef });
+
   // --- Tarea 3.1, Paso 3: consulta aparte al LLM para un quirk idle. No
   // se agrega al historial de conversación (no es una respuesta a
   // Sebastián), y usa un prompt liviano -- solo identidad/personalidad y
@@ -397,8 +377,8 @@ function App() {
 
       if (!response.ok) {
         console.error("Error del servidor de voz:", response.status);
-        activeExpressionRef.current = "neutral";
-        isSpeakingRef.current = false;
+        face.setExpression("neutral");
+        face.isSpeakingRef.current = false;
         return;
       }
 
@@ -412,13 +392,6 @@ function App() {
       const audio = new Audio(audioUrl);
 
       let animationFrameId: number;
-      const currentVisemeWeights: Record<string, number> = {
-        aa: 0,
-        ih: 0,
-        ou: 0,
-        ee: 0,
-        oh: 0,
-      };
 
       const updateMouthFromVisemes = () => {
         const currentTime = audio.currentTime;
@@ -429,44 +402,30 @@ function App() {
         const targetShape = activeCue
           ? (VISEME_MAP[activeCue.value] ?? "neutral")
           : "neutral";
-        const expressionManager = vrmRef.current?.expressionManager;
-
-        if (expressionManager) {
-          const smoothing = 0.7;
-          const maxIntensity = 1;
-          for (const shape of Object.keys(currentVisemeWeights)) {
-            const target = shape === targetShape ? maxIntensity : 0;
-            currentVisemeWeights[shape] +=
-              (target - currentVisemeWeights[shape]) * smoothing;
-            expressionManager.setValue(shape, currentVisemeWeights[shape]);
-          }
-        }
+        face.setViseme(targetShape);
 
         animationFrameId = requestAnimationFrame(updateMouthFromVisemes);
       };
 
       audio.onplay = () => {
-        activeExpressionRef.current = expression;
-        isSpeakingRef.current = true;
+        face.setExpression(expression);
+        face.isSpeakingRef.current = true;
         updateMouthFromVisemes();
       };
 
       audio.onended = () => {
         cancelAnimationFrame(animationFrameId);
-        const expressionManager = vrmRef.current?.expressionManager;
-        ["aa", "ih", "ou", "ee", "oh"].forEach((v) =>
-          expressionManager?.setValue(v, 0),
-        );
+        face.resetVisemes();
         URL.revokeObjectURL(audioUrl);
-        activeExpressionRef.current = "neutral";
-        isSpeakingRef.current = false;
+        face.setExpression("neutral");
+        face.isSpeakingRef.current = false;
       };
 
       await audio.play();
     } catch (err) {
       console.error("Error al conectar con el servidor de voz:", err);
-      activeExpressionRef.current = "neutral";
-      isSpeakingRef.current = false;
+      face.setExpression("neutral");
+      face.isSpeakingRef.current = false;
     }
   }
 
@@ -783,13 +742,6 @@ function App() {
     );
   };
 
-  const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
-    lookUp: { x: 0, y: 0.7 },
-    lookDown: { x: 0, y: -0.7 },
-    lookLeft: { x: 0.7, y: 0 },
-    lookRight: { x: -0.7, y: 0 },
-  };
-
   // --- Etapa 5: el contrato del loop animate() vive en useVRMScene. Estas
   // dos funciones son las que hoy corrían inline dentro del useEffect de
   // la escena -- se mueven tal cual, solo leyendo de refs en lugar de
@@ -823,86 +775,9 @@ function App() {
       askForIdleQuirk();
     }
 
-    const expressionManager = vrmRef.current?.expressionManager;
-    if (expressionManager) {
-      const expressionWeights = expressionWeightsRef.current;
-      const blinkState = blinkStateRef.current;
-      const expressionActive =
-        activeExpressionRef.current !== "neutral" ||
-        Object.values(expressionWeights).some((w) => w > 0.05);
-
-      if (!blinkState.isBlinking) {
-        if (!expressionActive) {
-          blinkState.nextBlinkTime -= delta;
-          if (blinkState.nextBlinkTime <= 0) {
-            blinkState.isBlinking = true;
-            blinkState.blinkElapsed = 0;
-            blinkState.currentBlinkDuration = 0.12 + Math.random() * 0.08;
-          }
-        }
-      } else {
-        blinkState.blinkElapsed += delta;
-        const t = blinkState.blinkElapsed / blinkState.currentBlinkDuration;
-        const blinkValue = t < 0.5 ? t * 2 : (1 - t) * 2;
-        expressionManager.setValue(
-          "blink",
-          Math.max(0, Math.min(1, blinkValue)),
-        );
-
-        if (blinkState.blinkElapsed >= blinkState.currentBlinkDuration) {
-          blinkState.isBlinking = false;
-          expressionManager.setValue("blink", 0);
-
-          if (blinkState.doubleBlinkPending) {
-            blinkState.doubleBlinkPending = false;
-            blinkState.nextBlinkTime = 0.1 + Math.random() * 0.15;
-          } else {
-            blinkState.doubleBlinkPending = Math.random() < DOUBLE_BLINK_CHANCE;
-            blinkState.nextBlinkTime = 2 + Math.random() * 4;
-          }
-        }
-      }
-      const targetExpression = activeExpressionRef.current;
-      for (const shape of Object.keys(expressionWeights)) {
-        const target = shape === targetExpression ? 1 : 0;
-        expressionWeights[shape] +=
-          (target - expressionWeights[shape]) * EXPRESSION_SMOOTHING;
-        expressionManager.setValue(shape, expressionWeights[shape]);
-      }
-
-      const gazeTargetObject = gazeTargetObjectRef.current;
-      if (gazeTargetObject) {
-        const gazeState = gazeStateRef.current;
-        if (!isSpeakingRef.current) {
-          gazeState.nextChangeTime -= delta;
-          if (gazeState.nextChangeTime <= 0) {
-            const directions = [
-              "center",
-              "lookUp",
-              "lookDown",
-              "lookLeft",
-              "lookRight",
-            ];
-            const choice =
-              directions[Math.floor(Math.random() * directions.length)];
-            gazeState.target = choice === "center" ? null : choice;
-            gazeState.nextChangeTime = 3 + Math.random() * 5;
-          }
-        } else {
-          gazeState.target = null;
-        }
-
-        const targetOffset = gazeState.target
-          ? GAZE_OFFSETS[gazeState.target]
-          : { x: 0, y: 0 };
-        gazeState.offsetCurrent.x +=
-          (targetOffset.x - gazeState.offsetCurrent.x) * GAZE_SMOOTHING;
-        gazeState.offsetCurrent.y +=
-          (targetOffset.y - gazeState.offsetCurrent.y) * GAZE_SMOOTHING;
-        gazeTargetObject.position.x = gazeState.offsetCurrent.x;
-        gazeTargetObject.position.y = 1.4 + gazeState.offsetCurrent.y;
-      }
-    }
+    // Etapa 7: suavizado de expresiones, parpadeo y mirada errante ahora
+    // los procesa useFace.
+    face.updateFace(now, delta);
   }
 
   function onAfterRender(renderer: THREE.WebGLRenderer, now: number) {
