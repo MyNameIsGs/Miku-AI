@@ -17,6 +17,8 @@ import { useVoiceServer } from "./hooks/useVoiceServer";
 import { useVRMScene } from "./hooks/useVRMScene";
 import { useMovement } from "./hooks/useMovement";
 import { useFace } from "./hooks/useFace";
+import { useSpeech } from "./hooks/useSpeech";
+import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { ChatContentPart, ChatContent, ChatMessage } from "./types";
 import {
   OPENROUTER_MODEL,
@@ -56,14 +58,12 @@ function App() {
   const [showToolbar, setShowToolbar] = useState(false);
   const [freeCamera, setFreeCamera] = useState(false);
   const [clickThrough, setClickThrough] = useState(false);
-  const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   const { isVoiceReady, handleCloseApp } = useVoiceServer();
 
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
-  const recognitionRef = useRef<any>(null);
   const isVoiceSettingsLoaded = useRef(false);
 
   const transcriptRef = useRef<HTMLTextAreaElement>(null);
@@ -180,73 +180,11 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      console.error("Web Speech API no está disponible en este entorno.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "es-ES";
-
-    recognition.onresult = (event: any) => {
-      let finalText = "";
-      let interimText = "";
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const text = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += text;
-        } else {
-          interimText += text;
-        }
-      }
-
-      setTranscript((prev) => (finalText ? prev + " " + finalText : prev));
-      if (interimText) setTranscript((prev) => prev);
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("Error de reconocimiento de voz:", event.error);
-    };
-
-    recognition.onend = () => {
-      if (listeningRef.current) {
-        recognition.start();
-      }
-    };
-
-    recognitionRef.current = recognition;
-
-    return () => {
-      recognition.stop();
-    };
-  }, []);
-
-  const listeningRef = useRef(false);
-  useEffect(() => {
-    listeningRef.current = listening;
-  }, [listening]);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current || !isVoiceReady) return;
-
-    if (listening) {
-      recognitionRef.current.stop();
-      setListening(false);
-    } else {
-      setTranscript("");
-      recognitionRef.current.start();
-      setListening(true);
-      setShowTextInput(true);
-    }
-  };
+  const speechRecognition = useSpeechRecognition({
+    isVoiceReady,
+    setTranscript,
+    setShowTextInput,
+  });
 
   const [llmResponse, setLlmResponse] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -350,84 +288,12 @@ function App() {
     selfImageCaptureAtRef.current = performance.now() + delayMs;
   }
 
-  const VISEME_MAP: Record<string, string> = {
-    A: "neutral",
-    B: "ih",
-    C: "ee",
-    D: "aa",
-    E: "oh",
-    F: "ou",
-    G: "ih",
-    H: "aa",
-    X: "neutral",
-  };
-
-  async function speak(
-    text: string,
-    pitch: number,
-    rate: number,
-    expression: string,
-  ) {
-    try {
-      const response = await fetch("http://127.0.0.1:8899/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, pitch, tts_rate: rate }),
-      });
-
-      if (!response.ok) {
-        console.error("Error del servidor de voz:", response.status);
-        face.setExpression("neutral");
-        face.isSpeakingRef.current = false;
-        return;
-      }
-
-      const { audio: audioBase64, visemes } = await response.json();
-
-      const audioBytes = Uint8Array.from(atob(audioBase64), (c) =>
-        c.charCodeAt(0),
-      );
-      const audioBlob = new Blob([audioBytes], { type: "audio/wav" });
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      let animationFrameId: number;
-
-      const updateMouthFromVisemes = () => {
-        const currentTime = audio.currentTime;
-        const activeCue = visemes.find(
-          (cue: any) => currentTime >= cue.start && currentTime < cue.end,
-        );
-
-        const targetShape = activeCue
-          ? (VISEME_MAP[activeCue.value] ?? "neutral")
-          : "neutral";
-        face.setViseme(targetShape);
-
-        animationFrameId = requestAnimationFrame(updateMouthFromVisemes);
-      };
-
-      audio.onplay = () => {
-        face.setExpression(expression);
-        face.isSpeakingRef.current = true;
-        updateMouthFromVisemes();
-      };
-
-      audio.onended = () => {
-        cancelAnimationFrame(animationFrameId);
-        face.resetVisemes();
-        URL.revokeObjectURL(audioUrl);
-        face.setExpression("neutral");
-        face.isSpeakingRef.current = false;
-      };
-
-      await audio.play();
-    } catch (err) {
-      console.error("Error al conectar con el servidor de voz:", err);
-      face.setExpression("neutral");
-      face.isSpeakingRef.current = false;
-    }
-  }
+  const speech = useSpeech({
+    setExpression: face.setExpression,
+    setViseme: face.setViseme,
+    resetVisemes: face.resetVisemes,
+    isSpeakingRef: face.isSpeakingRef,
+  });
 
   async function consolidateMemoryFile(
     file: "personality" | "memories",
@@ -717,7 +583,7 @@ function App() {
 
       setLlmResponse(reply);
 
-      await speak(reply, messagePitch, messageRate, expression);
+      await speech.speak(reply, messagePitch, messageRate, expression);
 
       consolidateMemoryIfNeeded();
     } catch (err) {
@@ -862,14 +728,14 @@ function App() {
             Click-through
           </button>
           <button
-            className={listening ? "active" : ""}
-            onClick={toggleListening}
+            className={speechRecognition.listening ? "active" : ""}
+            onClick={speechRecognition.toggleListening}
             disabled={!isVoiceReady}
             title={
               !isVoiceReady ? "Esperando al servidor de voz..." : undefined
             }
           >
-            {listening ? "Escuchando..." : "Mic"}
+            {speechRecognition.listening ? "Escuchando..." : "Mic"}
           </button>
           <button
             className={showTextInput ? "active" : ""}
