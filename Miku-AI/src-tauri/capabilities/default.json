@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capacidades por defecto de la app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-ignore-cursor-events",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "store:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "binaries/miku-voice-server", "sidecar": true }]
+    },
+    {
+      "identifier": "fs:scope-appdata-recursive",
+      "allow": [{ "path": "$APPDATA/memory/**" }]
+    },
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
+    "fs:allow-exists",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    "dialog:allow-open"
+  ]
+}

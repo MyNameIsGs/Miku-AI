@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Python venvs and caches
+**/miku-voice-test/
+**/.venv/
+**/env/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+dist/
+**/dist/
+build/
+**/build/
+target/
+**/target/
+gen/
+**/gen/
+
+# Large model and binary weights
+*.pt
+*.pth
+*.index
+*.bin
+*.dll
+*.exe
+Miku-RVC/
+Miku-AI/src-tauri/hubert_base.pt
+Miku-AI/src-tauri/rmvpe.pt
+Miku-AI/src-tauri/binaries/
+Miku-AI/src-tauri/temp/
+Miku-AI/src-tauri/.cache/
+Miku-Voice-Service/rhubarb/
+
+# Backups and reference files
+*.bak
+*.backup*
+*.etapa0-bak
+
+# Environment and OS files
+.env.local
+.DS_Store
+Thumbs.db
