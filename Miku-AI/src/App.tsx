@@ -17,6 +17,7 @@ import { useSpeech } from "./hooks/useSpeech";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
+import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { ChatContentPart, ChatContent, ChatMessage } from "./types";
 import {
   OPENROUTER_MODEL,
@@ -55,7 +56,8 @@ function App() {
   const [clickThrough, setClickThrough] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
-  const { isVoiceReady, handleCloseApp } = useVoiceServer();
+  const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
+  const loadingPhrase = useLoadingPhrase(!isVoiceReady);
 
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
@@ -702,12 +704,33 @@ function App() {
       {!isMikuReady && (
         <div className="loading-overlay" onMouseDown={handleMouseDown}>
           <div className="voice-loading-badge">
-            <span className="loading-spinner" />
-            <span>
-              {!isVoiceReady
-                ? "Iniciando sistema de voz..."
-                : "Cargando a Miku..."}
-            </span>
+            <div className="voice-loading-badge-row">
+              <span className="loading-spinner" />
+              <span
+                key={!isVoiceReady ? (downloadProgress ? "download" : loadingPhrase) : "ready"}
+                className="loading-text"
+              >
+                {!isVoiceReady
+                  ? downloadProgress
+                    ? `Descargando el servidor de voz... ${Math.round(
+                        (downloadProgress.downloaded / downloadProgress.total) * 100,
+                      )}%`
+                    : loadingPhrase
+                  : "Cargando a Miku..."}
+              </span>
+            </div>
+            {downloadProgress && (
+              <div className="download-progress-track">
+                <div
+                  className="download-progress-fill"
+                  style={{
+                    width: `${Math.round(
+                      (downloadProgress.downloaded / downloadProgress.total) * 100,
+                    )}%`,
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
