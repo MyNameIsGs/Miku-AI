@@ -7,6 +7,7 @@ import unicodedata  # Forzar importación previa
 import subprocess
 import json
 import base64
+import io
 
 # 1. Limpieza de carpetas temporales viejas de PyInstaller
 def cleanup_old_mei_folders():
@@ -34,6 +35,7 @@ os.chdir(system_temp)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from tts_with_rvc import TTS_RVC
+from faster_whisper import WhisperModel
 from waitress import serve
 
 app = Flask(__name__)
@@ -70,6 +72,26 @@ try:
     print("[OK] Modelo de voz RVC cargado correctamente.")
 except Exception as e:
     print("[ERROR CRÍTICO] Fallo al cargar el modelo RVC:")
+    traceback.print_exc()
+
+# Carpeta propia para cachear el modelo Whisper (se descarga solo la primera vez)
+WHISPER_CACHE_DIR = os.path.join(
+    os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "MikuAI", "whisper-cache"
+)
+os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)
+
+print("[INFO] Cargando modelo Whisper (large-v3-turbo)... puede tardar en el primer arranque si se descarga.")
+try:
+    whisper_model = WhisperModel(
+        "large-v3-turbo",
+        device="cuda",
+        compute_type="float16",
+        download_root=WHISPER_CACHE_DIR,
+    )
+    print("[OK] Modelo Whisper cargado correctamente.")
+except Exception as e:
+    whisper_model = None
+    print("[ERROR CRÍTICO] Fallo al cargar el modelo Whisper:")
     traceback.print_exc()
 
 
@@ -133,6 +155,29 @@ def speak():
         })
     except Exception as e:
         print("[ERROR EN /speak]:")
+        traceback.print_exc()
+        return {"error": str(e)}, 500
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
+    try:
+        if whisper_model is None:
+            return {"error": "El modelo Whisper no está disponible"}, 503
+
+        audio_bytes = request.get_data()
+        if not audio_bytes:
+            return {"error": "No se recibió audio"}, 400
+
+        segments, _info = whisper_model.transcribe(
+            io.BytesIO(audio_bytes),
+            language="es",
+        )
+        text = "".join(segment.text for segment in segments).strip()
+
+        return jsonify({"text": text})
+    except Exception as e:
+        print("[ERROR EN /transcribe]:")
         traceback.print_exc()
         return {"error": str(e)}, 500
 
