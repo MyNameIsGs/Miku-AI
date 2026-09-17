@@ -44,7 +44,19 @@ export type ChatContentPart =
 
 export type ChatContent = string | ChatContentPart[];
 
-export type ChatMessage = {
-  role: "user" | "assistant";
-  content: ChatContent;
+// Tarea 6.1: tool calling nativo de OpenRouter. `function.arguments` viaja
+// como string JSON tal cual lo devuelve la API -- se parsea recién al
+// ejecutar la tool (ver lib/tools/index.ts), no acá.
+export type ToolCall = {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
 };
+
+export type ChatMessage =
+  | { role: "user"; content: ChatContent }
+  | { role: "assistant"; content: ChatContent; tool_calls?: ToolCall[] }
+  | { role: "tool"; content: string; tool_call_id: string };

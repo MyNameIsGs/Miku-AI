@@ -46,3 +46,6 @@ Miku-Voice-Service/release-staging/
 .env.local
 .DS_Store
 Thumbs.db
+
+# Dumps de scripts de prueba sueltos (scripts/*.mjs sí se versionan)
+scripts/*-results/

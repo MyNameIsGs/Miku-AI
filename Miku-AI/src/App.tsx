@@ -28,7 +28,7 @@ import {
   VOICE_RATE_MAX,
 } from "./config/constants";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
-import { fetchOpenRouterWithRetry } from "./lib/openrouter";
+import { runToolCallingCycle } from "./lib/openrouter";
 import {
   parseMovementMarker,
   parseHandGestureMarker,
@@ -69,7 +69,13 @@ function App() {
 
   const transcriptRef = useRef<HTMLTextAreaElement>(null);
 
-  const conversationHistoryRef = useRef<ChatMessage[]>([]);
+  // Tarea 6.1: cada elemento es un TURNO completo, no un mensaje suelto --
+  // un turno simple es [user, assistant], pero uno con tool calling es
+  // [user, assistant(tool_calls), tool, tool, ..., assistant(final)]. Se
+  // recorta por turno completo, nunca por mensaje individual, para no
+  // partir un grupo assistant+tool a la mitad (ver gotcha en
+  // lib/openrouter.ts).
+  const conversationHistoryRef = useRef<ChatMessage[][]>([]);
 
   const movementBonesRef = useRef<Record<string, THREE.Object3D | null>>({});
   const fingerBonesRef = useRef<Record<string, THREE.Object3D | null>>({});
@@ -268,10 +274,25 @@ function App() {
         customGestureNames,
       });
 
-      const historyMessages = conversationHistoryRef.current.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Aplana los turnos guardados a la forma plana que espera la API,
+      // pasando tool_calls/tool_call_id tal cual cuando corresponde.
+      const historyMessages = conversationHistoryRef.current.flat().map((m) => {
+        if (m.role === "tool") {
+          return {
+            role: "tool",
+            content: m.content,
+            tool_call_id: m.tool_call_id,
+          };
+        }
+        if (m.role === "assistant") {
+          return {
+            role: "assistant",
+            content: m.content,
+            ...(m.tool_calls ? { tool_calls: m.tool_calls } : {}),
+          };
+        }
+        return { role: "user", content: m.content };
+      });
 
       // Si hay una imagen de sí misma pendiente de un movimiento anterior,
       // se adjunta aquí -- así ve cómo quedó antes de responder este turno.
@@ -292,15 +313,13 @@ function App() {
       const userContent: ChatContent =
         contentParts.length > 1 ? contentParts : userMessage;
 
-      const response = await fetchOpenRouterWithRetry(
-        {
-          model: OPENROUTER_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...historyMessages,
-            { role: "user", content: userContent },
-          ],
-        },
+      const toolCycle = await runToolCallingCycle(
+        OPENROUTER_MODEL,
+        [
+          { role: "system", content: systemPrompt },
+          ...historyMessages,
+          { role: "user", content: userContent },
+        ],
         (attempt, max, delay) => {
           setLlmResponse(
             `Miku está saturada del lado del proveedor, reintentando en ${delay / 1000}s... (intento ${attempt}/${max})`,
@@ -308,8 +327,7 @@ function App() {
         },
       );
 
-      const data = await response.json();
-      let reply = data.choices?.[0]?.message?.content ?? "No obtuve respuesta.";
+      let reply = toolCycle.finalContent || "No obtuve respuesta.";
 
       await memoryFiles.processMemoryMarkers(reply);
 
@@ -410,14 +428,19 @@ function App() {
 
       reply = stripMarkers(reply);
 
-      conversationHistoryRef.current.push(
+      // El turno completo -- incluyendo cualquier vuelta de tool calling
+      // que haya habido -- se guarda como bloque indivisible (ver gotcha en
+      // lib/openrouter.ts). El último mensaje assistant se reemplaza por la
+      // versión ya sin marcadores, igual que antes de la Tarea 6.1.
+      const turnMessages: ChatMessage[] = [
         { role: "user", content: userContent },
+        ...toolCycle.appendedMessages.slice(0, -1),
         { role: "assistant", content: reply },
-      );
-      const maxMessages = MAX_HISTORY_TURNS * 2;
-      if (conversationHistoryRef.current.length > maxMessages) {
+      ];
+      conversationHistoryRef.current.push(turnMessages);
+      if (conversationHistoryRef.current.length > MAX_HISTORY_TURNS) {
         conversationHistoryRef.current =
-          conversationHistoryRef.current.slice(-maxMessages);
+          conversationHistoryRef.current.slice(-MAX_HISTORY_TURNS);
       }
 
       setLlmResponse(reply);
