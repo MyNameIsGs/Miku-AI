@@ -57,7 +57,11 @@ function App() {
   const [transcript, setTranscript] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
-  const loadingPhrase = useLoadingPhrase(!isVoiceReady);
+  const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
+    !isVoiceReady,
+    3000,
+    1400,
+  );
 
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
@@ -707,8 +711,11 @@ function App() {
             <div className="voice-loading-badge-row">
               <span className="loading-spinner" />
               <span
-                key={!isVoiceReady ? (downloadProgress ? "download" : loadingPhrase) : "ready"}
-                className="loading-text"
+                className={`loading-text ${
+                  !isVoiceReady && !downloadProgress && !loadingPhraseVisible
+                    ? "loading-text-hidden"
+                    : ""
+                }`}
               >
                 {!isVoiceReady
                   ? downloadProgress

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const PHRASES = [
   "Afinando la voz de Miku...",
@@ -10,18 +10,38 @@ const PHRASES = [
   "Ajustando el micrófono de Miku...",
 ];
 
-export function useLoadingPhrase(active: boolean, intervalMs = 3000): string {
+type LoadingPhraseState = {
+  phrase: string;
+  visible: boolean;
+};
+
+export function useLoadingPhrase(
+  active: boolean,
+  intervalMs = 3000,
+  fadeMs = 400,
+): LoadingPhraseState {
   const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const swapTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!active) return;
 
-    const timer = setInterval(() => {
-      setIndex((i) => (i + 1) % PHRASES.length);
+    const intervalId = window.setInterval(() => {
+      setVisible(false);
+      swapTimeoutRef.current = window.setTimeout(() => {
+        setIndex((i) => (i + 1) % PHRASES.length);
+        setVisible(true);
+      }, fadeMs);
     }, intervalMs);
 
-    return () => clearInterval(timer);
-  }, [active, intervalMs]);
+    return () => {
+      window.clearInterval(intervalId);
+      if (swapTimeoutRef.current !== null) {
+        window.clearTimeout(swapTimeoutRef.current);
+      }
+    };
+  }, [active, intervalMs, fadeMs]);
 
-  return PHRASES[index];
+  return { phrase: PHRASES[index], visible };
 }
