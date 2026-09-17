@@ -46,7 +46,10 @@ export function buildAbrirAplicacionTool(): ToolDefinition {
       }
 
       try {
-        await invoke("launch_app_by_path", { path: app.path });
+        await invoke("launch_app_by_path", {
+          path: app.path,
+          processName: app.processName ?? null,
+        });
         return `Abrí "${app.name}".`;
       } catch (err) {
         return `Error al abrir "${app.name}": ${

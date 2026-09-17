@@ -4,10 +4,33 @@ use std::path::{Path, PathBuf};
 // Tarea 6.2: descubrimiento automático de aplicaciones instaladas, escaneando
 // los accesos directos (.lnk) del menú Inicio -- ni se registran a mano ni
 // se resuelve a qué apuntan, Windows hace eso solo al ejecutar el .lnk.
+//
+// `process_name` (Tarea 6.2, mejora post-lanzamiento): nombre del .exe al
+// que apunta el acceso directo, si se pudo resolver. Sirve para, antes de
+// lanzar de nuevo, buscar si ya hay una ventana de ese proceso abierta y
+// traerla al frente en vez de abrir una ventana nueva -- reportado con
+// Opera GX, que abre una ventana nueva cada vez que se relanza el .lnk
+// (comportamiento normal del navegador, pero evitable si detectamos la
+// instancia existente). None para Steam/UWP/apps personalizadas: no vale
+// la pena resolver su proceso real (variable por juego, o ya lo maneja el
+// propio sistema).
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct DiscoveredApp {
     pub name: String,
     pub path: String,
+    pub process_name: Option<String>,
+}
+
+// Lee el .lnk con la crate `lnk` (parser puro, sin depender de COM) y
+// devuelve el nombre de archivo del ejecutable al que apunta.
+fn resolve_lnk_process_name(lnk_path: &Path) -> Option<String> {
+    let shortcut = lnk::ShellLink::open(lnk_path, lnk::encoding::WINDOWS_1252).ok()?;
+    let target = shortcut.link_target()?;
+    Path::new(&target)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_string())
 }
 
 fn collect_lnk_files(dir: &Path, out: &mut Vec<DiscoveredApp>) {
@@ -28,6 +51,7 @@ fn collect_lnk_files(dir: &Path, out: &mut Vec<DiscoveredApp>) {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                 out.push(DiscoveredApp {
                     name: stem.to_string(),
+                    process_name: resolve_lnk_process_name(&path),
                     path: path.to_string_lossy().to_string(),
                 });
             }
@@ -151,6 +175,7 @@ fn collect_steam_games(out: &mut Vec<DiscoveredApp>) {
                 out.push(DiscoveredApp {
                     name,
                     path: format!("steam://rungameid/{}", appid),
+                    process_name: None,
                 });
             }
         }
@@ -212,6 +237,7 @@ fn collect_uwp_apps(out: &mut Vec<DiscoveredApp>) {
             out.push(DiscoveredApp {
                 name: app.name,
                 path: format!("appid:{}", app.app_id),
+                process_name: None,
             });
         }
     }
@@ -243,7 +269,142 @@ pub fn scan_installed_apps() -> Result<Vec<DiscoveredApp>, String> {
     Ok(apps)
 }
 
-// No usa ningún plugin de Tauri (ver §6.3 del contexto). Dos mecanismos
+// Trae al frente una ventana existente en vez de abrir una nueva -- ej.
+// Opera GX (o cualquier navegador) abre una ventana nueva cada vez que se
+// relanza el .lnk mientras ya está corriendo, aunque no sea una instancia
+// nueva de verdad (comportamiento normal del navegador, verificado: el
+// número de procesos no cambia al relanzarlo). Si encuentra una ventana
+// visible de nivel superior perteneciente a ese proceso, la activa y
+// devuelve true; si no encuentra nada, devuelve false para que el llamador
+// lance la app normalmente.
+#[cfg(target_os = "windows")]
+fn focus_existing_window(process_name: &str) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
+    use windows::core::BOOL;
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, EnumWindows, GW_OWNER, GetForegroundWindow, GetWindow,
+        GetWindowTextLengthW, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
+        SW_RESTORE, SetForegroundWindow, ShowWindow,
+    };
+
+    fn find_pids_by_process_name(target_name: &str) -> Vec<u32> {
+        let mut pids = Vec::new();
+        unsafe {
+            let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+                return pids;
+            };
+
+            let mut entry = PROCESSENTRY32W {
+                dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+                ..Default::default()
+            };
+
+            if Process32FirstW(snapshot, &mut entry).is_ok() {
+                loop {
+                    let len = entry
+                        .szExeFile
+                        .iter()
+                        .position(|&c| c == 0)
+                        .unwrap_or(entry.szExeFile.len());
+                    let exe_name = String::from_utf16_lossy(&entry.szExeFile[..len]);
+                    if exe_name.eq_ignore_ascii_case(target_name) {
+                        pids.push(entry.th32ProcessID);
+                    }
+                    if Process32NextW(snapshot, &mut entry).is_err() {
+                        break;
+                    }
+                }
+            }
+
+            let _ = CloseHandle(snapshot);
+        }
+        pids
+    }
+
+    struct FindContext {
+        target_pids: Vec<u32>,
+        found: HWND,
+    }
+
+    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        unsafe {
+            let ctx = &mut *(lparam.0 as *mut FindContext);
+
+            if !IsWindowVisible(hwnd).as_bool() || GetWindowTextLengthW(hwnd) == 0 {
+                return true.into();
+            }
+            // Las ventanas con "owner" son diálogos/tooltips, no la ventana
+            // principal -- GetWindow devuelve error cuando no hay owner.
+            if GetWindow(hwnd, GW_OWNER).is_ok() {
+                return true.into();
+            }
+
+            let mut pid: u32 = 0;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+
+            if ctx.target_pids.contains(&pid) {
+                ctx.found = hwnd;
+                return false.into();
+            }
+            true.into()
+        }
+    }
+
+    let target_pids = find_pids_by_process_name(process_name);
+    if target_pids.is_empty() {
+        return false;
+    }
+
+    let mut ctx = FindContext {
+        target_pids,
+        found: HWND(std::ptr::null_mut()),
+    };
+
+    unsafe {
+        let _ = EnumWindows(
+            Some(enum_callback),
+            LPARAM(&mut ctx as *mut FindContext as isize),
+        );
+
+        if ctx.found.0.is_null() {
+            return false;
+        }
+
+        // Windows bloquea que un proceso en segundo plano le robe el foco a
+        // otro -- adjuntar temporalmente el input del hilo actual al del
+        // proceso en primer plano es el mecanismo estándar para evitarlo.
+        let foreground = GetForegroundWindow();
+        let foreground_thread = GetWindowThreadProcessId(foreground, None);
+        let current_thread = GetCurrentThreadId();
+        let needs_attach = foreground_thread != current_thread;
+
+        if needs_attach {
+            let _ = AttachThreadInput(current_thread, foreground_thread, true);
+        }
+
+        if IsIconic(ctx.found).as_bool() {
+            let _ = ShowWindow(ctx.found, SW_RESTORE);
+        }
+        let _ = SetForegroundWindow(ctx.found);
+        let _ = BringWindowToTop(ctx.found);
+
+        if needs_attach {
+            let _ = AttachThreadInput(current_thread, foreground_thread, false);
+        }
+    }
+
+    true
+}
+
+// No usa ningún plugin de Tauri (ver §6.3 del contexto). `process_name` es
+// opcional: cuando viene, primero se intenta traer al frente una ventana ya
+// abierta de ese proceso (ver focus_existing_window) antes de lanzar nada
+// nuevo. Si no hay ventana existente (o no se pasó process_name), se lanza
 // según el tipo de entrada:
 // - "appid:<AppUserModelID>" (apps de Microsoft Store, ver collect_uwp_apps)
 //   se lanza con `explorer.exe shell:AppsFolder\<id>` -- verificado que
@@ -252,12 +413,18 @@ pub fn scan_installed_apps() -> Result<Vec<DiscoveredApp>, String> {
 //   `cmd /c start`, que usa ShellExecute y deja que Windows resuelva el
 //   destino, igual que un doble clic en el menú Inicio.
 #[tauri::command]
-pub fn launch_app_by_path(path: String) -> Result<(), String> {
+pub fn launch_app_by_path(path: String, process_name: Option<String>) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         use std::process::{Command, Stdio};
         const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        if let Some(name) = process_name.as_deref() {
+            if focus_existing_window(name) {
+                return Ok(());
+            }
+        }
 
         if let Some(app_id) = path.strip_prefix("appid:") {
             Command::new("explorer.exe")

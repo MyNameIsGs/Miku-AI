@@ -3,7 +3,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 import { setAppLauncherState } from "../lib/tools/appLauncherStore";
 
-export type DiscoveredApp = { name: string; path: string };
+export type DiscoveredApp = {
+  name: string;
+  path: string;
+  // Nombre del .exe al que apunta, si se pudo resolver -- se usa para
+  // traer al frente una ventana existente en vez de abrir una nueva (ver
+  // focus_existing_window en app_launcher.rs).
+  processName?: string | null;
+};
+
+function processNameFromPath(path: string): string | null {
+  const match = path.match(/([^\\/]+\.exe)$/i);
+  return match ? match[1] : null;
+}
 
 export type AppLauncherConfig = {
   hiddenApps: string[];
@@ -57,7 +69,7 @@ export function useAppLauncher() {
   }, []);
 
   const customApps: DiscoveredApp[] = Object.entries(config.customApps).map(
-    ([name, path]) => ({ name, path }),
+    ([name, path]) => ({ name, path, processName: processNameFromPath(path) }),
   );
 
   // Cada vez que cambian las apps descubiertas o la config, actualiza el

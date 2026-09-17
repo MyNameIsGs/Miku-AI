@@ -60,7 +60,10 @@ export function buildAbrirCarpetaDeAppsTool(): ToolDefinition {
           continue;
         }
         try {
-          await invoke("launch_app_by_path", { path: app.path });
+          await invoke("launch_app_by_path", {
+            path: app.path,
+            processName: app.processName ?? null,
+          });
           abiertas.push(app.name);
         } catch {
           fallidas.push(appName);

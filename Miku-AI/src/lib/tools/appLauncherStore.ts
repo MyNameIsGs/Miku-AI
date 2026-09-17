@@ -4,7 +4,7 @@
 // escribe acá cada vez que cambia algo, las tools solo leen.
 export type AppLauncherToolState = {
   // Ya filtradas: solo las que no están ocultas.
-  apps: { name: string; path: string }[];
+  apps: { name: string; path: string; processName?: string | null }[];
   // Nombre de carpeta -> nombres de apps que contiene.
   folders: Record<string, string[]>;
   actionsDisabled: boolean;

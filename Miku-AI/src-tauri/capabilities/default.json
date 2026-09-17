@@ -28,6 +28,8 @@
       "identifier": "fs:allow-read-file",
       "allow": [{ "path": "$HOME/**" }]
     },
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "opener:allow-open-url",
+    "opener:allow-default-urls"
   ]
 }

@@ -1,11 +1,13 @@
 import { obtenerHoraActual } from "./obtenerHoraActual";
+import { abrirUrl } from "./abrirUrl";
+import { buscarEnWeb } from "./buscarEnWeb";
 import { buildAbrirAplicacionTool } from "./abrirAplicacion";
 import { buildAbrirCarpetaDeAppsTool } from "./abrirCarpetaDeApps";
 import { ToolDefinition, ToolSchema } from "./types";
 
 // Tools estáticas: no dependen de nada que cambie en runtime, su schema se
 // arma una sola vez.
-const STATIC_TOOLS: ToolDefinition[] = [obtenerHoraActual];
+const STATIC_TOOLS: ToolDefinition[] = [obtenerHoraActual, abrirUrl, buscarEnWeb];
 
 // Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que
 // cambia en runtime (lista de apps descubiertas, carpetas creadas por
