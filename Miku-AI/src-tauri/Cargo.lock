@@ -2624,6 +2624,8 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "tauri-plugin-store",
+ "windows",
+ "windows-core 0.61.2",
 ]
 
 [[package]]

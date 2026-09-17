@@ -1,3 +1,6 @@
+#[cfg(target_os = "windows")]
+mod audio_session;
+
 #[tauri::command]
 fn log_to_terminal(msg: String) {
     println!("{}", msg);
@@ -182,6 +185,9 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     kill_voice_server();
+
+    #[cfg(target_os = "windows")]
+    audio_session::install();
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
