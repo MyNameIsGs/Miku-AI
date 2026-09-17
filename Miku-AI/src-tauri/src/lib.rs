@@ -1,3 +1,8 @@
+#[cfg(target_os = "windows")]
+mod audio_session;
+#[cfg(target_os = "windows")]
+mod voice_server_provision;
+
 #[tauri::command]
 fn log_to_terminal(msg: String) {
     println!("{}", msg);
@@ -63,8 +68,16 @@ fn pull_memory_from_github(repo_root: String) -> Result<(), String> {
 
     Ok(())
 }
+// Vite puede recargar la pagina (HMR) sin reiniciar el proceso de Rust, y
+// cada recarga vuelve a invocar este comando desde el useEffect de
+// useVoiceServer. Sin este guard, cada recarga lanzaba OTRA copia entera
+// del servidor de voz, todas compitiendo por la misma GPU.
+#[cfg(target_os = "windows")]
+static VOICE_SERVER_LAUNCHED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 #[tauri::command]
-fn launch_voice_server() -> Result<(), String> {
+async fn launch_voice_server(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
@@ -90,10 +103,24 @@ fn launch_voice_server() -> Result<(), String> {
         let server_path = exe_dir.join("miku-voice-server.exe");
 
         if !server_path.exists() {
-            return Err(format!(
-                "Servidor de voz no encontrado en: {}",
-                server_path.display()
-            ));
+            #[cfg(not(debug_assertions))]
+            {
+                voice_server_provision::ensure_installed(&server_path, &app)
+                    .await
+                    .map_err(|e| format!("No se pudo descargar el servidor de voz: {e}"))?;
+            }
+            #[cfg(debug_assertions)]
+            {
+                return Err(format!(
+                    "Servidor de voz no encontrado en: {}",
+                    server_path.display()
+                ));
+            }
+        }
+
+        if VOICE_SERVER_LAUNCHED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            println!("[INFO] El servidor de voz ya fue lanzado en este proceso; se omite un relanzamiento.");
+            return Ok(());
         }
 
         Command::new(&server_path)
@@ -182,6 +209,9 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     kill_voice_server();
+
+    #[cfg(target_os = "windows")]
+    audio_session::install();
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

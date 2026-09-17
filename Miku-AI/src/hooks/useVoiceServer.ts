@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { REPO_ROOT } from "../config/constants";
 
+type DownloadProgress = {
+  downloaded: number;
+  total: number;
+};
+
 export function useVoiceServer() {
   const [isVoiceReady, setIsVoiceReady] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const hasLaunched = useRef(false);
 
   const shutdownVoiceServer = useCallback(async () => {
@@ -35,12 +42,18 @@ export function useVoiceServer() {
       if (!isReady) {
         isReady = true;
         setIsVoiceReady(true);
+        setDownloadProgress(null);
         if (checkTimer !== null) {
           clearInterval(checkTimer);
           checkTimer = null;
         }
       }
     };
+
+    const unlistenPromise = listen<DownloadProgress>(
+      "voice-server-download-progress",
+      (event) => setDownloadProgress(event.payload),
+    );
 
     // Lanzar el servidor vía Rust (no via sidecar de Tauri)
     invoke("launch_voice_server").catch((err) => {
@@ -56,12 +69,13 @@ export function useVoiceServer() {
         });
         if (res.ok || res.status > 0) markVoiceReady();
       } catch {
-        // El servidor aún está iniciando y cargando el modelo RVC
+        // El servidor aún está iniciando (o descargándose) y cargando el modelo RVC
       }
     }, 1000);
 
     return () => {
       if (checkTimer !== null) clearInterval(checkTimer);
+      unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -82,6 +96,7 @@ export function useVoiceServer() {
 
   return {
     isVoiceReady,
+    downloadProgress,
     shutdownVoiceServer,
     handleCloseApp,
   };

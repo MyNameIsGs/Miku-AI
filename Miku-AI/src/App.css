@@ -280,8 +280,9 @@ button {
 
 .voice-loading-badge {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: rgba(20, 20, 30, 0.75);
   backdrop-filter: blur(8px);
   color: #39c5bb;
@@ -293,6 +294,42 @@ button {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   pointer-events: none;
   user-select: none;
+}
+
+.voice-loading-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.loading-text {
+  display: inline-block;
+  animation: loading-text-fade 1.4s ease;
+}
+
+@keyframes loading-text-fade {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.download-progress-track {
+  width: 140px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(57, 197, 187, 0.2);
+  overflow: hidden;
+}
+
+.download-progress-fill {
+  height: 100%;
+  background: #39c5bb;
+  transition: width 0.3s ease;
 }
 
 .loading-spinner {
