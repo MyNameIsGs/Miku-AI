@@ -19,6 +19,16 @@ export function useMemoryFiles() {
 
   useEffect(() => {
     (async () => {
+      // Primero: jalar la memoria actualizada desde GitHub
+      try {
+        await invoke("pull_memory_from_github", { repoRoot: REPO_ROOT });
+        console.log("[SYNC] Memoria actualizada desde GitHub al arrancar.");
+      } catch (err) {
+        console.warn("[SYNC] No se pudo jalar memoria desde GitHub:", err);
+        // No es fatal — se usa la copia local
+      }
+
+      // Segundo: cargar el contador de escrituras guardado
       try {
         const store = await load(".settings.dat", { autoSave: false });
         const savedCount = await store.get<number>("memoryWriteCount");

@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 private const val GH_OWNER  = "MyNameIsGs"
 private const val GH_REPO   = "Miku-AI"
-private const val GH_BRANCH = "refactor/modularizar-app"
+private const val GH_BRANCH = "main"
 
 class GitHubApi(private val token: String) {
 

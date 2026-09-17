@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Command, Child } from "@tauri-apps/plugin-shell";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { REPO_ROOT } from "../config/constants";
 
 export function useVoiceServer() {
   const [isVoiceReady, setIsVoiceReady] = useState(false);
-  const voiceServerChildRef = useRef<Child | null>(null);
   const hasLaunched = useRef(false);
 
   const shutdownVoiceServer = useCallback(async () => {
@@ -18,9 +16,6 @@ export function useVoiceServer() {
     try {
       await invoke("kill_voice_server");
     } catch {}
-    if (voiceServerChildRef.current) {
-      await voiceServerChildRef.current.kill().catch(() => {});
-    }
   }, []);
 
   const handleCloseApp = useCallback(async () => {
@@ -47,54 +42,26 @@ export function useVoiceServer() {
       }
     };
 
-    const command = Command.sidecar("binaries/miku-voice-server", [], {
-      env: {
-        SystemRoot: "C:\\Windows",
-        SYSTEMROOT: "C:\\Windows",
-        PATH: "C:\\Windows\\System32;C:\\Windows;C:\\ffmpeg\\bin",
-        PYTHONUNBUFFERED: "1",
-      },
+    // Lanzar el servidor vía Rust (no via sidecar de Tauri)
+    invoke("launch_voice_server").catch((err) => {
+      console.error("Fallo crítico al iniciar el servidor de voz:", err);
     });
 
-    command.stdout.on("data", (line) => {
-      invoke("log_to_terminal", { msg: `[voice-server] ${line}` });
-      if (line.includes("Servidor listo") || line.includes("127.0.0.1:8899")) {
-        markVoiceReady();
+    // Polling para detectar cuando el servidor está listo
+    checkTimer = window.setInterval(async () => {
+      if (isReady) return;
+      try {
+        const res = await fetch("http://127.0.0.1:8899/speak", {
+          method: "OPTIONS",
+        });
+        if (res.ok || res.status > 0) markVoiceReady();
+      } catch {
+        // El servidor aún está iniciando y cargando el modelo RVC
       }
-    });
-    command.stderr.on("data", (line) =>
-      invoke("log_to_terminal", { msg: `[voice-server][err] ${line}` }),
-    );
-
-    command
-      .spawn()
-      .then((child) => {
-        console.log("Servidor iniciado con PID:", child.pid);
-        voiceServerChildRef.current = child;
-
-        checkTimer = window.setInterval(async () => {
-          if (isReady) return;
-          try {
-            const res = await fetch("http://127.0.0.1:8899/speak", {
-              method: "OPTIONS",
-            });
-            if (res.ok || res.status > 0) {
-              markVoiceReady();
-            }
-          } catch {
-            // El servidor aún está iniciando y cargando el modelo RVC
-          }
-        }, 1000);
-      })
-      .catch((err) => {
-        console.error("Fallo crítico al iniciar el sidecar de voz:", err);
-      });
+    }, 1000);
 
     return () => {
-      if (checkTimer !== null) {
-        clearInterval(checkTimer);
-      }
-      voiceServerChildRef.current?.kill().catch(() => {});
+      if (checkTimer !== null) clearInterval(checkTimer);
     };
   }, []);
 
@@ -108,7 +75,6 @@ export function useVoiceServer() {
       await shutdownVoiceServer();
       await appWindow.destroy();
     });
-
     return () => {
       unlisten.then((f) => f());
     };
@@ -116,7 +82,6 @@ export function useVoiceServer() {
 
   return {
     isVoiceReady,
-    voiceServerChildRef,
     shutdownVoiceServer,
     handleCloseApp,
   };

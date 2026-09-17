@@ -10,7 +10,6 @@ fn kill_voice_server() {
         use std::os::windows::process::CommandExt;
         use std::process::{Command, Stdio};
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-
         let _ = Command::new("taskkill")
             .args(["/F", "/T", "/IM", "miku-voice-server*"])
             .stdout(Stdio::null())
@@ -20,6 +19,98 @@ fn kill_voice_server() {
     }
 }
 #[tauri::command]
+fn pull_memory_from_github(repo_root: String) -> Result<(), String> {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    if repo_root.is_empty() {
+        return Err("VITE_REPO_ROOT no configurado".to_string());
+    }
+
+    let appdata = std::env::var("APPDATA")
+        .map_err(|e| format!("Sin APPDATA: {}", e))?;
+
+    // git pull en el repo
+    let pull = Command::new("git")
+        .args(["-C", &repo_root, "pull", "--ff-only"])
+        .output()
+        .map_err(|e| format!("git pull: {}", e))?;
+
+    if !pull.status.success() {
+        return Err(format!(
+            "git pull falló: {}",
+            String::from_utf8_lossy(&pull.stderr)
+        ));
+    }
+
+    // Copiar los .md del repo a %APPDATA%
+    let memory_src  = PathBuf::from(&repo_root).join("Miku-AI").join("memory");
+    let memory_dest = PathBuf::from(&appdata)
+        .join("com.sebas.mikuai")
+        .join("memory");
+
+    std::fs::create_dir_all(&memory_dest)
+        .map_err(|e| format!("No se pudo crear carpeta de memoria: {}", e))?;
+
+    for filename in &["personality.md", "memories.md", "world.md"] {
+        let src = memory_src.join(filename);
+        let dst = memory_dest.join(filename);
+        if src.exists() {
+            std::fs::copy(&src, &dst)
+                .map_err(|e| format!("Error copiando {}: {}", filename, e))?;
+        }
+    }
+
+    Ok(())
+}
+#[tauri::command]
+fn launch_voice_server() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::process::{Command, Stdio};
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let exe_dir = std::env::current_exe()
+            .map_err(|e| format!("Sin ruta del exe: {}", e))?
+            .parent()
+            .ok_or("Sin directorio del exe")?
+            .to_path_buf();
+
+        // Dev (debug):  target/debug/ → ../../binaries/miku-voice-server-x86_64-pc-windows-msvc.exe
+        // Release:      junto al exe instalado → miku-voice-server.exe
+        #[cfg(debug_assertions)]
+        let server_path = exe_dir
+            .join("..")
+            .join("..")
+            .join("binaries")
+            .join("miku-voice-server-x86_64-pc-windows-msvc.exe");
+
+        #[cfg(not(debug_assertions))]
+        let server_path = exe_dir.join("miku-voice-server.exe");
+
+        if !server_path.exists() {
+            return Err(format!(
+                "Servidor de voz no encontrado en: {}",
+                server_path.display()
+            ));
+        }
+
+        Command::new(&server_path)
+            .env("SystemRoot", "C:\\Windows")
+            .env("SYSTEMROOT", "C:\\Windows")
+            .env("PATH", "C:\\Windows\\System32;C:\\Windows;C:\\ffmpeg\\bin")
+            .env("PYTHONUNBUFFERED", "1")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("Error al lanzar el servidor: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
     use std::path::PathBuf;
     use std::process::Command;
@@ -28,7 +119,6 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
         return Err("VITE_REPO_ROOT no configurado".to_string());
     }
 
-    // Origen: %APPDATA%\com.sebas.mikuai\memory\
     let appdata = std::env::var("APPDATA")
         .map_err(|e| format!("Sin APPDATA: {}", e))?;
 
@@ -41,7 +131,6 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
     std::fs::create_dir_all(&memory_dest)
         .map_err(|e| format!("No se pudo crear memory/: {}", e))?;
 
-    // Copiar solo los .md principales (no los .backup.md)
     for filename in &["personality.md", "memories.md", "world.md"] {
         let src = memory_src.join(filename);
         let dst = memory_dest.join(filename);
@@ -51,25 +140,20 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
         }
     }
 
-    // git add memory/
     Command::new("git")
         .args(["-C", &repo_root, "add", "memory/"])
         .output()
         .map_err(|e| format!("git add: {}", e))?;
 
-    // Verificar si hay cambios staged
-    // exit 0 = sin cambios, exit 1 = hay cambios
     let status = Command::new("git")
         .args(["-C", &repo_root, "diff", "--cached", "--quiet"])
         .status()
         .map_err(|e| format!("git diff: {}", e))?;
 
     if status.success() {
-        // Sin cambios: nada que hacer, no es error
         return Ok(());
     }
 
-    // git commit con timestamp
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -80,7 +164,6 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
         .output()
         .map_err(|e| format!("git commit: {}", e))?;
 
-    // git push
     let push = Command::new("git")
         .args(["-C", &repo_root, "push"])
         .output()
@@ -95,9 +178,9 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
 
     Ok(())
 }
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Limpiar posibles procesos huérfanos anteriores al iniciar
     kill_voice_server();
 
     let app = tauri::Builder::default()
@@ -107,7 +190,13 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![log_to_terminal, kill_voice_server,  sync_memory_to_github,])
+        .invoke_handler(tauri::generate_handler![
+            log_to_terminal,
+            kill_voice_server,
+            launch_voice_server,
+            sync_memory_to_github,
+            pull_memory_from_github,
+        ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 
