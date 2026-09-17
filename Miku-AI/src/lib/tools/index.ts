@@ -1,22 +1,34 @@
 import { obtenerHoraActual } from "./obtenerHoraActual";
-import { ToolDefinition } from "./types";
+import { buildAbrirAplicacionTool } from "./abrirAplicacion";
+import { buildAbrirCarpetaDeAppsTool } from "./abrirCarpetaDeApps";
+import { ToolDefinition, ToolSchema } from "./types";
 
-// Lista blanca de herramientas disponibles para el LLM (Tarea 6.1 en
-// adelante). Sumar una tool nueva es agregarla acá -- no hace falta tocar
-// el systemPrompt, cada schema ya trae su propio nombre y descripción.
-const TOOLS: ToolDefinition[] = [obtenerHoraActual];
+// Tools estáticas: no dependen de nada que cambie en runtime, su schema se
+// arma una sola vez.
+const STATIC_TOOLS: ToolDefinition[] = [obtenerHoraActual];
 
-export const TOOL_SCHEMAS = TOOLS.map((tool) => tool.schema);
+// Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que
+// cambia en runtime (lista de apps descubiertas, carpetas creadas por
+// Sebastián), así que se reconstruyen en cada request -- ver
+// lib/openrouter.ts, que llama a getToolSchemas() en cada vuelta del ciclo.
+const DYNAMIC_TOOL_BUILDERS: (() => ToolDefinition)[] = [
+  buildAbrirAplicacionTool,
+  buildAbrirCarpetaDeAppsTool,
+];
 
-const TOOLS_BY_NAME = new Map(
-  TOOLS.map((tool) => [tool.schema.function.name, tool]),
-);
+function getAllTools(): ToolDefinition[] {
+  return [...STATIC_TOOLS, ...DYNAMIC_TOOL_BUILDERS.map((build) => build())];
+}
+
+export function getToolSchemas(): ToolSchema[] {
+  return getAllTools().map((tool) => tool.schema);
+}
 
 export async function executeTool(
   name: string,
   argumentsJson: string,
 ): Promise<string> {
-  const tool = TOOLS_BY_NAME.get(name);
+  const tool = getAllTools().find((t) => t.schema.function.name === name);
   if (!tool) {
     return `Error: no existe una herramienta llamada "${name}".`;
   }

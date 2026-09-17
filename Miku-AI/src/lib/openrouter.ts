@@ -1,5 +1,5 @@
 import { ChatMessage, ToolCall } from "../types";
-import { TOOL_SCHEMAS, executeTool } from "./tools";
+import { getToolSchemas, executeTool } from "./tools";
 
 export async function fetchOpenRouterWithRetry(
   body: object,
@@ -71,7 +71,7 @@ export async function runToolCallingCycle(
       {
         model,
         messages,
-        tools: TOOL_SCHEMAS,
+        tools: getToolSchemas(),
         tool_choice: "auto",
       },
       onRetry,

@@ -18,6 +18,8 @@ import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
+import { useAppLauncher } from "./hooks/useAppLauncher";
+import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { ChatContentPart, ChatContent, ChatMessage } from "./types";
 import {
   OPENROUTER_MODEL,
@@ -50,6 +52,7 @@ function App() {
   const [voicePitch, setVoicePitch] = useState(10);
   const [voiceRate, setVoiceRate] = useState(15);
   const [showConfig, setShowConfig] = useState(false);
+  const [showAppLauncher, setShowAppLauncher] = useState(false);
   const [hideResponseText, setHideResponseText] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
   const [freeCamera, setFreeCamera] = useState(false);
@@ -252,6 +255,7 @@ function App() {
   });
 
   const memoryFiles = useMemoryFiles();
+  const appLauncher = useAppLauncher();
 
   async function askMiku(userMessage: string, imageDataUrl?: string | null) {
     if (!isVoiceReady) return;
@@ -601,6 +605,12 @@ function App() {
             Config
           </button>
           <button
+            className={showAppLauncher ? "active" : ""}
+            onClick={() => setShowAppLauncher((v) => !v)}
+          >
+            Apps
+          </button>
+          <button
             className={hideResponseText ? "active" : ""}
             onClick={() => setHideResponseText((v) => !v)}
             title="Ocultar el texto de respuesta (para sacar capturas limpias)"
@@ -691,6 +701,23 @@ function App() {
             ✕
           </button>
         </div>
+      )}
+
+      {showAppLauncher && (
+        <AppLauncherPanel
+          discoveredApps={appLauncher.discoveredApps}
+          customApps={appLauncher.customApps}
+          config={appLauncher.config}
+          onToggleAppHidden={appLauncher.toggleAppHidden}
+          onSetFolderApps={appLauncher.setFolderApps}
+          onRenameFolder={appLauncher.renameFolder}
+          onDeleteFolder={appLauncher.deleteFolder}
+          onSetAppUrl={appLauncher.setAppUrl}
+          onAddCustomApp={appLauncher.addCustomApp}
+          onRemoveCustomApp={appLauncher.removeCustomApp}
+          onSetActionsDisabled={appLauncher.setActionsDisabled}
+          onClose={() => setShowAppLauncher(false)}
+        />
       )}
 
       {showConfig && (

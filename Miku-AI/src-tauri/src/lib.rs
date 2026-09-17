@@ -2,6 +2,7 @@
 mod audio_session;
 #[cfg(target_os = "windows")]
 mod voice_server_provision;
+mod app_launcher;
 
 #[tauri::command]
 fn log_to_terminal(msg: String) {
@@ -226,6 +227,8 @@ pub fn run() {
             launch_voice_server,
             sync_memory_to_github,
             pull_memory_from_github,
+            app_launcher::scan_installed_apps,
+            app_launcher::launch_app_by_path,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
