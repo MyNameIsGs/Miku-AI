@@ -30,51 +30,14 @@ fn pull_memory_from_github(repo_root: String) -> Result<(), String> {
     let appdata = std::env::var("APPDATA")
         .map_err(|e| format!("Sin APPDATA: {}", e))?;
 
-    // 1. Copiar los .md locales al repo antes de sincronizar
-    let memory_src  = PathBuf::from(&appdata)
+    let memory_repo = PathBuf::from(&repo_root).join("memory");
+    let memory_local = PathBuf::from(&appdata)
         .join("com.sebas.mikuai")
         .join("memory");
-    let memory_dest = PathBuf::from(&repo_root).join("memory");
 
-    std::fs::create_dir_all(&memory_dest)
-        .map_err(|e| format!("No se pudo crear memory/: {}", e))?;
-
-    for filename in &["personality.md", "memories.md", "world.md"] {
-        let src = memory_src.join(filename);
-        let dst = memory_dest.join(filename);
-        if src.exists() {
-            std::fs::copy(&src, &dst)
-                .map_err(|e| format!("Error copiando {}: {}", filename, e))?;
-        }
-    }
-
-    // 2. git add memory/
-    Command::new("git")
-        .args(["-C", &repo_root, "add", "memory/"])
-        .output()
-        .map_err(|e| format!("git add: {}", e))?;
-
-    // 3. Commitear solo si hay cambios staged
-    let diff = Command::new("git")
-        .args(["-C", &repo_root, "diff", "--cached", "--quiet"])
-        .status()
-        .map_err(|e| format!("git diff: {}", e))?;
-
-    if !diff.success() {
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        Command::new("git")
-            .args(["-C", &repo_root, "commit", "-m",
-                &format!("memory: sync local antes de pull [{}]", ts)])
-            .output()
-            .map_err(|e| format!("git commit: {}", e))?;
-    }
-
-    // 4. Pull con rebase para integrar cambios remotos
+    // 1. Pull primero — traer lo más reciente del remoto
     let pull = Command::new("git")
-        .args(["-C", &repo_root, "pull", "--rebase"])
+        .args(["-C", &repo_root, "pull", "--rebase", "origin", "main"])
         .output()
         .map_err(|e| format!("git pull: {}", e))?;
 
@@ -85,19 +48,16 @@ fn pull_memory_from_github(repo_root: String) -> Result<(), String> {
         ));
     }
 
-    // 5. Push para subir el commit local si lo hubo
-    Command::new("git")
-        .args(["-C", &repo_root, "push"])
-        .output()
-        .map_err(|e| format!("git push: {}", e))?;
+    // 2. Copiar repo → %APPDATA% (versión más reciente al LLM)
+    std::fs::create_dir_all(&memory_local)
+        .map_err(|e| format!("No se pudo crear carpeta de memoria: {}", e))?;
 
-    // 6. Copiar los .md actualizados del repo a %APPDATA%
     for filename in &["personality.md", "memories.md", "world.md"] {
-        let src = memory_dest.join(filename);
-        let dst = memory_src.join(filename);
+        let src = memory_repo.join(filename);
+        let dst = memory_local.join(filename);
         if src.exists() {
             std::fs::copy(&src, &dst)
-                .map_err(|e| format!("Error copiando a APPDATA {}: {}", filename, e))?;
+                .map_err(|e| format!("Error copiando {}: {}", filename, e))?;
         }
     }
 
