@@ -41,6 +41,7 @@ import {
 } from "./lib/markers";
 import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
 import { loadPendientes, getActivePendientes } from "./lib/pendientes";
+import { connectSpotify, isSpotifyConnected } from "./lib/spotify/auth";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +68,9 @@ function App() {
   const [clickThrough, setClickThrough] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [spotifyConnecting, setSpotifyConnecting] = useState(false);
+  const [spotifyError, setSpotifyError] = useState<string | null>(null);
   const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
@@ -150,6 +154,25 @@ function App() {
       }
     })();
   }, [voiceRate]);
+
+  useEffect(() => {
+    isSpotifyConnected()
+      .then(setSpotifyConnected)
+      .catch((err) => console.error("Error consultando conexión de Spotify:", err));
+  }, []);
+
+  const handleConnectSpotify = async () => {
+    setSpotifyConnecting(true);
+    setSpotifyError(null);
+    try {
+      await connectSpotify();
+      setSpotifyConnected(true);
+    } catch (err) {
+      setSpotifyError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSpotifyConnecting(false);
+    }
+  };
 
   useEffect(() => {
     const el = transcriptRef.current;
@@ -806,6 +829,24 @@ function App() {
               onChange={(e) => setVoiceRate(Number(e.target.value))}
             />
           </label>
+          <div className="spotify-config-row">
+            <button
+              onClick={handleConnectSpotify}
+              disabled={spotifyConnecting}
+              className={spotifyConnected ? "active" : ""}
+            >
+              {spotifyConnecting
+                ? "Conectando..."
+                : spotifyConnected
+                  ? "Spotify conectado"
+                  : "Conectar Spotify"}
+            </button>
+            {spotifyError && (
+              <span className="spotify-error" title={spotifyError}>
+                Error al conectar Spotify
+              </span>
+            )}
+          </div>
         </div>
       )}
       {!hideResponseText && isThinking && (

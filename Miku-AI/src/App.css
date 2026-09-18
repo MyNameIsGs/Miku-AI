@@ -189,6 +189,36 @@ button {
   width: 100%;
 }
 
+.spotify-config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spotify-config-row button {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: white;
+}
+
+.spotify-config-row button.active {
+  background: rgba(30, 215, 96, 0.5);
+}
+
+.spotify-config-row button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spotify-error {
+  color: rgba(255, 120, 120, 0.9);
+  font-size: 12px;
+}
+
 .app-launcher-panel {
   position: absolute;
   top: 44px;

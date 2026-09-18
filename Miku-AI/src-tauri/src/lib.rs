@@ -6,6 +6,7 @@ mod app_launcher;
 mod media_control;
 mod audio_device;
 mod screen_capture;
+mod spotify_auth;
 
 #[tauri::command]
 fn log_to_terminal(msg: String) {
@@ -237,6 +238,7 @@ pub fn run() {
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,
+            spotify_auth::spotify_wait_for_redirect,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -10,6 +10,8 @@ import { buildCambiarSalidaAudioTool } from "./cambiarSalidaAudio";
 import { verPantalla } from "./verPantalla";
 import { anotarPendiente } from "./anotarPendiente";
 import { cerrarPendiente } from "./cerrarPendiente";
+import { buscarCancion } from "./buscarCancion";
+import { reproducirCancion } from "./reproducirCancion";
 import { ToolDefinition, ToolSchema } from "./types";
 import { ChatContent } from "../../types";
 
@@ -24,6 +26,8 @@ const STATIC_TOOLS: ToolDefinition[] = [
   verPantalla,
   anotarPendiente,
   cerrarPendiente,
+  buscarCancion,
+  reproducirCancion,
 ];
 
 // Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que
