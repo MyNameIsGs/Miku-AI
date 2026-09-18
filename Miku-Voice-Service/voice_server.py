@@ -32,8 +32,14 @@ cleanup_old_mei_folders()
 system_temp = tempfile.gettempdir()
 os.chdir(system_temp)
 
+import threading
+import time as time_module
+
+import numpy as np
+import sounddevice as sd
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from nanowakeword import NanoInterpreter
 from tts_with_rvc import TTS_RVC
 from faster_whisper import WhisperModel
 from waitress import serve
@@ -59,6 +65,101 @@ def resolve_rhubarb_path():
     return candidates[0] if candidates else "rhubarb.exe"
 
 RHUBARB_PATH = resolve_rhubarb_path()
+
+
+# Tarea 5.4: mismo criterio de resolución de ruta que Rhubarb -- PyInstaller
+# (_MEIPASS), junto al ejecutable, o junto al script en modo desarrollo.
+def resolve_wake_word_model_path():
+    candidates = []
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(os.path.join(sys._MEIPASS, "wake_word", "hey_miku_v1.onnx"))
+    if getattr(sys, "frozen", False):
+        candidates.append(os.path.join(os.path.dirname(sys.executable), "wake_word", "hey_miku_v1.onnx"))
+    candidates.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "wake_word", "hey_miku_v1.onnx"))
+
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return candidates[0] if candidates else "wake_word/hey_miku_v1.onnx"
+
+
+WAKE_WORD_MODEL_PATH = resolve_wake_word_model_path()
+WAKE_WORD_THRESHOLD = 0.85
+WAKE_WORD_SAMPLE_RATE = 16000
+WAKE_WORD_FRAME_SAMPLES = 1280  # 80ms a 16kHz, mismo tamaño de frame que usa nanowakeword
+WAKE_WORD_COOLDOWN_S = 3.0
+
+# El frontend hace polling de este contador (ver /wake-word/poll) -- se
+# incrementa cada vez que se detecta "Hey Miku", en vez de un evento push,
+# porque voice_server.py es un proceso separado del backend de Tauri (mismo
+# patrón de polling que ya usa useVoiceServer.ts para saber cuándo el
+# servidor está listo).
+wake_word_state_lock = threading.Lock()
+wake_word_detection_id = 0
+wake_word_enabled = True
+
+
+def _wake_word_loop():
+    global wake_word_detection_id
+
+    if not os.path.isfile(WAKE_WORD_MODEL_PATH):
+        print(f"[WAKE_WORD][ERROR] No se encontró el modelo en: {WAKE_WORD_MODEL_PATH}")
+        return
+
+    try:
+        interpreter = NanoInterpreter.load_model(WAKE_WORD_MODEL_PATH)
+    except Exception:
+        print("[WAKE_WORD][ERROR] Fallo al cargar el modelo de wake word:")
+        traceback.print_exc()
+        return
+
+    last_trigger_at = 0.0
+
+    def audio_callback(indata, _frames, _time_info, status):
+        nonlocal last_trigger_at
+        global wake_word_detection_id
+
+        if status:
+            print(f"[WAKE_WORD][WARN] Estado del stream de audio: {status}")
+        if not wake_word_enabled:
+            return
+
+        frame = indata[:, 0]
+        try:
+            result = interpreter.predict(frame)
+        except Exception:
+            print("[WAKE_WORD][ERROR] Fallo al predecir:")
+            traceback.print_exc()
+            return
+
+        if result.score >= WAKE_WORD_THRESHOLD:
+            now = time_module.monotonic()
+            if now - last_trigger_at >= WAKE_WORD_COOLDOWN_S:
+                last_trigger_at = now
+                with wake_word_state_lock:
+                    wake_word_detection_id += 1
+                print(f"[WAKE_WORD] Detectado 'Hey Miku' (score={result.score:.3f})")
+                # El score interno queda "pegado" arriba varios segundos
+                # después de detectar (filtro de patience/debounce de
+                # nanowakeword, pensado para no cortar a mitad de frase).
+                # Se resetea acá para no arrastrar ese estado durante el
+                # cooldown ni interferir con la próxima detección real.
+                interpreter.reset()
+
+    try:
+        with sd.InputStream(
+            samplerate=WAKE_WORD_SAMPLE_RATE,
+            channels=1,
+            dtype="int16",
+            blocksize=WAKE_WORD_FRAME_SAMPLES,
+            callback=audio_callback,
+        ):
+            print(f"[WAKE_WORD] Escuchando 'Hey Miku' (modelo: {WAKE_WORD_MODEL_PATH})")
+            while True:
+                time_module.sleep(1)
+    except Exception:
+        print("[WAKE_WORD][ERROR] Fallo al abrir el micrófono:")
+        traceback.print_exc()
 
 print(f"[INFO] Directorio de trabajo establecido en: {os.getcwd()}")
 print(f"[INFO] Rhubarb resuelto en: {RHUBARB_PATH} (Existe: {os.path.isfile(RHUBARB_PATH)})")
@@ -182,6 +283,20 @@ def transcribe():
         return {"error": str(e)}, 500
 
 
+@app.route("/wake-word/poll", methods=["GET"])
+def wake_word_poll():
+    with wake_word_state_lock:
+        return jsonify({"detectionId": wake_word_detection_id})
+
+
+@app.route("/wake-word/enabled", methods=["POST"])
+def wake_word_set_enabled():
+    global wake_word_enabled
+    data = request.get_json() or {}
+    wake_word_enabled = bool(data.get("enabled", True))
+    return jsonify({"enabled": wake_word_enabled})
+
+
 @app.route("/shutdown", methods=["POST", "GET"])
 def shutdown():
     def do_exit():
@@ -220,5 +335,6 @@ def start_parent_watchdog():
 
 if __name__ == "__main__":
     start_parent_watchdog()
+    threading.Thread(target=_wake_word_loop, daemon=True).start()
     print("[INFO] Servidor listo. Escuchando en http://127.0.0.1:8899")
     serve(app, host="127.0.0.1", port=8899)

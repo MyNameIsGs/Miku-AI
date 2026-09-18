@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('rhubarb', 'rhubarb')]
+datas = [('rhubarb', 'rhubarb'), ('wake_word', 'wake_word')]
 binaries = [('C:/Users/sebas/AppData/Local/Programs/Python/Python311/DLLs/_overlapped.pyd', '.')]
 hiddenimports = ['unicodedata', '_overlapped']
 tmp_ret = collect_all('fairseq')
@@ -13,6 +13,10 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('ctranslate2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('av')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('nanowakeword')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('sounddevice')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 

@@ -15,6 +15,7 @@ import { useMovement } from "./hooks/useMovement";
 import { useFace } from "./hooks/useFace";
 import { useSpeech } from "./hooks/useSpeech";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
+import { useWakeWord } from "./hooks/useWakeWord";
 import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
@@ -193,6 +194,14 @@ function App() {
 
   const [llmResponse, setLlmResponse] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+
+  useWakeWord({
+    isVoiceReady,
+    listening: speechRecognition.listening,
+    transcribing: speechRecognition.transcribing,
+    isThinking,
+    toggleListening: speechRecognition.toggleListening,
+  });
 
   const handlePasteImage = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
