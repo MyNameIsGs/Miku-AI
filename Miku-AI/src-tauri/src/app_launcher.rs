@@ -409,9 +409,11 @@ fn focus_existing_window(process_name: &str) -> bool {
 // - "appid:<AppUserModelID>" (apps de Microsoft Store, ver collect_uwp_apps)
 //   se lanza con `explorer.exe shell:AppsFolder\<id>` -- verificado que
 //   funciona (probado con Spotify real en esta máquina).
-// - Cualquier otra cosa (.lnk, .bat, .exe, URL, steam://...) se lanza vía
+// - Cualquier otra cosa (.lnk, .exe, URL, steam://...) se lanza vía
 //   `cmd /c start`, que usa ShellExecute y deja que Windows resuelva el
 //   destino, igual que un doble clic en el menú Inicio.
+// - .bat/.cmd son un caso aparte (ver más abajo): `start /D <carpeta>` NO
+//   alcanza para ellos.
 #[tauri::command]
 pub fn launch_app_by_path(path: String, process_name: Option<String>) -> Result<(), String> {
     #[cfg(target_os = "windows")]
@@ -432,6 +434,40 @@ pub fn launch_app_by_path(path: String, process_name: Option<String>) -> Result<
                 .creation_flags(CREATE_NO_WINDOW)
                 .spawn()
                 .map_err(|e| format!("No se pudo lanzar \"{}\": {}", app_id, e))?;
+            return Ok(());
+        }
+
+        let is_batch = Path::new(&path)
+            .extension()
+            .map(|ext| ext.eq_ignore_ascii_case("bat") || ext.eq_ignore_ascii_case("cmd"))
+            .unwrap_or(false);
+
+        if is_batch {
+            // `cmd /c start` delega los .bat/.cmd a su asociación de
+            // archivo, y esa asociación puede ignorar el /D que le pasemos
+            // (verificado: en esta máquina termina abriendo un
+            // `cmd /K <ruta>` con el directorio de trabajo en System32, no
+            // en la carpeta del script). La única forma confiable de que
+            // scripts con referencias relativas (ej. "call webui.bat")
+            // funcionen es invocar cmd.exe directamente y fijar el
+            // directorio de trabajo desde Rust con current_dir, sin pasar
+            // por start/ShellExecute.
+            //
+            // A propósito SIN CREATE_NO_WINDOW ni stdout/stderr en null:
+            // estos scripts (ej. levantar un servidor local) suelen
+            // imprimir su progreso, errores, o la URL para abrir en el
+            // navegador -- ocultar la consola dejaría a Sebastián sin esa
+            // información, igual que si se ejecutaran silenciados.
+            let mut command = Command::new("cmd");
+            command.args(["/C", &path]);
+            if let Some(parent) = Path::new(&path).parent() {
+                if parent.exists() {
+                    command.current_dir(parent);
+                }
+            }
+            command
+                .spawn()
+                .map_err(|e| format!("No se pudo lanzar \"{}\": {}", path, e))?;
             return Ok(());
         }
 

@@ -1,13 +1,22 @@
 import { obtenerHoraActual } from "./obtenerHoraActual";
 import { abrirUrl } from "./abrirUrl";
 import { buscarEnWeb } from "./buscarEnWeb";
+import { controlMedios } from "./controlMedios";
+import { ajustarVolumen } from "./ajustarVolumen";
 import { buildAbrirAplicacionTool } from "./abrirAplicacion";
 import { buildAbrirCarpetaDeAppsTool } from "./abrirCarpetaDeApps";
+import { buildCambiarSalidaAudioTool } from "./cambiarSalidaAudio";
 import { ToolDefinition, ToolSchema } from "./types";
 
 // Tools estáticas: no dependen de nada que cambie en runtime, su schema se
 // arma una sola vez.
-const STATIC_TOOLS: ToolDefinition[] = [obtenerHoraActual, abrirUrl, buscarEnWeb];
+const STATIC_TOOLS: ToolDefinition[] = [
+  obtenerHoraActual,
+  abrirUrl,
+  buscarEnWeb,
+  controlMedios,
+  ajustarVolumen,
+];
 
 // Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que
 // cambia en runtime (lista de apps descubiertas, carpetas creadas por
@@ -16,6 +25,7 @@ const STATIC_TOOLS: ToolDefinition[] = [obtenerHoraActual, abrirUrl, buscarEnWeb
 const DYNAMIC_TOOL_BUILDERS: (() => ToolDefinition)[] = [
   buildAbrirAplicacionTool,
   buildAbrirCarpetaDeAppsTool,
+  buildCambiarSalidaAudioTool,
 ];
 
 function getAllTools(): ToolDefinition[] {

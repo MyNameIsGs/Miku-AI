@@ -19,6 +19,7 @@ import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
+import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { ChatContentPart, ChatContent, ChatMessage } from "./types";
 import {
@@ -256,6 +257,7 @@ function App() {
 
   const memoryFiles = useMemoryFiles();
   const appLauncher = useAppLauncher();
+  useAudioDevices();
 
   async function askMiku(userMessage: string, imageDataUrl?: string | null) {
     if (!isVoiceReady) return;
