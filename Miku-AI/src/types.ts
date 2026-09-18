@@ -59,4 +59,9 @@ export type ToolCall = {
 export type ChatMessage =
   | { role: "user"; content: ChatContent }
   | { role: "assistant"; content: ChatContent; tool_calls?: ToolCall[] }
-  | { role: "tool"; content: string; tool_call_id: string };
+  // Tarea 6.6: content puede ser multi-parte (texto + image_url) -- una
+  // tool como ver_pantalla necesita poder devolver una imagen, no solo
+  // texto. Verificado contra la API real que un mensaje "tool" con content
+  // multi-parte funciona: el modelo describió correctamente una imagen de
+  // prueba mandada así.
+  | { role: "tool"; content: ChatContent; tool_call_id: string };

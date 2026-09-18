@@ -42,4 +42,7 @@ reqwest = { version = "0.12", features = ["json"] }
 sha2 = "0.10"
 tokio = { version = "1", features = ["fs", "io-util"] }
 lnk = "0.6"
+xcap = "0.9"
+image = { version = "0.25", default-features = false, features = ["png"] }
+base64 = "0.22"
 

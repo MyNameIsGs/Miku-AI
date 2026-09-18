@@ -7,7 +7,9 @@ import { ajustarVolumen } from "./ajustarVolumen";
 import { buildAbrirAplicacionTool } from "./abrirAplicacion";
 import { buildAbrirCarpetaDeAppsTool } from "./abrirCarpetaDeApps";
 import { buildCambiarSalidaAudioTool } from "./cambiarSalidaAudio";
+import { verPantalla } from "./verPantalla";
 import { ToolDefinition, ToolSchema } from "./types";
+import { ChatContent } from "../../types";
 
 // Tools estáticas: no dependen de nada que cambie en runtime, su schema se
 // arma una sola vez.
@@ -17,6 +19,7 @@ const STATIC_TOOLS: ToolDefinition[] = [
   buscarEnWeb,
   controlMedios,
   ajustarVolumen,
+  verPantalla,
 ];
 
 // Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que
@@ -40,7 +43,7 @@ export function getToolSchemas(): ToolSchema[] {
 export async function executeTool(
   name: string,
   argumentsJson: string,
-): Promise<string> {
+): Promise<ChatContent> {
   const tool = getAllTools().find((t) => t.schema.function.name === name);
   if (!tool) {
     return `Error: no existe una herramienta llamada "${name}".`;

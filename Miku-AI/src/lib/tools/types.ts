@@ -1,3 +1,5 @@
+import { ChatContent } from "../../types";
+
 export type ToolSchema = {
   type: "function";
   function: {
@@ -21,5 +23,7 @@ export type ToolDefinition = {
   // Mensaje humano para el diálogo de confirmación. Si no se define, se
   // arma uno genérico con el nombre de la tool y sus argumentos en crudo.
   describeForConfirmation?: (args: Record<string, unknown>) => string;
-  execute: (args: Record<string, unknown>) => Promise<string> | string;
+  // Tarea 6.6: puede devolver contenido multi-parte (texto + image_url),
+  // no solo texto -- ver_pantalla lo usa para devolver la captura.
+  execute: (args: Record<string, unknown>) => Promise<ChatContent> | ChatContent;
 };
