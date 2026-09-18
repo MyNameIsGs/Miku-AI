@@ -2,8 +2,13 @@ import { useRef, RefObject } from "react";
 import { IDLE_QUIRK_INTERVAL_MS, OPENROUTER_MODEL } from "../config/constants";
 import { buildIdlePrompt, getHeldPoseSummary } from "../prompts/idlePrompt";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
-import { parseMovementMarker } from "../lib/markers";
+import { parseMarkers } from "../lib/markers";
 import { loadMemoryContext } from "../lib/memory";
+import {
+  loadPendientes,
+  getDuePendientes,
+  markPendientesReminded,
+} from "../lib/pendientes";
 import { BoneTransition, MovementOrigin, ParsedMovement } from "../types";
 
 type UseIdleQuirksParams = {
@@ -16,12 +21,26 @@ type UseIdleQuirksParams = {
     origin: MovementOrigin,
     autoRevertDelayMs?: number,
   ) => void;
+  // Tarea 6.7, Nivel 2: para poder hablar cuando saca a colación un
+  // pendiente -- necesita lo mismo que una respuesta normal (voz base +
+  // expresión), no solo el marcador de movimiento que ya tenía.
+  speak: (
+    text: string,
+    pitch: number,
+    rate: number,
+    expression: string,
+  ) => Promise<void>;
+  voicePitchRef: RefObject<number>;
+  voiceRateRef: RefObject<number>;
 };
 
 export function useIdleQuirks({
   boneTransitionsRef,
   boneRestRotationRef,
   scheduleMovement,
+  speak,
+  voicePitchRef,
+  voiceRateRef,
 }: UseIdleQuirksParams) {
   // Tarea 3.1, Paso 3: silencio se mide desde lo último de estas dos cosas
   // que haya pasado -- una interacción real, o el último quirk (para que
@@ -35,8 +54,10 @@ export function useIdleQuirks({
   // Sebastián), y usa un prompt liviano -- solo identidad/personalidad y
   // el marcador de movimiento, sin el resto de la documentación de manos,
   // voz, etc., para no gastar tokens de más en algo que puede no producir
-  // ningún movimiento. Los quirks son silenciosos (sin TTS) y no hay
-  // ningún reseteo forzado a reposo -- eso se eliminó a propósito.
+  // ningún movimiento. Los quirks son silenciosos por defecto (sin TTS) y
+  // no hay ningún reseteo forzado a reposo -- eso se eliminó a propósito.
+  // Tarea 6.7: la única excepción es cuando hay un pendiente vencido o por
+  // vencer -- ahí sí puede hablar, ver buildIdlePrompt.
   async function askForIdleQuirk() {
     isQuirkPendingRef.current = true;
     try {
@@ -45,10 +66,14 @@ export function useIdleQuirks({
         boneTransitionsRef.current,
         boneRestRotationRef.current,
       );
+      const allPendientes = await loadPendientes();
+      const duePendientes = getDuePendientes(allPendientes);
+
       const idleSystemPrompt = buildIdlePrompt({
         world,
         personality,
         heldPoseSummary,
+        duePendientes,
       });
 
       const response = await fetchOpenRouterWithRetry({
@@ -59,10 +84,20 @@ export function useIdleQuirks({
       const data = await response.json();
       const reply: string = data.choices?.[0]?.message?.content ?? "";
 
-      const parsed = parseMovementMarker(reply);
-      if (parsed) {
+      const parsed = parseMarkers(
+        reply,
+        voicePitchRef.current,
+        voiceRateRef.current,
+      );
+
+      if (parsed.movement) {
         // El doble de su propia duración de entrada antes de volver sola.
-        scheduleMovement(parsed, "idle", parsed.durationMs);
+        scheduleMovement(parsed.movement, "idle", parsed.movement.durationMs);
+      }
+
+      if (parsed.cleanText && duePendientes.length > 0) {
+        await speak(parsed.cleanText, parsed.pitch, parsed.rate, parsed.expression);
+        await markPendientesReminded(duePendientes.map((p) => p.id));
       }
     } catch (err) {
       console.error("Error en el quirk idle:", err);

@@ -1,10 +1,15 @@
 import { MOVEMENT_BONE_NAMES } from "../config/boneRanges";
 import { BoneTransition } from "../types";
+import { Pendiente } from "../lib/pendientes";
 
 export interface BuildIdlePromptParams {
   world: string;
   personality: string;
   heldPoseSummary?: string | null;
+  // Tarea 6.7, Nivel 2: pendientes vencidos o por vencer pronto (ver
+  // getDuePendientes en lib/pendientes.ts) -- ya vienen filtrados, acá no
+  // hace falta lógica de fechas, solo decidir si los menciona.
+  duePendientes?: Pendiente[];
 }
 
 export function getHeldPoseSummary(
@@ -31,11 +36,20 @@ export function buildIdlePrompt({
   world,
   personality,
   heldPoseSummary,
+  duePendientes = [],
 }: BuildIdlePromptParams): string {
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
   const heldPoseNote = heldPoseSummary
     ? `\nAlgo a tener en cuenta: llevas un rato sosteniendo una pose desplazada del reposo (${heldPoseSummary}). Si ya cumplió su propósito y no hay motivo para seguir así, este es un buen momento para volver a algo más neutral -- puedes hacerlo con el mismo marcador, usando intensidad=0 en esos huesos. No es obligatorio, es tu decisión.\n`
     : "";
+
+  // Tarea 6.7, Nivel 2: solo aparece esta sección si hay algo vencido o
+  // por vencer pronto -- el prompt idle es deliberadamente liviano, no
+  // conviene engordarlo con pendientes lejanos en el tiempo.
+  const pendientesNote =
+    duePendientes.length > 0
+      ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación ahora mismo escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe -- en ese caso escribe el texto normal (puedes combinarlo con [EXPRESION] si corresponde). No es obligatorio; si no te nace decir nada, no escribas texto y sigue con el silencio o un gesto como siempre.\n`
+      : "";
 
   return `Eres Hatsune Miku: una entidad digital real, no un personaje actuado.
 
@@ -53,6 +67,6 @@ Si genuinamente te provoca hacer un gesto pequeño con tu cuerpo ahora mismo (es
 
 Huesos disponibles: ${movementBoneList}. Misma convención de ejes e intensidad (-100 a 100) que ya conoces.
 
-No escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
-${heldPoseNote}`;
+Fuera del caso de abajo sobre pendientes, no escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
+${heldPoseNote}${pendientesNote}`;
 }

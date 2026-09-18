@@ -105,7 +105,7 @@ export function AppLauncherPanel({
       <div className="app-launcher-section">
         <h4>Aplicaciones personalizadas (scripts, .bat, etc.)</h4>
         <p className="app-launcher-hint">
-          Solo Miku puede abrir lo que vos cargues acá -- ella nunca elige ni
+          Solo Miku puede abrir lo que tú cargues aquí -- ella nunca elige ni
           escribe una ruta por su cuenta.
         </p>
         {customApps.map((app) => (

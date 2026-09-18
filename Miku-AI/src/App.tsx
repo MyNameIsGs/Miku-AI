@@ -39,6 +39,7 @@ import {
   stripMarkers,
 } from "./lib/markers";
 import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
+import { loadPendientes, getActivePendientes } from "./lib/pendientes";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -52,6 +53,11 @@ function App() {
   const gazeTargetObjectRef = useRef<THREE.Object3D | null>(null);
   const [voicePitch, setVoicePitch] = useState(10);
   const [voiceRate, setVoiceRate] = useState(15);
+  // Tarea 6.7: el quirk idle necesita leer siempre el valor más reciente
+  // de estos sliders al hablar un recordatorio, sin depender de si
+  // onBeforeRender quedó con una closure vieja.
+  const voicePitchRef = useRef(voicePitch);
+  const voiceRateRef = useRef(voiceRate);
   const [showConfig, setShowConfig] = useState(false);
   const [showAppLauncher, setShowAppLauncher] = useState(false);
   const [hideResponseText, setHideResponseText] = useState(false);
@@ -110,6 +116,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    voicePitchRef.current = voicePitch;
     if (!isVoiceSettingsLoaded.current) return;
     (async () => {
       try {
@@ -123,6 +130,7 @@ function App() {
   }, [voicePitch]);
 
   useEffect(() => {
+    voiceRateRef.current = voiceRate;
     if (!isVoiceSettingsLoaded.current) return;
     (async () => {
       try {
@@ -232,12 +240,6 @@ function App() {
 
   const face = useFace({ vrmRef, gazeTargetObjectRef });
 
-  const idleQuirks = useIdleQuirks({
-    boneTransitionsRef: movement.boneTransitionsRef,
-    boneRestRotationRef,
-    scheduleMovement: movement.scheduleMovement,
-  });
-
   // Captura el canvas como imagen después de que la animación probablemente
   // ya se asentó, para que la próxima consulta al LLM pueda incluir cómo
   // quedó ella de verdad, no solo la descripción textual. Se hace marcando
@@ -253,6 +255,15 @@ function App() {
     setViseme: face.setViseme,
     resetVisemes: face.resetVisemes,
     isSpeakingRef: face.isSpeakingRef,
+  });
+
+  const idleQuirks = useIdleQuirks({
+    boneTransitionsRef: movement.boneTransitionsRef,
+    boneRestRotationRef,
+    scheduleMovement: movement.scheduleMovement,
+    speak: speech.speak,
+    voicePitchRef,
+    voiceRateRef,
   });
 
   const memoryFiles = useMemoryFiles();
@@ -272,12 +283,24 @@ function App() {
       const selfDescription = pendingSelfDescriptionRef.current;
       pendingSelfDescriptionRef.current = null;
 
+      // Tarea 6.7: fecha de hoy (para que calcule fechas relativas al
+      // anotar pendientes) y la lista de pendientes activos.
+      const todayLabel = new Date().toLocaleDateString("es-ES", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const activePendientes = getActivePendientes(await loadPendientes());
+
       const systemPrompt = buildSystemPrompt({
         world,
         personality,
         memories,
         selfDescription,
         customGestureNames,
+        todayLabel,
+        activePendientes,
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,
