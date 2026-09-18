@@ -140,6 +140,85 @@ export function parseCreateHandGestureMarker(
   return { name, curls: completeCurls, animated };
 }
 
+// Fase 7: creación/confirmación de quirks propios. Formato análogo a
+// [MOVIMIENTO] (mismos pares hueso.eje=intensidad) más nombre= y, opcional,
+// mano_izq=/mano_der= con el nombre de un preset o gesto propio ya
+// existente -- un quirk combina cuerpo y manos en una sola definición.
+export interface ParsedQuirkCreation {
+  name: string;
+  entries: { bone: string; axis: "x" | "y" | "z"; intensity: number }[];
+  durationMs: number;
+  animated: boolean;
+  handLeft?: string;
+  handRight?: string;
+}
+
+export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null {
+  const match = text.match(/\[CREAR_QUIRK:\s*([\s\S]*?)\]/i);
+  if (!match) return null;
+
+  const parts = match[1]
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  let name: string | undefined;
+  let durationMs = DEFAULT_MOVEMENT_DURATION_MS;
+  let animated = false;
+  let handLeft: string | undefined;
+  let handRight: string | undefined;
+  const entries: ParsedQuirkCreation["entries"] = [];
+
+  for (const part of parts) {
+    const [rawKey, rawValue] = part.split("=").map((s) => s.trim());
+    if (!rawKey || rawValue === undefined) continue;
+    const key = rawKey.toLowerCase();
+
+    if (key === "nombre") {
+      name = rawValue.replace(/[^a-zA-Z0-9_]/g, "");
+      continue;
+    }
+    if (key === "duracion") {
+      const num = parseFloat(rawValue.replace(/s$/i, ""));
+      if (!Number.isNaN(num) && num > 0) durationMs = num * 1000;
+      continue;
+    }
+    if (key === "animado") {
+      animated = /^(si|sí|yes|true)$/i.test(rawValue);
+      continue;
+    }
+    if (key === "mano_izq" && rawValue) {
+      handLeft = rawValue;
+      continue;
+    }
+    if (key === "mano_der" && rawValue) {
+      handRight = rawValue;
+      continue;
+    }
+
+    const [bone, axis] = rawKey.split(".");
+    if (!bone || !axis || !["x", "y", "z"].includes(axis)) continue;
+    if (!BONE_RANGES_DEG[bone]) continue;
+
+    const intensity = parseFloat(rawValue);
+    if (Number.isNaN(intensity)) continue;
+
+    entries.push({ bone, axis: axis as "x" | "y" | "z", intensity });
+  }
+
+  if (!name) return null;
+  if (entries.length === 0 && !handLeft && !handRight) return null;
+
+  return { name, entries, durationMs, animated, handLeft, handRight };
+}
+
+export function parseQuirkReadyMarker(text: string): string | null {
+  const match = text.match(/\[QUIRK_LISTO:\s*([\s\S]*?)\]/i);
+  if (!match) return null;
+  const name = match[1].trim().replace(/[^a-zA-Z0-9_]/g, "");
+  return name || null;
+}
+
 export function stripMarkers(text: string): string {
   return text
     .replace(/\[GUARDAR_PERSONALIDAD:[\s\S]*?\]/g, "")
@@ -150,6 +229,8 @@ export function stripMarkers(text: string): string {
     .replace(/\[MOVIMIENTO:[\s\S]*?\]/gi, "")
     .replace(/\[GESTO_MANO:[\s\S]*?\]/gi, "")
     .replace(/\[CREAR_GESTO_MANO:[\s\S]*?\]/gi, "")
+    .replace(/\[CREAR_QUIRK:[\s\S]*?\]/gi, "")
+    .replace(/\[QUIRK_LISTO:[\s\S]*?\]/gi, "")
     .trim();
 }
 
@@ -163,6 +244,10 @@ export interface ParsedMarkersResult {
   // ORDEN CRÍTICO: createHandGesture debe aplicarse ANTES de handGesture
   createHandGesture: ParsedGestureCreation | null;
   handGesture: ParsedHandGesture | null;
+  // Fase 7: solo los usa el loop idle (ver useIdleQuirks.ts) -- la
+  // conversación normal nunca instruye estos marcadores.
+  createQuirk: ParsedQuirkCreation | null;
+  quirkReady: string | null;
   cleanText: string;
 }
 
@@ -222,6 +307,9 @@ export function parseMarkers(
   const createHandGesture = parseCreateHandGestureMarker(reply);
   const handGesture = parseHandGestureMarker(reply);
 
+  const createQuirk = parseCreateQuirkMarker(reply);
+  const quirkReady = parseQuirkReadyMarker(reply);
+
   const cleanText = stripMarkers(reply);
 
   return {
@@ -233,6 +321,8 @@ export function parseMarkers(
     movement,
     createHandGesture,
     handGesture,
+    createQuirk,
+    quirkReady,
     cleanText,
   };
 }

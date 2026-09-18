@@ -94,6 +94,13 @@ function App() {
   const selfImageCaptureAtRef = useRef<number | null>(null);
   const lastSelfImageRef = useRef<string | null>(null);
   const pendingSelfDescriptionRef = useRef<string | null>(null);
+  // Fase 7: mismo patrón que los tres refs de arriba, pero separado para
+  // la foto/descripción de un quirk en evaluación -- así no se pisa con la
+  // captura de una conversación real si coinciden en el tiempo, y viaja a
+  // la PRÓXIMA consulta idle (ver useIdleQuirks.ts), no a la conversación.
+  const quirkImageCaptureAtRef = useRef<number | null>(null);
+  const quirkSelfImageRef = useRef<string | null>(null);
+  const pendingQuirkDescriptionRef = useRef<string | null>(null);
   const boneRestRotationRef = useRef<
     Record<string, { x: number; y: number; z: number }>
   >({});
@@ -259,6 +266,12 @@ function App() {
     selfImageCaptureAtRef.current = performance.now() + delayMs;
   }
 
+  // Fase 7: mismo mecanismo que captureSelfImageAfterDelay, para la foto de
+  // un quirk en evaluación -- ver el contrato en onAfterRender más abajo.
+  function captureQuirkImageAfterDelay(delayMs: number) {
+    quirkImageCaptureAtRef.current = performance.now() + delayMs;
+  }
+
   const speech = useSpeech({
     setExpression: face.setExpression,
     setViseme: face.setViseme,
@@ -270,9 +283,13 @@ function App() {
     boneTransitionsRef: movement.boneTransitionsRef,
     boneRestRotationRef,
     scheduleMovement: movement.scheduleMovement,
+    scheduleHandGesture: movement.scheduleHandGesture,
     speak: speech.speak,
     voicePitchRef,
     voiceRateRef,
+    captureQuirkImageAfterDelay,
+    quirkSelfImageRef,
+    pendingQuirkDescriptionRef,
   });
 
   const memoryFiles = useMemoryFiles();
@@ -545,6 +562,19 @@ function App() {
         lastSelfImageRef.current = renderer.domElement.toDataURL("image/png");
       } catch (err) {
         console.error("Error capturando imagen de sí misma:", err);
+      }
+    }
+
+    // Fase 7: mismo mecanismo, para la foto de un quirk en evaluación.
+    if (
+      quirkImageCaptureAtRef.current !== null &&
+      now >= quirkImageCaptureAtRef.current
+    ) {
+      quirkImageCaptureAtRef.current = null;
+      try {
+        quirkSelfImageRef.current = renderer.domElement.toDataURL("image/png");
+      } catch (err) {
+        console.error("Error capturando imagen del quirk:", err);
       }
     }
   }

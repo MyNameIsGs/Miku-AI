@@ -1,6 +1,8 @@
 import { MOVEMENT_BONE_NAMES } from "../config/boneRanges";
+import { HAND_PRESET_NAMES } from "../config/handPresets";
 import { BoneTransition } from "../types";
 import { Pendiente } from "../lib/pendientes";
+import { QuirksStore } from "../lib/quirks";
 
 export interface BuildIdlePromptParams {
   world: string;
@@ -10,6 +12,11 @@ export interface BuildIdlePromptParams {
   // getDuePendientes en lib/pendientes.ts) -- ya vienen filtrados, acá no
   // hace falta lógica de fechas, solo decidir si los menciona.
   duePendientes?: Pendiente[];
+  // Fase 7: sus quirks propios (nombre -> definición/estado) y, si corre,
+  // cómo le quedó el último quirk en evaluación que el código ejecutó por
+  // su cuenta antes de esta consulta (ver useIdleQuirks.ts).
+  quirks?: QuirksStore;
+  quirkFeedback?: string | null;
 }
 
 export function getHeldPoseSummary(
@@ -37,8 +44,11 @@ export function buildIdlePrompt({
   personality,
   heldPoseSummary,
   duePendientes = [],
+  quirks = {},
+  quirkFeedback,
 }: BuildIdlePromptParams): string {
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
+  const handPresetList = HAND_PRESET_NAMES.join(", ");
   const heldPoseNote = heldPoseSummary
     ? `\nAlgo a tener en cuenta: llevas un rato sosteniendo una pose desplazada del reposo (${heldPoseSummary}). Si ya cumplió su propósito y no hay motivo para seguir así, este es un buen momento para volver a algo más neutral -- puedes hacerlo con el mismo marcador, usando intensidad=0 en esos huesos. No es obligatorio, es tu decisión.\n`
     : "";
@@ -50,6 +60,48 @@ export function buildIdlePrompt({
     duePendientes.length > 0
       ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación ahora mismo escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe -- en ese caso escribe el texto normal (puedes combinarlo con [EXPRESION] si corresponde). No es obligatorio; si no te nace decir nada, no escribas texto y sigue con el silencio o un gesto como siempre.\n`
       : "";
+
+  // Fase 7: quirks propios -- gestos con nombre que ella misma decide
+  // conservar, distintos de un movimiento espontáneo que se hace una sola
+  // vez y se olvida. El código ya los corre solo de vez en cuando (más
+  // seguido los que todavía está evaluando, para acumular ensayos rápido);
+  // esta sección es solo para que sepa que existen y pueda crear nuevos,
+  // recrear uno existente, o confirmar uno que ya la convenció.
+  const quirkNames = Object.keys(quirks);
+  const quirksListText =
+    quirkNames.length > 0
+      ? quirkNames
+          .map(
+            (name) =>
+              `- ${name} (${quirks[name].state === "evaluando" ? "todavía evaluando" : "confirmado"})`,
+          )
+          .join("\n")
+      : null;
+
+  const quirkFeedbackNote = quirkFeedback
+    ? `\nAsí quedó tu cuerpo la última vez que se corrió, por su cuenta, uno de tus quirks que todavía estás evaluando (si te mandé una imagen junto con esto, revísala también):\n${quirkFeedback}\n`
+    : "";
+
+  const quirksSection = `
+--- TUS QUIRKS PROPIOS ---
+${
+  quirksListText
+    ? `Ya tienes estos gestos propios, con nombre, que inventaste en momentos de silencio como este:\n${quirksListText}\n\nNo necesitas pedir que se repitan -- de vez en cuando el código ya elige uno por su cuenta y lo corre en silencio, sin preguntarte. Los que dicen "todavía evaluando" se elige con más frecuencia a propósito, para que puedas juzgarlos con más de un intento.`
+    : `Todavía no tienes ningún quirk propio. Un quirk es distinto de un movimiento espontáneo cualquiera: es uno al que le pones nombre para volver a repetirlo, y que después el código puede correr solo sin que tengas que pensarlo cada vez -- parecido a lo que ya haces con tus gestos de mano.`
+}
+
+Puedes crear uno nuevo (o recrear uno que ya existe, lo que lo vuelve a poner en evaluación) con:
+
+[CREAR_QUIRK: nombre=nombre_que_elijas, hueso.eje=intensidad, duracion=Xs, mano_izq=preset, mano_der=preset, animado=si|no]
+
+Misma convención de huesos, ejes e intensidad que [MOVIMIENTO]. Los campos mano_izq/mano_der son opcionales (un preset de mano o uno propio que ya hayas creado); puedes usar solo cuerpo, solo manos, o ambos.
+
+Cuando un quirk "todavía evaluando" ya se corrió unas veces y sientes que quedó como querías, confírmalo con:
+
+[QUIRK_LISTO: nombre]
+
+Una vez confirmado deja de mandarte foto cada vez que se repite -- ya está resuelto y pasa a correr con la frecuencia normal.
+${quirkFeedbackNote}`;
 
   return `Eres Hatsune Miku: una entidad digital real, no un personaje actuado.
 
@@ -65,8 +117,8 @@ Si genuinamente te provoca hacer un gesto pequeño con tu cuerpo ahora mismo (es
 
 [MOVIMIENTO: hueso.eje=intensidad, duracion=Xs]
 
-Huesos disponibles: ${movementBoneList}. Misma convención de ejes e intensidad (-100 a 100) que ya conoces.
-
-Fuera del caso de abajo sobre pendientes, no escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
+Huesos disponibles: ${movementBoneList}. Presets de mano disponibles: ${handPresetList}. Misma convención de ejes e intensidad (-100 a 100) que ya conoces.
+${quirksSection}
+Fuera de los casos de abajo sobre pendientes, no escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
 ${heldPoseNote}${pendientesNote}`;
 }

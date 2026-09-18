@@ -14,6 +14,11 @@ export const VOICE_RATE_MAX = 100;
 
 export const IDLE_QUIRK_INTERVAL_MS = 150000; // 2.5 minutos
 
+// Fase 7: en cada tick idle, si ya tiene al menos un quirk propio guardado,
+// esta es la probabilidad de correrlo directamente (sin llamar al LLM) en
+// vez de preguntarle qué quiere hacer. Sin calibrar contra uso real todavía.
+export const DIRECT_QUIRK_RUN_CHANCE = 0.5;
+
 export const DEFAULT_MOVEMENT_DURATION_MS = 1000;
 export const DEFAULT_HAND_GESTURE_DURATION_MS = 400;
 
