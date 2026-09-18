@@ -1,3 +1,4 @@
+import { ask } from "@tauri-apps/plugin-dialog";
 import { obtenerHoraActual } from "./obtenerHoraActual";
 import { abrirUrl } from "./abrirUrl";
 import { buscarEnWeb } from "./buscarEnWeb";
@@ -51,6 +52,23 @@ export async function executeTool(
       args = JSON.parse(argumentsJson);
     } catch {
       return `Error: los argumentos recibidos para "${name}" no son JSON válido.`;
+    }
+  }
+
+  // Tarea 6.5: acciones sensibles se frenan acá antes de ejecutar nada --
+  // se le pregunta a Sebastián con un diálogo nativo, y si la rechaza, la
+  // tool nunca corre. El resultado dice explícitamente que fue rechazada
+  // para que Miku lo entienda y no asuma que funcionó.
+  if (tool.requiresConfirmation) {
+    const description = tool.describeForConfirmation
+      ? tool.describeForConfirmation(args)
+      : `${name}(${JSON.stringify(args)})`;
+    const approved = await ask(`Miku quiere hacer esto:\n${description}`, {
+      title: "Miku pide confirmación",
+      kind: "warning",
+    });
+    if (!approved) {
+      return "El usuario rechazó esta acción.";
     }
   }
 

@@ -13,5 +13,13 @@ export type ToolSchema = {
 
 export type ToolDefinition = {
   schema: ToolSchema;
+  // Tarea 6.5: si es true, antes de ejecutar se le pregunta a Sebastián
+  // con un diálogo nativo. Pensado para acciones sensibles (cerrar
+  // procesos, mover archivos, etc.) que todavía no existen -- ninguna
+  // tool actual lo necesita.
+  requiresConfirmation?: boolean;
+  // Mensaje humano para el diálogo de confirmación. Si no se define, se
+  // arma uno genérico con el nombre de la tool y sus argumentos en crudo.
+  describeForConfirmation?: (args: Record<string, unknown>) => string;
   execute: (args: Record<string, unknown>) => Promise<string> | string;
 };

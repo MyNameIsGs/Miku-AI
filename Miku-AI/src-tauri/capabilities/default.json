@@ -29,6 +29,7 @@
       "allow": [{ "path": "$HOME/**" }]
     },
     "dialog:allow-open",
+    "dialog:allow-ask",
     "opener:allow-open-url",
     "opener:allow-default-urls"
   ]
