@@ -283,6 +283,46 @@ def transcribe():
         return {"error": str(e)}, 500
 
 
+@app.route("/transcribe/partial", methods=["POST"])
+def transcribe_partial():
+    # Tarea 5.4b: transcripción incremental. Reusa el mismo Whisper ya
+    # cargado -- no hay motor nuevo, ver §6.26 del contexto para por qué se
+    # descartaron Voxtral Realtime (VRAM) y Parakeet TDT (el export a ONNX
+    # todavía no soporta streaming real). La técnica es "LocalAgreement"
+    # simplificada: el frontend manda el audio acumulado desde que empezó a
+    # grabar, cada vez más largo, y esta ruta lo retranscribe entero cada
+    # vez -- el resultado reemplaza al anterior en el cuadro de texto,
+    # hasta que /transcribe (al soltar el botón) lo reemplaza con la
+    # versión final de mejor calidad.
+    #
+    # beam_size=1 (greedy) en vez del default (beam_size=5): prioriza
+    # velocidad sobre precisión perfecta, porque este resultado es
+    # descartable -- se llama varias veces por segundo de grabación.
+    # condition_on_previous_text=False: evita que un audio parcial corto o
+    # ambiguo entre en loop repitiendo texto.
+    try:
+        if whisper_model is None:
+            return {"error": "El modelo Whisper no está disponible"}, 503
+
+        audio_bytes = request.get_data()
+        if not audio_bytes:
+            return {"error": "No se recibió audio"}, 400
+
+        segments, _info = whisper_model.transcribe(
+            io.BytesIO(audio_bytes),
+            language="es",
+            beam_size=1,
+            condition_on_previous_text=False,
+        )
+        text = "".join(segment.text for segment in segments).strip()
+
+        return jsonify({"text": text})
+    except Exception as e:
+        print("[ERROR EN /transcribe/partial]:")
+        traceback.print_exc()
+        return {"error": str(e)}, 500
+
+
 @app.route("/wake-word/poll", methods=["GET"])
 def wake_word_poll():
     with wake_word_state_lock:
