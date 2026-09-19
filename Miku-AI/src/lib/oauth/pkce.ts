@@ -1,6 +1,7 @@
-// Helpers de PKCE (Proof Key for Code Exchange) para el flujo de
-// autorización de Spotify -- usa Web Crypto, disponible en el webview de
-// Tauri como en cualquier navegador, sin dependencias nuevas.
+// Helpers de PKCE (Proof Key for Code Exchange), compartidos por cualquier
+// integración con login OAuth de escritorio (Spotify, Gmail, ...) -- usa
+// Web Crypto, disponible en el webview de Tauri como en cualquier
+// navegador, sin dependencias nuevas.
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);

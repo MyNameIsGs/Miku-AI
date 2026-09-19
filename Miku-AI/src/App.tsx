@@ -42,6 +42,11 @@ import {
 import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
 import { loadPendientes, getActivePendientes } from "./lib/pendientes";
 import { connectSpotify, isSpotifyConnected } from "./lib/spotify/auth";
+import {
+  connectGmail,
+  disconnectGmailAccount,
+  listConnectedGmailEmails,
+} from "./lib/gmail/auth";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -71,6 +76,9 @@ function App() {
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [spotifyConnecting, setSpotifyConnecting] = useState(false);
   const [spotifyError, setSpotifyError] = useState<string | null>(null);
+  const [gmailAccounts, setGmailAccounts] = useState<string[]>([]);
+  const [gmailConnecting, setGmailConnecting] = useState(false);
+  const [gmailError, setGmailError] = useState<string | null>(null);
   const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
@@ -159,6 +167,9 @@ function App() {
     isSpotifyConnected()
       .then(setSpotifyConnected)
       .catch((err) => console.error("Error consultando conexión de Spotify:", err));
+    listConnectedGmailEmails()
+      .then(setGmailAccounts)
+      .catch((err) => console.error("Error consultando cuentas de Gmail:", err));
   }, []);
 
   const handleConnectSpotify = async () => {
@@ -171,6 +182,29 @@ function App() {
       setSpotifyError(err instanceof Error ? err.message : String(err));
     } finally {
       setSpotifyConnecting(false);
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    setGmailConnecting(true);
+    setGmailError(null);
+    try {
+      const email = await connectGmail();
+      setGmailAccounts((prev) => [...prev.filter((e) => e !== email), email]);
+    } catch (err) {
+      console.error("Error conectando Gmail:", err);
+      setGmailError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGmailConnecting(false);
+    }
+  };
+
+  const handleDisconnectGmail = async (email: string) => {
+    try {
+      await disconnectGmailAccount(email);
+      setGmailAccounts((prev) => prev.filter((e) => e !== email));
+    } catch (err) {
+      console.error("Error desconectando cuenta de Gmail:", err);
     }
   };
 
@@ -829,7 +863,7 @@ function App() {
               onChange={(e) => setVoiceRate(Number(e.target.value))}
             />
           </label>
-          <div className="spotify-config-row">
+          <div className="oauth-connect-row">
             <button
               onClick={handleConnectSpotify}
               disabled={spotifyConnecting}
@@ -842,8 +876,33 @@ function App() {
                   : "Conectar Spotify"}
             </button>
             {spotifyError && (
-              <span className="spotify-error" title={spotifyError}>
+              <span className="oauth-error" title={spotifyError}>
                 Error al conectar Spotify
+              </span>
+            )}
+          </div>
+          <div className="oauth-connect-row gmail-accounts-row">
+            {gmailAccounts.map((email) => (
+              <span key={email} className="gmail-account-chip">
+                {email}
+                <button
+                  onClick={() => handleDisconnectGmail(email)}
+                  title="Desconectar esta cuenta"
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            <button onClick={handleConnectGmail} disabled={gmailConnecting}>
+              {gmailConnecting
+                ? "Conectando..."
+                : gmailAccounts.length > 0
+                  ? "+ Otra cuenta de Gmail"
+                  : "Conectar Gmail"}
+            </button>
+            {gmailError && (
+              <span className="oauth-error" title={gmailError}>
+                Error al conectar Gmail
               </span>
             )}
           </div>

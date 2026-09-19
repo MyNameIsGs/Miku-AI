@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { load } from "@tauri-apps/plugin-store";
-import { generateCodeVerifier, generateCodeChallenge, generateState } from "./pkce";
+import { generateCodeVerifier, generateCodeChallenge, generateState } from "../oauth/pkce";
 
 // Puerto fijo -- Spotify exige que el Redirect URI registrado en el
 // dashboard coincida EXACTO, así que no puede ser dinámico.
@@ -49,11 +49,12 @@ export async function isSpotifyConnected(): Promise<boolean> {
 }
 
 // Arranca el flujo de conexión: abre el navegador para que Sebastián
-// autorice, espera el callback de loopback (Rust, ver spotify_auth.rs) y
+// autorice, espera el callback de loopback (Rust, ver
+// oauth_loopback.rs -- compartido con cualquier otra integración OAuth) y
 // cambia el código por tokens. El intercambio se hace con fetch() directo
 // desde el frontend -- Spotify soporta CORS para el flujo Authorization
 // Code + PKCE (pensado para apps de escritorio/SPA), así que no hace falta
-// pasar por Rust para esta parte.
+// pasar por Rust para esta parte (a diferencia de Gmail, ver gmail/auth.ts).
 export async function connectSpotify(): Promise<void> {
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
@@ -70,7 +71,7 @@ export async function connectSpotify(): Promise<void> {
 
   // Arranca a escuchar ANTES de abrir el navegador, para no perder el
   // callback por una carrera si Spotify responde muy rápido.
-  const waitForRedirect = invoke<string>("spotify_wait_for_redirect", {
+  const waitForRedirect = invoke<string>("oauth_wait_for_redirect", {
     port: REDIRECT_PORT,
   });
 

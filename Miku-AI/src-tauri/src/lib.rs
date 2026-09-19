@@ -6,7 +6,8 @@ mod app_launcher;
 mod media_control;
 mod audio_device;
 mod screen_capture;
-mod spotify_auth;
+mod oauth_loopback;
+mod gmail_auth;
 
 #[tauri::command]
 fn log_to_terminal(msg: String) {
@@ -238,7 +239,9 @@ pub fn run() {
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,
-            spotify_auth::spotify_wait_for_redirect,
+            oauth_loopback::oauth_wait_for_redirect,
+            gmail_auth::gmail_exchange_code,
+            gmail_auth::gmail_refresh_token,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

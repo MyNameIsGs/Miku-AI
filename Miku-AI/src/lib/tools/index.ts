@@ -12,6 +12,7 @@ import { anotarPendiente } from "./anotarPendiente";
 import { cerrarPendiente } from "./cerrarPendiente";
 import { buscarCancion } from "./buscarCancion";
 import { reproducirCancion } from "./reproducirCancion";
+import { revisarCorreo } from "./revisarCorreo";
 import { ToolDefinition, ToolSchema } from "./types";
 import { ChatContent } from "../../types";
 
@@ -28,6 +29,7 @@ const STATIC_TOOLS: ToolDefinition[] = [
   cerrarPendiente,
   buscarCancion,
   reproducirCancion,
+  revisarCorreo,
 ];
 
 // Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que

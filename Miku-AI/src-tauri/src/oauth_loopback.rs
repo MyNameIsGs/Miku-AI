@@ -2,28 +2,26 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 
-// Integración con Spotify: solo se necesita Rust para esta parte -- captura
-// el redirect de loopback del flujo OAuth "Authorization Code + PKCE". El
-// PKCE en sí (code_verifier/code_challenge) y el intercambio del código por
-// tokens los hace el lado JS con fetch() directo a Spotify: ese flujo está
-// pensado para apps de escritorio/SPA y Spotify permite CORS ahí, así que
-// no hace falta duplicar esa lógica ni tocar reqwest en este módulo.
+// Compartido por cualquier integración con login OAuth de escritorio
+// (Spotify, Gmail, ...): captura el único request de loopback que manda el
+// navegador tras la autorización, y devuelve su query string a JS. El PKCE
+// en sí, y el intercambio del código por tokens, los hace cada integración
+// por su lado (JS con fetch() si el proveedor permite CORS, como Spotify;
+// Rust con reqwest si no está claro que lo permita, como Gmail) -- esto
+// solo resuelve la parte que es imposible desde el webview: escuchar un
+// puerto TCP.
 //
 // El comando es async y delega el bloqueo real a spawn_blocking a
-// propósito: un comando de Tauri NO-async corre en el thread principal (el
-// mismo que atiende la ventana) -- a diferencia de lo que asumí al
-// escribir esto la primera vez, NO hay un pool de threads bloqueantes por
-// defecto para comandos síncronos. Los demás comandos síncronos del
-// proyecto (kill_voice_server, git pull/push en lib.rs) nunca mostraron
-// este problema porque terminan en menos de un segundo; este loop podía
-// bloquear hasta 3 minutos esperando la conexión TCP, y eso congelaba toda
-// la app (comprobado: "el programa se freezea" al apretar Conectar
-// Spotify).
+// propósito (ver 6.22 del contexto): un comando de Tauri NO-async corre en
+// el thread principal (el mismo que atiende la ventana) -- bloquearlo
+// bloquea toda la UI. Confirmado en vivo la primera vez que se escribió
+// esto para Spotify: la app se congelaba entera al apretar "Conectar
+// Spotify".
 #[tauri::command]
-pub async fn spotify_wait_for_redirect(port: u16) -> Result<String, String> {
+pub async fn oauth_wait_for_redirect(port: u16) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || wait_for_redirect_blocking(port))
         .await
-        .map_err(|e| format!("Error interno esperando el callback de Spotify: {}", e))?
+        .map_err(|e| format!("Error interno esperando el callback de OAuth: {}", e))?
 }
 
 fn wait_for_redirect_blocking(port: u16) -> Result<String, String> {
