@@ -40,17 +40,20 @@ class GitHubApi(private val token: String) {
         )
     }
 
+    // sha nulo = crear un archivo nuevo (la API de contenidos de GitHub lo
+    // exige para SOBREESCRIBIR uno existente, pero lo rechaza si se manda
+    // en la creación de uno que no existe todavía).
     suspend fun putFile(
         path: String,
         content: String,
-        sha: String,
+        sha: String?,
         message: String
     ): String = withContext(Dispatchers.IO) {
         val encoded = Base64.encodeToString(content.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         val bodyJson = JSONObject().apply {
             put("message", message)
             put("content", encoded)
-            put("sha", sha)
+            if (sha != null) put("sha", sha)
             put("branch", GH_BRANCH)
         }.toString().toRequestBody("application/json".toMediaType())
 

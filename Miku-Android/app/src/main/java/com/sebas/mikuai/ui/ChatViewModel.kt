@@ -112,8 +112,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 // Recortar historial a 20 turnos (40 mensajes)
                 while (history.size > 40) { history.removeAt(0); history.removeAt(0) }
 
-                val systemPrompt = Prompts.buildChatPrompt(mem)
-                val raw          = r.chat(systemPrompt, history.dropLast(1), promptText, base64Payload)
+                val activePendientes = r.loadActivePendientes()
+                val systemPrompt = Prompts.buildChatPrompt(mem, activePendientes)
+                val raw          = r.chatWithTools(systemPrompt, history.dropLast(1), promptText, base64Payload)
                 val parsed       = MarkerParser.parse(raw)
 
                 addMessage(UiMessage("miku", parsed.cleanText))

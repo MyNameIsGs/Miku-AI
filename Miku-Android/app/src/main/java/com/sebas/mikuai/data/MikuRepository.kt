@@ -6,6 +6,7 @@ class MikuRepository(ghToken: String, orKey: String) {
 
     private val ghApi = GitHubApi(ghToken)
     private val orApi = OpenRouterApi(orKey)
+    private val pendientesRepo = PendientesRepository(ghApi)
 
     suspend fun loadMemory(): MikuMemory {
         return MikuMemory(
@@ -49,4 +50,20 @@ class MikuRepository(ghToken: String, orKey: String) {
         userMessage: String,
         userImageBase64: String? = null
     ): String = orApi.chat(systemPrompt, history, userMessage, userImageBase64)
+
+    // Primer paso de tool calling en Android (ver Tools.kt / PendientesRepository.kt).
+    suspend fun loadActivePendientes(): List<Pendiente> = pendientesRepo.loadActivePendientes()
+
+    suspend fun chatWithTools(
+        systemPrompt: String,
+        history: List<ChatMessage>,
+        userMessage: String,
+        userImageBase64: String? = null
+    ): String = orApi.chatWithTools(
+        systemPrompt,
+        history,
+        userMessage,
+        userImageBase64,
+        Tools.schemas(),
+    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo) }
 }
