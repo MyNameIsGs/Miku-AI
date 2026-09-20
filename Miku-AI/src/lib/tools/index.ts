@@ -12,6 +12,13 @@ import { anotarPendiente } from "./anotarPendiente";
 import { cerrarPendiente } from "./cerrarPendiente";
 import { buscarCancion } from "./buscarCancion";
 import { reproducirCancion } from "./reproducirCancion";
+import { reproducirPlaylist } from "./reproducirPlaylist";
+import { reproducirAlbum } from "./reproducirAlbum";
+import { agregarACola } from "./agregarACola";
+import { queEstaSonando } from "./queEstaSonando";
+import { transferirReproduccion } from "./transferirReproduccion";
+import { modoAleatorio } from "./modoAleatorio";
+import { modoRepeticion } from "./modoRepeticion";
 import { revisarCorreo } from "./revisarCorreo";
 import { ToolDefinition, ToolSchema } from "./types";
 import { ChatContent } from "../../types";
@@ -29,6 +36,13 @@ const STATIC_TOOLS: ToolDefinition[] = [
   cerrarPendiente,
   buscarCancion,
   reproducirCancion,
+  reproducirPlaylist,
+  reproducirAlbum,
+  agregarACola,
+  queEstaSonando,
+  transferirReproduccion,
+  modoAleatorio,
+  modoRepeticion,
   revisarCorreo,
 ];
 

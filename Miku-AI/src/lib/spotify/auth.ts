@@ -7,7 +7,13 @@ import { generateCodeVerifier, generateCodeChallenge, generateState } from "../o
 // dashboard coincida EXACTO, así que no puede ser dinámico.
 const REDIRECT_PORT = 14700;
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/callback`;
-const SCOPES = "user-modify-playback-state user-read-playback-state";
+// playlist-read-private/collaborative: agregado para reproducir_playlist,
+// que necesita leer /me/playlists (playlists propias y seguidas) -- la
+// búsqueda pública de Spotify apenas encuentra contenido privado del
+// usuario. Si esto se agrega DESPUÉS de que Sebastián ya conectó Spotify,
+// el token viejo no va a tener el permiso nuevo -- hace falta reconectar.
+const SCOPES =
+  "user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative";
 const STORE_KEY = "spotifyTokens";
 
 export type SpotifyTokens = {
