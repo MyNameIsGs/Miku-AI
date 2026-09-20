@@ -34,7 +34,7 @@ export const verPantalla: ToolDefinition = {
           monitor: {
             type: "string",
             description:
-              "Qué monitor mirar: 'principal' (el default si no decís nada), un número como '2' para el segundo monitor si Sebastián lo pide específicamente, o 'todos' si pide ver los dos a la vez. Cada monitor de más cuesta tokens de más -- usa 'todos' solo cuando de verdad haga falta, no por costumbre.",
+              "Qué monitor mirar: 'principal' (el default si no dices nada), un número como '2' para el segundo monitor si Sebastián lo pide específicamente, o 'todos' si pide ver los dos a la vez. Cada monitor de más cuesta tokens de más -- usa 'todos' solo cuando de verdad haga falta, no por costumbre.",
           },
         },
         required: [],
