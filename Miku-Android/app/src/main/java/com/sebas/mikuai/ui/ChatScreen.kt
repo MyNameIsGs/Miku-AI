@@ -62,6 +62,12 @@ fun ChatScreen(
     val scope       = rememberCoroutineScope()
     var inputText   by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    var spotifyConnected by remember { mutableStateOf(vm.isSpotifyConnected()) }
+    var spotifyConnecting by remember { mutableStateOf(false) }
+    var spotifyError by remember { mutableStateOf<String?>(null) }
+    var gmailAccounts by remember { mutableStateOf(vm.listConnectedGmailEmails()) }
+    var gmailConnecting by remember { mutableStateOf(false) }
+    var gmailError by remember { mutableStateOf<String?>(null) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -245,6 +251,80 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
                 ) { Text("↺ Recargar memoria desde GitHub") }
+                OutlinedButton(
+                    onClick = {
+                        spotifyConnecting = true
+                        spotifyError = null
+                        vm.connectSpotify { success, error ->
+                            spotifyConnecting = false
+                            if (success) spotifyConnected = true else spotifyError = error
+                        }
+                    },
+                    enabled = !spotifyConnecting,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (spotifyConnected) MikuTeal else MikuText
+                    )
+                ) {
+                    Text(
+                        when {
+                            spotifyConnecting -> "Conectando..."
+                            spotifyConnected -> "Spotify conectado ✓"
+                            else -> "Conectar Spotify"
+                        }
+                    )
+                }
+                if (spotifyError != null) {
+                    Text(spotifyError.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                }
+                gmailAccounts.forEach { email ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(email, color = MikuText, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        IconButton(onClick = {
+                            vm.disconnectGmailAccount(email)
+                            gmailAccounts = gmailAccounts.filter { it != email }
+                        }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Desconectar cuenta de Gmail",
+                                tint = MikuTextDim,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        gmailConnecting = true
+                        gmailError = null
+                        vm.connectGmail { email, error ->
+                            gmailConnecting = false
+                            if (email != null) {
+                                gmailAccounts = gmailAccounts.filter { it != email } + email
+                            } else {
+                                gmailError = error
+                            }
+                        }
+                    },
+                    enabled = !gmailConnecting,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                ) {
+                    Text(
+                        when {
+                            gmailConnecting -> "Conectando..."
+                            gmailAccounts.isEmpty() -> "Conectar Gmail"
+                            else -> "+ Otra cuenta de Gmail"
+                        }
+                    )
+                }
+                if (gmailError != null) {
+                    Text(gmailError.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                }
                 OutlinedButton(
                     onClick = { showSettings = false; vm.logout(); onLogout() },
                     modifier = Modifier.fillMaxWidth(),

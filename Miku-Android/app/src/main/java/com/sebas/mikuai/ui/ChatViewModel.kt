@@ -48,7 +48,39 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private fun buildRepo(): MikuRepository? {
         val gh = prefs.getGitHubToken() ?: return null
         val or = prefs.getOpenRouterKey() ?: return null
-        return MikuRepository(gh, or)
+        return MikuRepository(gh, or, getApplication(), prefs)
+    }
+
+    fun isSpotifyConnected(): Boolean = repo?.isSpotifyConnected() ?: false
+
+    fun connectSpotify(onResult: (success: Boolean, error: String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val r = repo ?: throw IllegalStateException("Sin credenciales")
+                r.connectSpotify()
+                onResult(true, null)
+            } catch (e: Exception) {
+                onResult(false, e.message)
+            }
+        }
+    }
+
+    fun listConnectedGmailEmails(): List<String> = repo?.listConnectedGmailEmails() ?: emptyList()
+
+    fun connectGmail(onResult: (email: String?, error: String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val r = repo ?: throw IllegalStateException("Sin credenciales")
+                val email = r.connectGmail()
+                onResult(email, null)
+            } catch (e: Exception) {
+                onResult(null, e.message)
+            }
+        }
+    }
+
+    fun disconnectGmailAccount(email: String) {
+        repo?.disconnectGmailAccount(email)
     }
 
     private fun loadMemory() {

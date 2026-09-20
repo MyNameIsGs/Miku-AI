@@ -3,6 +3,8 @@ package com.sebas.mikuai.data
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONArray
+import org.json.JSONObject
 
 class SecurePrefs(context: Context) {
 
@@ -26,6 +28,65 @@ class SecurePrefs(context: Context) {
 
     fun hasCredentials(): Boolean = !getGitHubToken().isNullOrBlank() && !getOpenRouterKey().isNullOrBlank()
 
+    // Spotify: cuenta única (a diferencia de Gmail en desktop, que soporta
+    // varias) -- mismo criterio que la integración de Spotify en desktop.
+    fun getSpotifyTokens(): SpotifyTokens? {
+        val access = prefs.getString(KEY_SPOTIFY_ACCESS, null) ?: return null
+        val refresh = prefs.getString(KEY_SPOTIFY_REFRESH, null) ?: return null
+        val expiresAt = prefs.getLong(KEY_SPOTIFY_EXPIRES, 0L)
+        return SpotifyTokens(access, refresh, expiresAt)
+    }
+
+    fun setSpotifyTokens(accessToken: String, refreshToken: String, expiresAt: Long) {
+        prefs.edit()
+            .putString(KEY_SPOTIFY_ACCESS, accessToken)
+            .putString(KEY_SPOTIFY_REFRESH, refreshToken)
+            .putLong(KEY_SPOTIFY_EXPIRES, expiresAt)
+            .apply()
+    }
+
+    fun clearSpotifyTokens() {
+        prefs.edit()
+            .remove(KEY_SPOTIFY_ACCESS)
+            .remove(KEY_SPOTIFY_REFRESH)
+            .remove(KEY_SPOTIFY_EXPIRES)
+            .apply()
+    }
+
+    // Gmail: varias cuentas a la vez (Sebastián usa varias) -- mismo
+    // criterio que Gmail en desktop. EncryptedSharedPreferences no
+    // soporta listas nativamente, así que se serializa como JSON.
+    fun getGmailAccounts(): List<GmailAccount> {
+        val raw = prefs.getString(KEY_GMAIL_ACCOUNTS, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            (0 until array.length()).map { i ->
+                val obj = array.getJSONObject(i)
+                GmailAccount(
+                    email = obj.getString("email"),
+                    accessToken = obj.getString("accessToken"),
+                    refreshToken = obj.getString("refreshToken"),
+                    expiresAt = obj.getLong("expiresAt"),
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setGmailAccounts(accounts: List<GmailAccount>) {
+        val array = JSONArray()
+        accounts.forEach { a ->
+            array.put(JSONObject().apply {
+                put("email", a.email)
+                put("accessToken", a.accessToken)
+                put("refreshToken", a.refreshToken)
+                put("expiresAt", a.expiresAt)
+            })
+        }
+        prefs.edit().putString(KEY_GMAIL_ACCOUNTS, array.toString()).apply()
+    }
+
     /** Mensaje generado por el job de notificaciones, pendiente de mostrar en el chat. */
     fun getPendingNotificationMessage(): String? = prefs.getString(KEY_PENDING, null)
     fun setPendingNotificationMessage(msg: String) = prefs.edit().putString(KEY_PENDING, msg).apply()
@@ -37,5 +98,12 @@ class SecurePrefs(context: Context) {
         private const val KEY_GH      = "gh_token"
         private const val KEY_OR      = "or_key"
         private const val KEY_PENDING = "pending_notification"
+        private const val KEY_SPOTIFY_ACCESS  = "spotify_access_token"
+        private const val KEY_SPOTIFY_REFRESH = "spotify_refresh_token"
+        private const val KEY_SPOTIFY_EXPIRES = "spotify_expires_at"
+        private const val KEY_GMAIL_ACCOUNTS  = "gmail_accounts"
     }
 }
+
+data class SpotifyTokens(val accessToken: String, val refreshToken: String, val expiresAt: Long)
+data class GmailAccount(val email: String, val accessToken: String, val refreshToken: String, val expiresAt: Long)

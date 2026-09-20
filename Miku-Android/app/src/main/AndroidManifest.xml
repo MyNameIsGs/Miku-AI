@@ -17,10 +17,22 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Redirect de OAuth de Spotify (ver SpotifyAuth.kt): este
+                 esquema tiene que coincidir exacto con el Redirect URI
+                 registrado en el dashboard de Spotify. singleTask arriba
+                 asegura que vuelva a la MISMA instancia de la app en vez
+                 de crear una nueva (ver onNewIntent). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mikuai" android:host="spotify-callback" />
             </intent-filter>
         </activity>
 

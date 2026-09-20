@@ -40,9 +40,141 @@ object Tools {
                 required = listOf("descripcion"),
             )
         )
+        put(
+            buildTool(
+                name = "buscar_cancion",
+                description = "Busca canciones en Spotify por nombre, artista, o ambos, sin reproducir nada. Úsala cuando Sebastián quiera saber qué opciones hay antes de elegir una.",
+                properties = JSONObject().apply {
+                    put("consulta", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Qué buscar, por ejemplo \"bad apple\" o \"canciones de Kikuo\".")
+                    })
+                },
+                required = listOf("consulta"),
+            )
+        )
+        put(
+            buildTool(
+                name = "reproducir_cancion",
+                description = "Busca una canción en Spotify por nombre/artista y la pone a sonar de inmediato en el dispositivo de Spotify activo de Sebastián (necesita tener Spotify abierto en algún lado). Úsala cuando pida escuchar algo puntual, no solo buscar información.",
+                properties = JSONObject().apply {
+                    put("consulta", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "La canción a reproducir, por ejemplo \"bad apple\" o \"melt de Kikuo\".")
+                    })
+                },
+                required = listOf("consulta"),
+            )
+        )
+        put(
+            buildTool(
+                name = "reproducir_playlist",
+                description = "Busca una playlist de Spotify por nombre y la pone a sonar completa (en orden) en el dispositivo de Spotify activo de Sebastián. Úsala cuando pida una playlist puntual, no una canción suelta.",
+                properties = JSONObject().apply {
+                    put("consulta", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "El nombre de la playlist a reproducir, por ejemplo \"mi playlist de gym\" o \"lofi beats\".")
+                    })
+                },
+                required = listOf("consulta"),
+            )
+        )
+        put(
+            buildTool(
+                name = "reproducir_album",
+                description = "Busca un álbum de Spotify por nombre/artista y lo pone a sonar completo (en orden) en el dispositivo de Spotify activo de Sebastián. Úsala cuando pida un álbum puntual, no una canción suelta.",
+                properties = JSONObject().apply {
+                    put("consulta", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "El álbum a reproducir, por ejemplo \"the dark side of the moon\" o \"melancolía de Kikuo\".")
+                    })
+                },
+                required = listOf("consulta"),
+            )
+        )
+        put(
+            buildTool(
+                name = "agregar_a_cola",
+                description = "Busca una canción en Spotify y la agrega a la cola de reproducción, sin interrumpir lo que esté sonando ahora. Úsala cuando pida que algo suene DESPUÉS, no de inmediato -- para eso está reproducir_cancion.",
+                properties = JSONObject().apply {
+                    put("consulta", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "La canción a agregar a la cola, por ejemplo \"bad apple\".")
+                    })
+                },
+                required = listOf("consulta"),
+            )
+        )
+        put(
+            buildTool(
+                name = "que_esta_sonando",
+                description = "Consulta qué canción está sonando ahora mismo en Spotify (nombre y artista), y si está en pausa o reproduciéndose.",
+                properties = JSONObject(),
+                required = emptyList(),
+            )
+        )
+        put(
+            buildTool(
+                name = "transferir_reproduccion",
+                description = "Mueve la reproducción de Spotify a otro dispositivo (por ejemplo, del celular a la PC o viceversa), sin cortar lo que esté sonando.",
+                properties = JSONObject().apply {
+                    put("dispositivo", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "A qué dispositivo mover la reproducción, por ejemplo \"PC\" o \"celular\" -- no hace falta el nombre exacto.")
+                    })
+                },
+                required = listOf("dispositivo"),
+            )
+        )
+        put(
+            buildTool(
+                name = "modo_aleatorio",
+                description = "Activa o desactiva el modo aleatorio de Spotify para lo que esté sonando ahora. Reproducir algo no lo pone en aleatorio por sí solo -- si Sebastián lo pide combinado con una playlist, usa esta tool además de reproducir_playlist.",
+                properties = JSONObject().apply {
+                    put("activar", JSONObject().apply {
+                        put("type", "boolean")
+                        put("description", "true para activar el modo aleatorio, false para desactivarlo.")
+                    })
+                },
+                required = listOf("activar"),
+            )
+        )
+        put(
+            buildTool(
+                name = "modo_repeticion",
+                description = "Cambia el modo de repetición de Spotify: repetir solo la canción actual en loop, repetir toda la playlist/álbum, o apagar la repetición.",
+                properties = JSONObject().apply {
+                    put("modo", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray(listOf("cancion", "lista", "apagado")))
+                        put("description", "\"cancion\" repite el track actual en loop, \"lista\" repite toda la playlist/álbum, \"apagado\" la desactiva.")
+                    })
+                },
+                required = listOf("modo"),
+            )
+        )
+        put(
+            buildTool(
+                name = "revisar_correo",
+                description = "Revisa los correos más recientes de TODAS las cuentas de Gmail que Sebastián tenga conectadas -- solo lectura, nunca envía, borra ni modifica nada. Devuelve de qué cuenta vino cada uno, remitente, asunto, fecha y un fragmento corto. Úsala cuando Sebastián pida revisar el correo, o cuando quieras fijarte si llegó algo con una fecha de entrega o cita que valga la pena anotar con anotar_pendiente.",
+                properties = JSONObject().apply {
+                    put("dias", JSONObject().apply {
+                        put("type", "number")
+                        put("description", "Cuántos días hacia atrás revisar. Por defecto 7.")
+                    })
+                },
+                required = emptyList(),
+            )
+        )
     }
 
-    suspend fun execute(name: String, argumentsJson: String, pendientes: PendientesRepository): String {
+    suspend fun execute(
+        name: String,
+        argumentsJson: String,
+        pendientes: PendientesRepository,
+        spotify: SpotifyApi,
+        gmail: GmailApi,
+    ): String {
         val args = try {
             JSONObject(argumentsJson)
         } catch (e: Exception) {
@@ -56,6 +188,108 @@ object Tools {
                     args.getString("fecha_estimada"),
                 )
                 "cerrar_pendiente" -> pendientes.cerrarPendiente(args.getString("descripcion"))
+                "buscar_cancion" -> {
+                    val consulta = args.getString("consulta")
+                    val tracks = spotify.searchTracks(consulta, 5)
+                    if (tracks.isEmpty()) {
+                        "No encontré ninguna canción para \"$consulta\"."
+                    } else {
+                        tracks.joinToString("\n") { "${it.name} - ${it.artists}" }
+                    }
+                }
+                "reproducir_cancion" -> {
+                    val consulta = args.getString("consulta")
+                    val tracks = spotify.searchTracks(consulta, 1)
+                    if (tracks.isEmpty()) {
+                        "No encontré ninguna canción para \"$consulta\"."
+                    } else {
+                        val top = tracks[0]
+                        spotify.playTrack(top.uri)
+                        "Reproduciendo \"${top.name}\" de ${top.artists}."
+                    }
+                }
+                "reproducir_playlist" -> {
+                    val consulta = args.getString("consulta")
+                    val playlist = spotify.findPlaylist(consulta)
+                    if (playlist == null) {
+                        "No encontré ninguna playlist para \"$consulta\"."
+                    } else {
+                        spotify.playContext(playlist.uri)
+                        "Reproduciendo la playlist \"${playlist.name}\"" +
+                            if (playlist.owner.isNotBlank()) " de ${playlist.owner}." else "."
+                    }
+                }
+                "reproducir_album" -> {
+                    val consulta = args.getString("consulta")
+                    val albums = spotify.searchAlbums(consulta, 1)
+                    if (albums.isEmpty()) {
+                        "No encontré ningún álbum para \"$consulta\"."
+                    } else {
+                        val top = albums[0]
+                        spotify.playContext(top.uri)
+                        "Reproduciendo el álbum \"${top.name}\" de ${top.artists}."
+                    }
+                }
+                "agregar_a_cola" -> {
+                    val consulta = args.getString("consulta")
+                    val tracks = spotify.searchTracks(consulta, 1)
+                    if (tracks.isEmpty()) {
+                        "No encontré ninguna canción para \"$consulta\"."
+                    } else {
+                        val top = tracks[0]
+                        spotify.addToQueue(top.uri)
+                        "Agregué \"${top.name}\" de ${top.artists} a la cola."
+                    }
+                }
+                "que_esta_sonando" -> {
+                    val nowPlaying = spotify.getNowPlaying()
+                    if (nowPlaying.track == null) {
+                        "No hay ninguna canción sonando en Spotify ahora mismo."
+                    } else {
+                        val estado = if (nowPlaying.isPlaying) "sonando" else "en pausa"
+                        "\"${nowPlaying.track}\" de ${nowPlaying.artists ?: "un artista desconocido"} -- $estado."
+                    }
+                }
+                "transferir_reproduccion" -> {
+                    val dispositivo = args.getString("dispositivo")
+                    val nombre = spotify.transferPlayback(dispositivo)
+                    "Listo, la reproducción ahora está en \"$nombre\"."
+                }
+                "modo_aleatorio" -> {
+                    val activar = args.getBoolean("activar")
+                    spotify.setShuffle(activar)
+                    if (activar) "Modo aleatorio activado." else "Modo aleatorio desactivado."
+                }
+                "modo_repeticion" -> {
+                    val modo = args.getString("modo")
+                    val spotifyMode = when (modo) {
+                        "cancion" -> "track"
+                        "lista" -> "context"
+                        "apagado" -> "off"
+                        else -> return "Error: modo de repetición desconocido \"$modo\"."
+                    }
+                    spotify.setRepeat(spotifyMode)
+                    when (modo) {
+                        "cancion" -> "Repitiendo la canción actual."
+                        "lista" -> "Repitiendo toda la lista."
+                        else -> "Repetición desactivada."
+                    }
+                }
+                "revisar_correo" -> {
+                    val dias = if (args.has("dias") && args.get("dias") is Number) {
+                        args.getInt("dias").coerceAtLeast(1)
+                    } else {
+                        7
+                    }
+                    val messages = gmail.listRecentMessagesAllAccounts(15, dias)
+                    if (messages.isEmpty()) {
+                        "No hay correos nuevos en los últimos $dias días."
+                    } else {
+                        messages.joinToString("\n---\n") {
+                            "Cuenta: ${it.account}\nDe: ${it.from}\nAsunto: ${it.subject}\nFecha: ${it.date}\nFragmento: ${it.snippet}"
+                        }
+                    }
+                }
                 else -> "Error: no existe una herramienta llamada \"$name\"."
             }
         } catch (e: Exception) {

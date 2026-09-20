@@ -26,7 +26,7 @@ class MikuNotificationWorker(
         val orKey   = prefs.getOpenRouterKey() ?: return Result.success()
 
         return try {
-            val repo   = MikuRepository(ghToken, orKey)
+            val repo   = MikuRepository(ghToken, orKey, applicationContext, prefs)
             val memory = repo.loadMemory()
             val prompt = Prompts.buildIdlePrompt(memory)
 

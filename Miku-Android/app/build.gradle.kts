@@ -1,6 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Client ID/Secret de Gmail (cliente OAuth tipo "Aplicación web") --
+// viven en local.properties, no en el código, porque el repo es público
+// y el Client Secret sí es sensible (a diferencia del Client ID de
+// Spotify, que usa PKCE y no necesita secreto). Mismo espíritu que el
+// .env del lado desktop.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) load(file.inputStream())
 }
 
 android {
@@ -19,6 +31,17 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "GMAIL_WEB_CLIENT_ID",
+            "\"${localProperties.getProperty("gmail.webClientId", "")}\"",
+        )
+        buildConfigField(
+            "String",
+            "GMAIL_WEB_CLIENT_SECRET",
+            "\"${localProperties.getProperty("gmail.webClientSecret", "")}\"",
+        )
     }
 
     buildTypes {
@@ -34,6 +57,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -70,6 +94,11 @@ dependencies {
 
     // NUEVA — Coil (para mostrar imágenes)
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // NUEVA — AuthorizationClient de Play Services, para la conexión
+    // nativa de Gmail (sin navegador ni redirect -- Google restringe los
+    // esquemas de URL personalizados en Android, a diferencia de Spotify)
+    implementation("com.google.android.gms:play-services-auth:21.4.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

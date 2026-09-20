@@ -1,12 +1,17 @@
 package com.sebas.mikuai.data
 
+import android.content.Context
 import java.time.LocalDate
 
-class MikuRepository(ghToken: String, orKey: String) {
+class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: SecurePrefs) {
 
     private val ghApi = GitHubApi(ghToken)
     private val orApi = OpenRouterApi(orKey)
     private val pendientesRepo = PendientesRepository(ghApi)
+    private val spotifyAuth = SpotifyAuth(context, prefs)
+    private val spotifyApi = SpotifyApi(spotifyAuth)
+    private val gmailAuth = GmailAuth(context, prefs)
+    private val gmailApi = GmailApi(gmailAuth)
 
     suspend fun loadMemory(): MikuMemory {
         return MikuMemory(
@@ -65,5 +70,14 @@ class MikuRepository(ghToken: String, orKey: String) {
         userMessage,
         userImageBase64,
         Tools.schemas(),
-    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo) }
+    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi) }
+
+    // Segundo paso de "Miku en Android" (ver SpotifyAuth.kt / SpotifyApi.kt).
+    suspend fun connectSpotify() = spotifyAuth.connect()
+    fun isSpotifyConnected(): Boolean = spotifyAuth.isConnected()
+
+    // Tercer paso de "Miku en Android" (ver GmailAuth.kt / GmailApi.kt).
+    suspend fun connectGmail(): String = gmailAuth.connect()
+    fun listConnectedGmailEmails(): List<String> = gmailAuth.listConnectedEmails()
+    fun disconnectGmailAccount(email: String) = gmailAuth.disconnect(email)
 }

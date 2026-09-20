@@ -1,6 +1,7 @@
 package com.sebas.mikuai
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -13,7 +14,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.work.*
+import com.sebas.mikuai.data.GmailAuthBridge
 import com.sebas.mikuai.data.SecurePrefs
+import com.sebas.mikuai.data.SpotifyAuthBridge
 import com.sebas.mikuai.ui.ChatScreen
 import com.sebas.mikuai.ui.SetupScreen
 import com.sebas.mikuai.ui.theme.MikuTheme
@@ -26,9 +29,18 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* resultado ignorado — el usuario puede denegar */ }
 
+    // Diálogo nativo de autorización de Gmail (AuthorizationClient de
+    // Play Services) -- a diferencia del deep link de Spotify, esto no
+    // pasa por el manifiesto ni por onNewIntent, es un resultado de
+    // Activity normal que se reenvía a GmailAuthBridge.
+    private val gmailAuthLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result -> GmailAuthBridge.onResult(result.data) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        GmailAuthBridge.registerLauncher { request -> gmailAuthLauncher.launch(request) }
         requestNotificationPermissionIfNeeded()
         scheduleNotificationWorker()
 
@@ -58,6 +70,20 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
+        }
+    }
+
+    // Redirect de OAuth de Spotify (deep link mikuai://spotify-callback,
+    // ver el intent-filter en AndroidManifest.xml). Con launchMode
+    // singleTask, este método es el que recibe el Intent al volver del
+    // navegador -- no un onCreate nuevo -- porque la Activity ya estaba
+    // en la pila de tareas (la abrió el propio flujo de conexión).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.data?.let { uri ->
+            if (uri.scheme == "mikuai") {
+                SpotifyAuthBridge.onRedirectReceived(uri)
             }
         }
     }
