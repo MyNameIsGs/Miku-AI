@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">MikuAI</string>
+
+    <string name="wakeword_status_listening">Escuchando "Hey Miku"…</string>
+    <string name="wakeword_status_command">Escuchando tu pedido…</string>
+    <string name="wakeword_status_thinking">Pensando…</string>
+    <string name="wakeword_no_credentials">No tengo tus claves configuradas todavía.</string>
+    <string name="wakeword_error">Tuve un problema para responder. Inténtalo de nuevo.</string>
+    <string name="wakeword_no_stt">Este teléfono no tiene reconocimiento de voz disponible.</string>
 </resources>

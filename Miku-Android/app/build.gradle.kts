@@ -30,6 +30,14 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // onnxruntime-android (wake-word "Hey Miku") trae binarios nativos
+        // para 4 arquitecturas -- este es un APK de uso personal instalado
+        // a mano, no Play Store, y el único dispositivo real es un
+        // Redmagic 11 Pro (arm64). Sin este filtro el .apk pesa ~100MB.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField(
@@ -99,6 +107,12 @@ dependencies {
     // nativa de Gmail (sin navegador ni redirect -- Google restringe los
     // esquemas de URL personalizados en Android, a diferencia de Spotify)
     implementation("com.google.android.gms:play-services-auth:21.4.0")
+
+    // NUEVA — ONNX Runtime Mobile, para correr en el celular el MISMO
+    // modelo entrenado con nanowakeword que usa el wake-word "Hey Miku"
+    // en desktop (melspectrogram + embedding + clasificador, los tres
+    // .onnx embebidos en assets/wakeword/) -- ver wakeword/WakeWordEngine.kt
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

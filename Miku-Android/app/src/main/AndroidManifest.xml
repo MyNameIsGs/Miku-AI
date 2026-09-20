@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Wake-word "Hey Miku" (wakeword/WakeWordService.kt): escucha
+         continua en primer plano, equivalente a la Tarea 5.4 de desktop. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <application
         android:name=".MikuApp"
         android:allowBackup="true"
@@ -39,6 +45,34 @@
         <receiver
             android:name="androidx.work.impl.utils.ForceStopRunnable$BroadcastReceiver"
             android:exported="false" />
+
+        <!-- Relanza "Hey Miku" tras reiniciar el teléfono, si estaba
+             activado (ver wakeword/BootReceiver.kt). -->
+        <receiver
+            android:name=".wakeword.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".wakeword.WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- Ficha de Ajustes Rápidos para prender/apagar "Hey Miku"
+             (ver wakeword/WakeWordTileService.kt). -->
+        <service
+            android:name=".wakeword.WakeWordTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="Hey Miku"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
     </application>
 

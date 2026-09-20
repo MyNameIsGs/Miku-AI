@@ -20,6 +20,8 @@ import com.sebas.mikuai.data.SpotifyAuthBridge
 import com.sebas.mikuai.ui.ChatScreen
 import com.sebas.mikuai.ui.SetupScreen
 import com.sebas.mikuai.ui.theme.MikuTheme
+import com.sebas.mikuai.wakeword.WakeWordPrefs
+import com.sebas.mikuai.wakeword.WakeWordService
 import com.sebas.mikuai.worker.MikuNotificationWorker
 import java.util.concurrent.TimeUnit
 
@@ -43,6 +45,7 @@ class MainActivity : ComponentActivity() {
         GmailAuthBridge.registerLauncher { request -> gmailAuthLauncher.launch(request) }
         requestNotificationPermissionIfNeeded()
         scheduleNotificationWorker()
+        restartWakeWordServiceIfEnabled()
 
         setContent {
             MikuTheme {
@@ -96,6 +99,18 @@ class MainActivity : ComponentActivity() {
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+
+    // Si "Hey Miku" estaba activado y el sistema mató el servicio en
+    // segundo plano (memoria/batería), lo vuelve a levantar cada vez que
+    // se abre la app -- red de seguridad además del BootReceiver, que
+    // solo cubre el caso de un reinicio completo del teléfono.
+    private fun restartWakeWordServiceIfEnabled() {
+        if (!WakeWordPrefs.isEnabled(this)) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) return
+        WakeWordService.start(this)
     }
 
     private fun scheduleNotificationWorker() {

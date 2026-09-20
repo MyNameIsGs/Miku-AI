@@ -1,9 +1,18 @@
 package com.sebas.mikuai.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.sebas.mikuai.wakeword.WakeWordPrefs
+import com.sebas.mikuai.wakeword.WakeWordService
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -42,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +70,7 @@ fun ChatScreen(
     val uiState     by vm.uiState.collectAsState()
     val listState   = rememberLazyListState()
     val scope       = rememberCoroutineScope()
+    val context     = LocalContext.current
     var inputText   by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
     var spotifyConnected by remember { mutableStateOf(vm.isSpotifyConnected()) }
@@ -68,11 +79,20 @@ fun ChatScreen(
     var gmailAccounts by remember { mutableStateOf(vm.listConnectedGmailEmails()) }
     var gmailConnecting by remember { mutableStateOf(false) }
     var gmailError by remember { mutableStateOf<String?>(null) }
+    var wakeWordEnabled by remember { mutableStateOf(WakeWordPrefs.isEnabled(context)) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         vm.selectImage(uri)
+    }
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        wakeWordEnabled = granted
+        WakeWordPrefs.setEnabled(context, granted)
+        if (granted) WakeWordService.start(context)
     }
 
     // Scroll al fondo cuando llega un mensaje nuevo o cambia el estado de carga
@@ -251,6 +271,62 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
                 ) { Text("↺ Recargar memoria desde GitHub") }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Decir \"Hey Miku\"", color = MikuText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Escucha activa en segundo plano, como \"Hey Siri\". Usa el micrófono todo el tiempo y muestra una notificación permanente mientras está activo.",
+                            color = MikuTextDim,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Switch(
+                        checked = wakeWordEnabled,
+                        onCheckedChange = { checked ->
+                            if (checked) {
+                                val hasPermission = ContextCompat.checkSelfPermission(
+                                    context, Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (hasPermission) {
+                                    wakeWordEnabled = true
+                                    WakeWordPrefs.setEnabled(context, true)
+                                    WakeWordService.start(context)
+                                } else {
+                                    recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            } else {
+                                wakeWordEnabled = false
+                                WakeWordPrefs.setEnabled(context, false)
+                                WakeWordService.stop(context)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = MikuTeal, checkedTrackColor = MikuTealDark)
+                    )
+                }
+                if (wakeWordEnabled) {
+                    OutlinedButton(
+                        onClick = {
+                            val pm = context.getSystemService(PowerManager::class.java)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                                pm?.isIgnoringBatteryOptimizations(context.packageName) != true
+                            ) {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                    ) { Text("🔋 Evitar que el sistema corte el micrófono en segundo plano") }
+                }
                 OutlinedButton(
                     onClick = {
                         spotifyConnecting = true
