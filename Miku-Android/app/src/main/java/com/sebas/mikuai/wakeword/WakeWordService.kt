@@ -18,7 +18,6 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.sebas.mikuai.MainActivity
@@ -33,7 +32,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import java.util.Locale
 import kotlin.concurrent.thread
 
 /**
@@ -47,14 +45,16 @@ import kotlin.concurrent.thread
  * detectar, se suelta el micrófono del wake-word y se usa el
  * reconocimiento de voz nativo de Android para capturar el pedido → se
  * manda por el mismo ciclo de tool calling que ya usa el chat de texto
- * (MikuRepository.chatWithTools) → la respuesta se lee en voz alta con
- * TextToSpeech y además se muestra como notificación (por si no se
- * escuchó, o la pantalla estaba apagada).
+ * (MikuRepository.chatWithTools) → la respuesta se lee con la voz REAL de
+ * Miku si el servidor de voz de desktop está alcanzable en la red local
+ * (MikuVoiceClient, ver ese archivo), si no con la voz del sistema — y
+ * además se muestra como notificación (por si no se escuchó, o la
+ * pantalla estaba apagada).
  *
- * A diferencia de desktop, acá NO hay STT propio (Whisper) ni voz propia
- * (RVC) — usa lo que ya trae el sistema operativo. Es una decisión de
- * plataforma, no un recorte de alcance: instalar y correr Whisper/RVC en
- * un teléfono no tiene el mismo sentido que en una PC con GPU dedicada.
+ * A diferencia de desktop, acá NO hay STT propio (Whisper) — usa el
+ * reconocimiento de voz nativo de Android. Es una decisión de plataforma,
+ * no un recorte de alcance: instalar y correr Whisper en un teléfono no
+ * tiene el mismo sentido que en una PC con GPU dedicada.
  */
 class WakeWordService : Service() {
 
@@ -64,8 +64,7 @@ class WakeWordService : Service() {
     @Volatile private var capturing = false
 
     private var speechRecognizer: SpeechRecognizer? = null
-    private var tts: TextToSpeech? = null
-    @Volatile private var ttsReady = false
+    private lateinit var voiceClient: MikuVoiceClient
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -77,13 +76,7 @@ class WakeWordService : Service() {
         startForegroundWithNotification(statusText(R.string.wakeword_status_listening))
 
         engine = WakeWordEngine(applicationContext)
-
-        tts = TextToSpeech(applicationContext) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-            if (ttsReady) {
-                tts?.language = Locale("es", "ES")
-            }
-        }
+        voiceClient = MikuVoiceClient(applicationContext)
 
         if (SpeechRecognizer.isRecognitionAvailable(applicationContext)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(applicationContext)
@@ -99,7 +92,7 @@ class WakeWordService : Service() {
     override fun onDestroy() {
         stopCapture()
         speechRecognizer?.destroy()
-        tts?.shutdown()
+        if (::voiceClient.isInitialized) voiceClient.shutdown()
         if (::engine.isInitialized) engine.close()
         serviceScope.cancel()
         super.onDestroy()
@@ -196,8 +189,7 @@ class WakeWordService : Service() {
     private fun startSpeechRecognition() {
         val recognizer = speechRecognizer
         if (recognizer == null) {
-            speak(getString(R.string.wakeword_no_stt))
-            resumeWakeWordListening()
+            speakAndResume(getString(R.string.wakeword_no_stt))
             return
         }
 
@@ -243,7 +235,7 @@ class WakeWordService : Service() {
                 val gh = prefs.getGitHubToken()
                 val or = prefs.getOpenRouterKey()
                 if (gh == null || or == null) {
-                    speak(getString(R.string.wakeword_no_credentials))
+                    voiceClient.speak(getString(R.string.wakeword_no_credentials))
                     return@launch
                 }
 
@@ -262,20 +254,25 @@ class WakeWordService : Service() {
                 }
 
                 if (parsed.cleanText.isNotBlank()) {
-                    speak(parsed.cleanText)
+                    voiceClient.speak(parsed.cleanText)
                     showReplyNotification(text, parsed.cleanText)
                 }
             } catch (e: Exception) {
-                speak(getString(R.string.wakeword_error))
+                voiceClient.speak(getString(R.string.wakeword_error))
             } finally {
                 resumeWakeWordListening()
             }
         }
     }
 
-    private fun speak(text: String) {
-        if (text.isBlank() || !ttsReady) return
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "miku_voice_reply")
+    // Habla y recién después vuelve a escuchar -- para no reabrir el
+    // micrófono del wake-word mientras todavía está sonando la voz (mismo
+    // motivo que la cola de speak() del lado desktop, ver useSpeech.ts).
+    private fun speakAndResume(text: String) {
+        serviceScope.launch {
+            voiceClient.speak(text)
+            resumeWakeWordListening()
+        }
     }
 
     private fun resumeWakeWordListening() {

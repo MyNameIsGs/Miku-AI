@@ -18,6 +18,7 @@ import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useWakeWord } from "./hooks/useWakeWord";
 import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
+import { useReminders } from "./hooks/useReminders";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useAudioDevices } from "./hooks/useAudioDevices";
@@ -65,6 +66,8 @@ function App() {
   // onBeforeRender quedó con una closure vieja.
   const voicePitchRef = useRef(voicePitch);
   const voiceRateRef = useRef(voiceRate);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const voiceMutedRef = useRef(voiceMuted);
   const [showConfig, setShowConfig] = useState(false);
   const [showAppLauncher, setShowAppLauncher] = useState(false);
   const [hideResponseText, setHideResponseText] = useState(false);
@@ -79,6 +82,12 @@ function App() {
   const [gmailAccounts, setGmailAccounts] = useState<string[]>([]);
   const [gmailConnecting, setGmailConnecting] = useState(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  const [lanVoiceInfo, setLanVoiceInfo] = useState<{
+    lanKey: string;
+    localIp: string | null;
+    port: number;
+  } | null>(null);
+  const [lanVoiceCopied, setLanVoiceCopied] = useState(false);
   const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
@@ -124,10 +133,13 @@ function App() {
         const store = await load(".settings.dat", { autoSave: false });
         const savedPitch = await store.get<number>("voicePitch");
         const savedRate = await store.get<number>("voiceRate");
+        const savedMuted = await store.get<boolean>("voiceMuted");
         if (savedPitch !== null && savedPitch !== undefined)
           setVoicePitch(savedPitch);
         if (savedRate !== null && savedRate !== undefined)
           setVoiceRate(savedRate);
+        if (savedMuted !== null && savedMuted !== undefined)
+          setVoiceMuted(savedMuted);
         isVoiceSettingsLoaded.current = true;
       } catch (err) {
         console.error("Error cargando configuración de voz guardada:", err);
@@ -164,6 +176,20 @@ function App() {
   }, [voiceRate]);
 
   useEffect(() => {
+    voiceMutedRef.current = voiceMuted;
+    if (!isVoiceSettingsLoaded.current) return;
+    (async () => {
+      try {
+        const store = await load(".settings.dat", { autoSave: false });
+        await store.set("voiceMuted", voiceMuted);
+        await store.save();
+      } catch (err) {
+        console.error("Error guardando el silencio de voz:", err);
+      }
+    })();
+  }, [voiceMuted]);
+
+  useEffect(() => {
     isSpotifyConnected()
       .then(setSpotifyConnected)
       .catch((err) => console.error("Error consultando conexión de Spotify:", err));
@@ -171,6 +197,24 @@ function App() {
       .then(setGmailAccounts)
       .catch((err) => console.error("Error consultando cuentas de Gmail:", err));
   }, []);
+
+  // Voz de Miku en Android: la clave de red solo se pide al abrir el panel
+  // de Configuración (no hace falta tenerla lista de entrada), y en
+  // silencio si falla -- el servidor de voz instalado hoy puede no tener
+  // todavía el endpoint /lan-key (requiere reconstruirlo, ver el plan), así
+  // que un error acá es un estado normal a esta altura, no un bug.
+  useEffect(() => {
+    if (!showConfig || lanVoiceInfo) return;
+    fetch("http://127.0.0.1:8899/lan-key")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.lanKey) setLanVoiceInfo(data);
+      })
+      .catch(() => {
+        // Servidor de voz viejo sin este endpoint todavía, o no está
+        // corriendo -- no es un error que valga la pena mostrar.
+      });
+  }, [showConfig, lanVoiceInfo]);
 
   const handleConnectSpotify = async () => {
     setSpotifyConnecting(true);
@@ -334,6 +378,7 @@ function App() {
     setViseme: face.setViseme,
     resetVisemes: face.resetVisemes,
     isSpeakingRef: face.isSpeakingRef,
+    mutedRef: voiceMutedRef,
   });
 
   const idleQuirks = useIdleQuirks({
@@ -347,6 +392,12 @@ function App() {
     captureQuirkImageAfterDelay,
     quirkSelfImageRef,
     pendingQuirkDescriptionRef,
+  });
+
+  const reminders = useReminders({
+    speak: speech.speak,
+    voicePitchRef,
+    voiceRateRef,
   });
 
   const memoryFiles = useMemoryFiles();
@@ -604,6 +655,12 @@ function App() {
     // ahora los procesa useIdleQuirks.
     idleQuirks.checkIdleQuirk(now);
 
+    // poner_recordatorio: chequeo liviano (solo timestamps en memoria) de
+    // recordatorios vencidos, independiente del intervalo de 2.5 minutos
+    // del quirk idle -- un timer de "en 5 minutos" no puede esperar a que
+    // el silencio dispare el loop idle.
+    reminders.checkReminders();
+
     // Etapa 7: suavizado de expresiones, parpadeo y mirada errante ahora
     // los procesa useFace.
     face.updateFace(now, delta);
@@ -698,6 +755,13 @@ function App() {
             onClick={() => setClickThrough((v) => !v)}
           >
             Click-through
+          </button>
+          <button
+            className={voiceMuted ? "active" : ""}
+            onClick={() => setVoiceMuted((v) => !v)}
+            title={voiceMuted ? "Miku está silenciada" : "Silenciar la voz de Miku"}
+          >
+            {voiceMuted ? "🔇 Silenciada" : "🔊 Voz"}
           </button>
           <button
             className={speechRecognition.listening ? "active" : ""}
@@ -904,6 +968,40 @@ function App() {
               <span className="oauth-error" title={gmailError}>
                 Error al conectar Gmail
               </span>
+            )}
+          </div>
+          <div className="lan-voice-section">
+            <p className="lan-voice-title">Voz de Miku en Android</p>
+            {lanVoiceInfo ? (
+              <>
+                <p className="lan-voice-hint">
+                  En la app de Android, en Configuración → Voz de Miku, cargá:
+                </p>
+                <p className="lan-voice-value">
+                  Servidor: {lanVoiceInfo.localIp ?? "?"}:{lanVoiceInfo.port}
+                </p>
+                <p className="lan-voice-value">Clave: {lanVoiceInfo.lanKey}</p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard
+                      .writeText(
+                        `${lanVoiceInfo.localIp ?? ""}:${lanVoiceInfo.port} / ${lanVoiceInfo.lanKey}`,
+                      )
+                      .then(() => {
+                        setLanVoiceCopied(true);
+                        setTimeout(() => setLanVoiceCopied(false), 2000);
+                      })
+                      .catch(() => {});
+                  }}
+                >
+                  {lanVoiceCopied ? "Copiado ✓" : "Copiar"}
+                </button>
+              </>
+            ) : (
+              <p className="lan-voice-hint">
+                No disponible todavía -- necesita reconstruir el servidor de
+                voz con el endpoint /lan-key (ver el plan).
+              </p>
             )}
           </div>
         </div>

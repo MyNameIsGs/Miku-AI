@@ -11,6 +11,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.sebas.mikuai.data.SecurePrefs
+import com.sebas.mikuai.wakeword.MikuVoiceClient
 import com.sebas.mikuai.wakeword.WakeWordPrefs
 import com.sebas.mikuai.wakeword.WakeWordService
 import androidx.compose.animation.core.animateFloatAsState
@@ -80,6 +82,12 @@ fun ChatScreen(
     var gmailConnecting by remember { mutableStateOf(false) }
     var gmailError by remember { mutableStateOf<String?>(null) }
     var wakeWordEnabled by remember { mutableStateOf(WakeWordPrefs.isEnabled(context)) }
+    val securePrefs = remember { SecurePrefs(context) }
+    var voiceServerHost by remember { mutableStateOf(securePrefs.getVoiceServerHost() ?: "") }
+    var voiceServerKey by remember { mutableStateOf(securePrefs.getVoiceServerKey() ?: "") }
+    var voiceMuted by remember { mutableStateOf(securePrefs.isVoiceMuted()) }
+    var voiceTestState by remember { mutableStateOf<Boolean?>(null) } // null = sin probar, true/false = resultado
+    var voiceTesting by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -327,6 +335,90 @@ fun ChatScreen(
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
                     ) { Text("🔋 Evitar que el sistema corte el micrófono en segundo plano") }
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Voz de Miku", color = MikuTeal, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (voiceMuted) "Silenciada" else "Con voz", color = MikuTextDim, fontSize = 11.sp)
+                        Switch(
+                            checked = !voiceMuted,
+                            onCheckedChange = { on ->
+                                voiceMuted = !on
+                                securePrefs.setVoiceMuted(voiceMuted)
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = MikuTeal, checkedTrackColor = MikuTealDark)
+                        )
+                    }
+                }
+                Text(
+                    "Si configuras el servidor de voz de tu PC acá abajo (mismo dato que muestra su panel de Configuración), \"Hey Miku\" responde con la voz real en vez de la del sistema. Sin esto, sigue funcionando con la voz del teléfono.",
+                    color = MikuTextDim,
+                    fontSize = 11.sp
+                )
+                OutlinedTextField(
+                    value = voiceServerHost,
+                    onValueChange = { voiceServerHost = it; voiceTestState = null },
+                    label = { Text("IP:puerto de la PC") },
+                    placeholder = { Text("192.168.1.50:8899") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MikuTeal,
+                        unfocusedBorderColor = MikuBorder,
+                        focusedTextColor = MikuText,
+                        unfocusedTextColor = MikuText,
+                        cursorColor = MikuTeal
+                    )
+                )
+                OutlinedTextField(
+                    value = voiceServerKey,
+                    onValueChange = { voiceServerKey = it; voiceTestState = null },
+                    label = { Text("Clave") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MikuTeal,
+                        unfocusedBorderColor = MikuBorder,
+                        focusedTextColor = MikuText,
+                        unfocusedTextColor = MikuText,
+                        cursorColor = MikuTeal
+                    )
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            securePrefs.setVoiceServerHost(voiceServerHost.trim())
+                            securePrefs.setVoiceServerKey(voiceServerKey.trim())
+                            voiceTesting = true
+                            voiceTestState = null
+                            scope.launch {
+                                val ok = MikuVoiceClient.checkConnection(voiceServerHost.trim(), voiceServerKey.trim())
+                                voiceTestState = ok
+                                voiceTesting = false
+                            }
+                        },
+                        enabled = !voiceTesting && voiceServerHost.isNotBlank() && voiceServerKey.isNotBlank(),
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                    ) {
+                        Text(
+                            when {
+                                voiceTesting -> "Probando..."
+                                voiceTestState == true -> "Conectado ✓"
+                                voiceTestState == false -> "Sin conexión ✗"
+                                else -> "Guardar y probar"
+                            }
+                        )
+                    }
+                }
+
                 OutlinedButton(
                     onClick = {
                         spotifyConnecting = true

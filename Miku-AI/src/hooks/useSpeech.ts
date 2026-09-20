@@ -1,4 +1,4 @@
-import { RefObject } from "react";
+import { RefObject, useRef } from "react";
 
 const VISEME_MAP: Record<string, string> = {
   A: "neutral",
@@ -17,6 +17,11 @@ type UseSpeechParams = {
   setViseme: (shapeName: string) => void;
   resetVisemes: () => void;
   isSpeakingRef: RefObject<boolean>;
+  // Interruptor de silencio (botón 🔇 de la toolbar, ver App.tsx). Un ref,
+  // no un bool plano, para que speak() siempre lea el valor más reciente
+  // sin importar cuándo se haya creado la closure que lo llama (mismo
+  // motivo que voicePitchRef/voiceRateRef).
+  mutedRef: RefObject<boolean>;
 };
 
 export function useSpeech({
@@ -24,8 +29,20 @@ export function useSpeech({
   setViseme,
   resetVisemes,
   isSpeakingRef,
+  mutedRef,
 }: UseSpeechParams) {
-  async function speak(
+  // Antes de los recordatorios (poner_recordatorio) speak() solo se llamaba
+  // desde dos lugares que nunca coincidían en el tiempo por construcción
+  // (askMiku y el quirk idle, cada uno con su propio guard de "no llamar de
+  // nuevo mientras está pensando/hablando). Un recordatorio puede dispararse
+  // en CUALQUIER momento, incluido mientras alguno de esos dos ya está
+  // hablando -- sin esta cola, dos llamadas superpuestas crean dos <audio>
+  // sonando a la vez y dos loops de requestAnimationFrame peleando por el
+  // mismo setViseme/setExpression/isSpeakingRef. La cola serializa: cada
+  // speak() espera a que termine el anterior antes de arrancar el suyo.
+  const speechQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  async function speakImmediately(
     text: string,
     pitch: number,
     rate: number,
@@ -79,20 +96,59 @@ export function useSpeech({
         updateMouthFromVisemes();
       };
 
-      audio.onended = () => {
-        cancelAnimationFrame(animationFrameId);
-        resetVisemes();
-        URL.revokeObjectURL(audioUrl);
-        setExpression("neutral");
-        isSpeakingRef.current = false;
-      };
-
-      await audio.play();
+      // La promesa de speakImmediately ahora se resuelve recién cuando
+      // TERMINA de sonar (onended/onerror), no apenas arranca -- antes
+      // `await audio.play()` resolvía al arrancar la reproducción, lo que
+      // hacía inútil encolar llamadas (la siguiente podía arrancar mientras
+      // la anterior seguía sonando). Necesario para que la cola de speak()
+      // de más abajo sirva para algo real.
+      await new Promise<void>((resolve) => {
+        audio.onended = () => {
+          cancelAnimationFrame(animationFrameId);
+          resetVisemes();
+          URL.revokeObjectURL(audioUrl);
+          setExpression("neutral");
+          isSpeakingRef.current = false;
+          resolve();
+        };
+        audio.onerror = () => {
+          cancelAnimationFrame(animationFrameId);
+          resetVisemes();
+          URL.revokeObjectURL(audioUrl);
+          setExpression("neutral");
+          isSpeakingRef.current = false;
+          resolve();
+        };
+        audio.play().catch(() => {
+          setExpression("neutral");
+          isSpeakingRef.current = false;
+          resolve();
+        });
+      });
     } catch (err) {
       console.error("Error al conectar con el servidor de voz:", err);
       setExpression("neutral");
       isSpeakingRef.current = false;
     }
+  }
+
+  // Envoltorio público: encola en vez de ejecutar directo -- ver
+  // speechQueueRef más arriba. Nunca rechaza (speakImmediately ya atrapa
+  // sus propios errores), así que la cola nunca se traba por un fallo.
+  function speak(
+    text: string,
+    pitch: number,
+    rate: number,
+    expression: string,
+  ): Promise<void> {
+    // Silenciado: no se toca la cola en absoluto -- si se desmutea después,
+    // no hay nada "pendiente" esperando a sonar de golpe.
+    if (mutedRef.current) return Promise.resolve();
+
+    const run = () => speakImmediately(text, pitch, rate, expression);
+    const result = speechQueueRef.current.then(run, run);
+    speechQueueRef.current = result;
+    return result;
   }
 
   return { speak };

@@ -10,6 +10,7 @@ import { buildCambiarSalidaAudioTool } from "./cambiarSalidaAudio";
 import { verPantalla } from "./verPantalla";
 import { anotarPendiente } from "./anotarPendiente";
 import { cerrarPendiente } from "./cerrarPendiente";
+import { ponerRecordatorio } from "./ponerRecordatorio";
 import { buscarCancion } from "./buscarCancion";
 import { reproducirCancion } from "./reproducirCancion";
 import { reproducirPlaylist } from "./reproducirPlaylist";
@@ -34,6 +35,7 @@ const STATIC_TOOLS: ToolDefinition[] = [
   verPantalla,
   anotarPendiente,
   cerrarPendiente,
+  ponerRecordatorio,
   buscarCancion,
   reproducirCancion,
   reproducirPlaylist,
