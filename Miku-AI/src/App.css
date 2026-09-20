@@ -247,46 +247,6 @@ button {
   color: rgba(255, 120, 120, 0.9);
 }
 
-.lan-voice-section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.lan-voice-title {
-  margin: 0;
-  font-weight: 600;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.lan-voice-hint {
-  margin: 0;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.lan-voice-value {
-  margin: 0;
-  font-size: 12px;
-  font-family: monospace;
-  color: rgba(255, 255, 255, 0.85);
-  word-break: break-all;
-}
-
-.lan-voice-section button {
-  align-self: flex-start;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 12px;
-  color: white;
-}
-
 .app-launcher-panel {
   position: absolute;
   top: 44px;

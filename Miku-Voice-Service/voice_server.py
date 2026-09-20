@@ -37,10 +37,7 @@ import time as time_module
 
 import numpy as np
 import sounddevice as sd
-import secrets
-import socket
-
-from flask import Flask, request, jsonify, abort
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from nanowakeword import NanoInterpreter
 from tts_with_rvc import TTS_RVC
@@ -49,87 +46,6 @@ from waitress import serve
 
 app = Flask(__name__)
 CORS(app)
-
-# --- Acceso desde la red local (Miku en Android, voz real vía RVC) ---
-# Antes el servidor solo respondía en 127.0.0.1 -- nada fuera de la propia
-# PC podía alcanzarlo. Para que la app de Android le pida a ESTE MISMO
-# servidor que hable con la voz real de Miku (en vez del TTS genérico del
-# sistema), tiene que poder llegar por la IP local, así que ahora escucha
-# en todas las interfaces (ver el cambio de host en serve(), al final del
-# archivo). Para no dejarlo abierto a cualquiera en la misma red Wi-Fi, las
-# peticiones que NO vienen de localhost necesitan una clave compartida
-# (header X-Miku-Key) -- se genera sola la primera vez y se guarda en
-# disco. El panel de Configuración de la app de escritorio la muestra
-# (GET /lan-key, que solo responde a localhost) para copiarla una vez a la
-# app de Android.
-LAN_CONFIG_PATH = os.path.join(
-    os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "MikuAI", "lan_config.json"
-)
-
-
-def _load_or_create_lan_key():
-    try:
-        os.makedirs(os.path.dirname(LAN_CONFIG_PATH), exist_ok=True)
-        if os.path.isfile(LAN_CONFIG_PATH):
-            with open(LAN_CONFIG_PATH, "r", encoding="utf-8") as f:
-                existing = json.load(f).get("lanKey", "")
-                if existing:
-                    return existing
-        new_key = secrets.token_hex(16)
-        with open(LAN_CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump({"lanKey": new_key}, f)
-        return new_key
-    except Exception:
-        print("[LAN][ERROR] No se pudo leer/crear la clave de acceso de red:")
-        traceback.print_exc()
-        return secrets.token_hex(16)  # solo para esta sesión, no persiste
-
-
-LAN_ACCESS_KEY = _load_or_create_lan_key()
-
-
-def _detect_local_ip():
-    """Mejor esfuerzo: no abre ninguna conexión real, solo usa el truco
-    de un socket UDP para que el SO resuelva qué interfaz local usaría
-    para salir -- estándar para detectar la IP de LAN sin dependencias."""
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
-        finally:
-            s.close()
-    except Exception:
-        return None
-
-
-@app.before_request
-def _restrict_lan_access():
-    if request.remote_addr in ("127.0.0.1", "::1", None):
-        return  # el propio frontend de escritorio -- sin cambio de comportamiento
-    if request.headers.get("X-Miku-Key") != LAN_ACCESS_KEY:
-        abort(403)
-
-
-@app.route("/lan-key", methods=["GET"])
-def lan_key():
-    # El before_request de arriba ya garantiza que esto solo responde a
-    # localhost -- es la propia app de escritorio pidiendo la clave para
-    # mostrarla en el panel de Configuración, nunca se expone por la red.
-    return jsonify({
-        "lanKey": LAN_ACCESS_KEY,
-        "localIp": _detect_local_ip(),
-        "port": 8899,
-    })
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    # A diferencia de /lan-key (solo localhost), esta SÍ responde a la red
-    # local con la clave correcta -- es lo que usa el botón "Probar
-    # conexión" de la app de Android para confirmar host+clave sin tener
-    # que disparar una síntesis de voz completa solo para probar.
-    return jsonify({"ok": True})
 
 # Ruta a Rhubarb: busca en PyInstaller (_MEIPASS), junto al ejecutable, o rutas conocidas
 def resolve_rhubarb_path():
@@ -460,13 +376,5 @@ def start_parent_watchdog():
 if __name__ == "__main__":
     start_parent_watchdog()
     threading.Thread(target=_wake_word_loop, daemon=True).start()
-    _local_ip = _detect_local_ip()
     print("[INFO] Servidor listo. Escuchando en http://127.0.0.1:8899")
-    if _local_ip:
-        print(f"[LAN] También accesible en la red local en http://{_local_ip}:8899 (requiere X-Miku-Key)")
-    print(f"[LAN] Clave de acceso de red (para la app de Android): {LAN_ACCESS_KEY}")
-    # 0.0.0.0 en vez de 127.0.0.1: necesario para que la app de Android
-    # pueda alcanzar este servidor por la IP local (ver bloque de arriba,
-    # _restrict_lan_access exige la clave para cualquier origen que no sea
-    # localhost).
-    serve(app, host="0.0.0.0", port=8899)
+    serve(app, host="127.0.0.1", port=8899)

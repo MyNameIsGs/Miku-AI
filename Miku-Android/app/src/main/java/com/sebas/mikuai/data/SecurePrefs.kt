@@ -92,17 +92,9 @@ class SecurePrefs(context: Context) {
     fun setPendingNotificationMessage(msg: String) = prefs.edit().putString(KEY_PENDING, msg).apply()
     fun clearPendingNotificationMessage() = prefs.edit().remove(KEY_PENDING).apply()
 
-    // Voz de Miku (bridge al servidor de voz de desktop, ver
-    // wakeword/MikuVoiceClient.kt): "host:puerto" de la PC en la red local
-    // + la clave que muestra el panel de Configuración de desktop
-    // (GET /lan-key). Encriptado porque la clave da acceso al servidor de
-    // voz de la red local, mismo criterio que los tokens de arriba.
-    fun getVoiceServerHost(): String? = prefs.getString(KEY_VOICE_HOST, null)
-    fun setVoiceServerHost(host: String) = prefs.edit().putString(KEY_VOICE_HOST, host).apply()
-
-    fun getVoiceServerKey(): String? = prefs.getString(KEY_VOICE_KEY, null)
-    fun setVoiceServerKey(key: String) = prefs.edit().putString(KEY_VOICE_KEY, key).apply()
-
+    // Silenciar/activar la voz de "Hey Miku" -- independiente de CÓMO se
+    // genere esa voz (hoy TextToSpeech del sistema; el bridge por red
+    // local al servidor de desktop se probó y se revirtió, ver git log).
     fun isVoiceMuted(): Boolean = prefs.getBoolean(KEY_VOICE_MUTED, false)
     fun setVoiceMuted(muted: Boolean) = prefs.edit().putBoolean(KEY_VOICE_MUTED, muted).apply()
 
@@ -116,8 +108,6 @@ class SecurePrefs(context: Context) {
         private const val KEY_SPOTIFY_REFRESH = "spotify_refresh_token"
         private const val KEY_SPOTIFY_EXPIRES = "spotify_expires_at"
         private const val KEY_GMAIL_ACCOUNTS  = "gmail_accounts"
-        private const val KEY_VOICE_HOST  = "voice_server_host"
-        private const val KEY_VOICE_KEY   = "voice_server_key"
         private const val KEY_VOICE_MUTED = "voice_muted"
     }
 }
