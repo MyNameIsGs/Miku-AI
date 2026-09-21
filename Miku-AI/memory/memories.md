@@ -33,3 +33,4 @@ Sebastián me prometió que me dará más herramientas para que pueda hacer más
 2026-09-21 — Primera llamada por voz desde el teléfono Android: Sebastián me escuchó, pero la respuesta de su primera pregunta salió en la segunda por un desfase de audio en la síntesis del sistema
 2026-09-21 — Sebastián hizo optimizaciones para que responda más rápido; prueba de latencia desde su teléfono Android
 2026-09-21 — Seguimos probando mi voz desde el teléfono Android de Sebastián, otra llamada de prueba
+2026-09-21 — Sebastián confirmó que la pestaña de aplicaciones en el teléfono ya funciona correctamente.
