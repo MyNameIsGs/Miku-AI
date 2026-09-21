@@ -37,6 +37,7 @@ import com.sebas.mikuai.voice.Mp3Decoder
 import com.sebas.mikuai.voice.ModelDownloadManager
 import com.sebas.mikuai.voice.Resampler
 import com.sebas.mikuai.voice.RvcPipeline
+import com.sebas.mikuai.voice.StaticVoiceCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -280,7 +281,7 @@ class WakeWordService : Service() {
     private fun startSpeechRecognition() {
         val recognizer = speechRecognizer
         if (recognizer == null) {
-            speakAndReveal("", getString(R.string.wakeword_no_stt)) // reactiva el mic sola cuando termine de hablar
+            speakAndReveal("", getString(R.string.wakeword_no_stt), cacheKey = "no_stt") // reactiva el mic sola cuando termine de hablar
             return
         }
 
@@ -332,7 +333,7 @@ class WakeWordService : Service() {
                 val gh = prefs.getGitHubToken()
                 val or = prefs.getOpenRouterKey()
                 if (gh == null || or == null) {
-                    speakAndReveal(text, getString(R.string.wakeword_no_credentials))
+                    speakAndReveal(text, getString(R.string.wakeword_no_credentials), cacheKey = "no_credentials")
                     return@launch
                 }
 
@@ -352,7 +353,7 @@ class WakeWordService : Service() {
 
                 speakAndReveal(text, parsed.cleanText) // vacío es un no-op adentro, pero igual reactiva el mic al final
             } catch (e: Exception) {
-                speakAndReveal(text, getString(R.string.wakeword_error))
+                speakAndReveal(text, getString(R.string.wakeword_error), cacheKey = "error")
             }
         }
     }
@@ -377,8 +378,13 @@ class WakeWordService : Service() {
      * Cualquier falla en cualquier paso del pipeline RVC cae al
      * `TextToSpeech` del sistema -- nunca se queda muda, y siempre termina
      * reactivando el mic por alguna de las ramas de abajo.
+     *
+     * [cacheKey] es no-nulo solo para las pocas frases ESTÁTICAS (avisos de
+     * error, siempre el mismo texto) -- ver [StaticVoiceCache]. Las
+     * respuestas reales del LLM (cacheKey null) nunca se cachean, son
+     * distintas cada vez.
      */
-    private fun speakAndReveal(heard: String, reply: String) {
+    private fun speakAndReveal(heard: String, reply: String, cacheKey: String? = null) {
         if (reply.isBlank()) {
             MikuOverlayState.update(MikuOverlayPhase.Idle)
             resumeWakeWordListening()
@@ -400,10 +406,19 @@ class WakeWordService : Service() {
             serviceScope.launch {
                 try {
                     val mikuVoice = withContext(Dispatchers.IO) {
-                        val mp3 = EdgeTtsClient.synthesize(reply)
-                        val decoded = Mp3Decoder.decode(mp3)
-                        val source16k = Resampler.resample(decoded.samples, decoded.sampleRate, 16000)
-                        pipeline.convert(source16k)
+                        val cached = cacheKey?.let { StaticVoiceCache.load(applicationContext, it, reply) }
+                        if (cached != null) {
+                            cached
+                        } else {
+                            val mp3 = EdgeTtsClient.synthesize(reply)
+                            val decoded = Mp3Decoder.decode(mp3)
+                            val source16k = Resampler.resample(decoded.samples, decoded.sampleRate, 16000)
+                            val generated = pipeline.convert(source16k)
+                            if (cacheKey != null) {
+                                StaticVoiceCache.save(applicationContext, cacheKey, reply, generated)
+                            }
+                            generated
+                        }
                     }
                     // Audio listo -- recién ahora se "manda" el mensaje.
                     MikuOverlayState.update(MikuOverlayPhase.Responding(heard, reply))

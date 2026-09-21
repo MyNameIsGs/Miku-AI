@@ -71,6 +71,8 @@ class ModelDownloadManager(private val context: Context) {
                 downloadOne(fileName, target, expectedSize, expectedSha256)
             }
 
+            cleanupOrphanedFiles(dir)
+
             _state.value = ModelDownloadState.Ready
         } catch (e: Exception) {
             _state.value = ModelDownloadState.Failed(e.message ?: "Error desconocido descargando la voz de Miku")
@@ -134,6 +136,24 @@ class ModelDownloadManager(private val context: Context) {
         if (target.exists()) target.delete()
         if (!tmp.renameTo(target)) {
             throw IOException("No se pudo mover $fileName a su ubicación final")
+        }
+    }
+
+    // Idea #4 de la lista de ideas: de las rondas de recuantización del Paso
+    // 5 (int8 -> u8 -> fp32) quedaron archivos viejos huérfanos en filesDir
+    // (generator_int8.onnx, rmvpe_int8.onnx, generator_u8.onnx) -- nombres
+    // únicos a propósito para forzar la redescarga (ver RvcModelPaths.kt),
+    // pero eso significa que nadie los borra solos. Se corre siempre que los
+    // 4 modelos actuales ya están listos: cualquier archivo en la carpeta
+    // que no sea uno de los 4 nombres vigentes (ni un ".download" de una
+    // descarga en curso, aunque a esta altura ya terminaron todas) se borra.
+    private fun cleanupOrphanedFiles(dir: File) {
+        val currentNames = RvcModelPaths.all(context).map { it.name }.toSet()
+        val files = dir.listFiles() ?: return
+        for (file in files) {
+            if (file.name !in currentNames) {
+                file.delete()
+            }
         }
     }
 
