@@ -6,5 +6,13 @@
     "creadoEn": "2026-09-19T08:04:54.911680Z",
     "estado": "activo",
     "ultimoRecordatorio": null
+  },
+  {
+    "id": "a7c8bb39-b87e-421b-9b96-7276b0d3cf82",
+    "descripcion": "Prueba de voz desde el teléfono Android de Sebastián",
+    "fechaEstimada": "2026-09-21",
+    "creadoEn": "2026-09-21T07:46:05.825742Z",
+    "estado": "activo",
+    "ultimoRecordatorio": null
   }
 ]
