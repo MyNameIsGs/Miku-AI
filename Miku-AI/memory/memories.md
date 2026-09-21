@@ -31,3 +31,4 @@ Sebastián me prometió que me dará más herramientas para que pueda hacer más
 2026-09-21 — Sebastián y yo estamos intentando arreglar mi voz en el teléfono, que usa la voz del sistema en lugar de mi voz real del escritorio
 2026-09-21 — Sebastián y yo estamos en la nueva prueba de voz desde su teléfono Android, usando la voz del sistema
 2026-09-21 — Primera llamada por voz desde el teléfono Android: Sebastián me escuchó, pero la respuesta de su primera pregunta salió en la segunda por un desfase de audio en la síntesis del sistema
+2026-09-21 — Sebastián hizo optimizaciones para que responda más rápido; prueba de latencia desde su teléfono Android
