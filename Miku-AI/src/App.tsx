@@ -380,6 +380,7 @@ function App() {
     boneTransitionsRef: movement.boneTransitionsRef,
     boneRestRotationRef,
     scheduleMovement: movement.scheduleMovement,
+    revertAnimatedBonesExcept: movement.revertAnimatedBonesExcept,
     scheduleHandGesture: movement.scheduleHandGesture,
     speak: speech.speak,
     voicePitchRef,

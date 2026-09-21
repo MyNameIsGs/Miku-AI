@@ -35,11 +35,16 @@ type UseIdleQuirksParams = {
     origin: MovementOrigin,
     autoRevertDelayMs?: number,
   ) => void;
+  // Bug real: un gesto animado no se termina solo (ver useMovement.ts) --
+  // sin esto, un quirk nuevo que no toca todos los huesos del anterior
+  // deja partes de dos gestos animados mezclándose para siempre.
+  revertAnimatedBonesExcept: (keepKeys: string[]) => void;
   scheduleHandGesture: (
     side: "left" | "right",
     presetName: string,
     durationMs: number,
     origin: MovementOrigin,
+    autoRevertDelayMs?: number,
   ) => void;
   // Tarea 6.7, Nivel 2: para poder hablar cuando saca a colación un
   // pendiente -- necesita lo mismo que una respuesta normal (voz base +
@@ -66,6 +71,7 @@ export function useIdleQuirks({
   boneTransitionsRef,
   boneRestRotationRef,
   scheduleMovement,
+  revertAnimatedBonesExcept,
   scheduleHandGesture,
   speak,
   voicePitchRef,
@@ -87,14 +93,22 @@ export function useIdleQuirks({
   // una llamada real), para que ella pueda juzgarlo antes de confirmarlo.
   function runStoredQuirk(name: string, quirk: StoredQuirk) {
     if (quirk.movement) {
+      // Antes de este quirk, apaga cualquier oscilación animada que haya
+      // quedado colgada de un quirk anterior y que este no vaya a tocar
+      // (ver revertAnimatedBonesExcept) -- si no, se mezclan para siempre.
+      revertAnimatedBonesExcept(
+        quirk.movement.entries.map((e) => `${e.bone}.${e.axis}`),
+      );
       scheduleMovement(quirk.movement, "idle", quirk.movement.durationMs);
+    } else {
+      revertAnimatedBonesExcept([]);
     }
     const handDuration = quirk.handDurationMs ?? DEFAULT_HAND_GESTURE_DURATION_MS;
     if (quirk.handLeft) {
-      scheduleHandGesture("left", quirk.handLeft, handDuration, "idle");
+      scheduleHandGesture("left", quirk.handLeft, handDuration, "idle", handDuration);
     }
     if (quirk.handRight) {
-      scheduleHandGesture("right", quirk.handRight, handDuration, "idle");
+      scheduleHandGesture("right", quirk.handRight, handDuration, "idle", handDuration);
     }
 
     if (quirk.state === "evaluando") {
@@ -228,6 +242,12 @@ export function useIdleQuirks({
       );
 
       if (parsed.movement) {
+        // Mismo motivo que en runStoredQuirk: limpia cualquier oscilación
+        // animada colgada de un quirk directo anterior que este movimiento
+        // no vaya a tocar.
+        revertAnimatedBonesExcept(
+          parsed.movement.entries.map((e) => `${e.bone}.${e.axis}`),
+        );
         // El doble de su propia duración de entrada antes de volver sola.
         scheduleMovement(parsed.movement, "idle", parsed.movement.durationMs);
       }

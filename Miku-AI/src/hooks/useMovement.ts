@@ -46,6 +46,14 @@ export function useMovement({
 }: UseMovementParams) {
   const boneTransitionsRef = useRef<Record<string, BoneTransition>>({});
   const pendingQuirkRevertsRef = useRef<Record<string, PendingQuirkRevert>>({});
+  // Mismo problema que los huesos de cuerpo (ver revertAnimatedBonesExcept),
+  // pero para el wiggle de dedos: animatedHandSidesRef nunca se apagaba
+  // sola, un lado quedaba wiggleando para siempre hasta el próximo gesto
+  // para ESE mismo lado. Un registro por lado, no por hueso -- el wiggle
+  // ya es por lado, no por dedo individual.
+  const pendingHandRevertsRef = useRef<
+    Partial<Record<"left" | "right", { revertAt: number; revertDuration: number }>>
+  >({});
 
   // --- Tarea 3.1, Paso 2b: gestos de mano personalizados y animación ---
   // Gestos creados por Miku, persistidos en .settings.dat (no en memory.ts:
@@ -109,13 +117,57 @@ export function useMovement({
         animated: parsed.animated,
       };
 
-      if (autoRevertDelayMs !== undefined && !parsed.animated) {
+      // Idea de Sebastián: un quirk (animado o no) no debería durar para
+      // siempre, tiene que tener un límite propio -- antes esto se
+      // saltaba a propósito para animados, porque "nunca revertir" era el
+      // único comportamiento posible para animados en general (ver
+      // updateMovement). Ahora también programan su revert -- mismo
+      // tiempo que ya usan los no-animados (2x su propia duración: la
+      // duración es el período de un ciclo completo, así que son ~2
+      // ciclos de vaivén antes de asentarse solos). Solo aplica a
+      // llamadas que YA pasan autoRevertDelayMs -- hoy eso es únicamente
+      // runStoredQuirk/askForIdleQuirk (quirks idle); un gesto animado en
+      // una respuesta normal de conversación sigue sin límite, no es lo
+      // que se pidió acá.
+      if (autoRevertDelayMs !== undefined) {
         pendingQuirkRevertsRef.current[key] = {
           revertAt: now + parsed.durationMs + autoRevertDelayMs,
-          revertToValue: currentValue,
+          revertToValue: parsed.animated ? restRad : currentValue,
           revertDuration: parsed.durationMs,
         };
       }
+    }
+  }
+
+  // Bug real encontrado por Sebastián en vivo: un gesto animado nunca
+  // "termina" solo (ver el comentario en updateMovement) -- sigue
+  // oscilando hasta que llega una orden nueva para ESE MISMO hueso+eje.
+  // Si un quirk nuevo no toca alguno de los huesos que el quirk ANTERIOR
+  // sí animaba (ej. tarareo_quieta mueve cabeza/cuello/columna, y
+  // microsuspiro no), esos huesos se quedan oscilando para siempre,
+  // mezclados con el gesto nuevo -- y de paso ensucian la foto que se usa
+  // para evaluar el quirk nuevo, sin que la descripción numérica lo
+  // refleje. Se llama antes de programar un quirk idle nuevo, con la
+  // lista de huesos que SÍ va a tocar ese quirk -- todo lo demás que
+  // siga animado vuelve suavemente a su reposo.
+  function revertAnimatedBonesExcept(keepKeys: string[]) {
+    const now = performance.now();
+    const keep = new Set(keepKeys);
+    for (const key of Object.keys(boneTransitionsRef.current)) {
+      const transition = boneTransitionsRef.current[key];
+      if (!transition.animated || keep.has(key)) continue;
+      const [boneName, axis] = key.split(".") as [string, "x" | "y" | "z"];
+      const boneNode = movementBonesRef.current[boneName];
+      if (!boneNode) continue;
+      const restRad = boneRestRotationRef.current[boneName]?.[axis] ?? 0;
+      boneTransitionsRef.current[key] = {
+        startValue: boneNode.rotation[axis],
+        targetValue: restRad,
+        startTime: now,
+        duration: transition.duration,
+        origin: "idle",
+        animated: false,
+      };
     }
   }
 
@@ -140,6 +192,11 @@ export function useMovement({
     presetName: string,
     durationMs: number,
     origin: MovementOrigin,
+    // Mismo criterio que scheduleMovement: si se pasa, un gesto animado
+    // se apaga solo (2x su duración) en vez de wigglear para siempre.
+    // Solo lo usan los quirks idle -- un gesto de mano en una respuesta
+    // normal de conversación sigue sin límite.
+    autoRevertDelayMs?: number,
   ) {
     const def = getHandGestureDefinition(presetName);
     if (!def) return;
@@ -148,6 +205,15 @@ export function useMovement({
     // Marca/desmarca el lado como animado -- programar CUALQUIER gesto
     // nuevo para este lado reemplaza el estado anterior, sea animado o no.
     animatedHandSidesRef.current[side] = def.animated;
+
+    if (def.animated && autoRevertDelayMs !== undefined) {
+      pendingHandRevertsRef.current[side] = {
+        revertAt: performance.now() + durationMs + autoRevertDelayMs,
+        revertDuration: durationMs,
+      };
+    } else {
+      delete pendingHandRevertsRef.current[side];
+    }
 
     const now = performance.now();
     for (const fingerKey of Object.keys(curls) as FingerKey[]) {
@@ -241,6 +307,41 @@ export function useMovement({
       }
     }
 
+    // Mismo mecanismo que pendingQuirkRevertsRef, pero para el wiggle de
+    // dedos (ver el comentario largo en scheduleHandGesture): cuando llega
+    // su momento, apaga animatedHandSidesRef para ese lado Y programa una
+    // transición normal de cada falange de vuelta a su rotación de
+    // reposo -- si no, el wiggle se apaga pero la mano queda congelada en
+    // la pose exagerada del gesto animado, en vez de relajarse.
+    for (const sideKey of Object.keys(pendingHandRevertsRef.current) as (
+      | "left"
+      | "right"
+    )[]) {
+      const pending = pendingHandRevertsRef.current[sideKey];
+      if (!pending || now < pending.revertAt) continue;
+      delete pendingHandRevertsRef.current[sideKey];
+      animatedHandSidesRef.current[sideKey] = false;
+      (Object.keys(FINGER_KEY_TO_VRM_NAME) as FingerKey[]).forEach((fingerKey) => {
+        const vrmFingerName = FINGER_KEY_TO_VRM_NAME[fingerKey];
+        const axis: "y" | "z" = fingerKey === "thumb" ? "y" : "z";
+        (["Proximal", "Intermediate", "Distal"] as const).forEach((phalanx) => {
+          const boneName = `${sideKey}${vrmFingerName}${phalanx}`;
+          const boneNode = fingerBonesRef.current[boneName];
+          if (!boneNode) return;
+          const restRad = boneRestRotationRef.current[boneName]?.[axis] ?? 0;
+          const key = `${boneName}.${axis}`;
+          boneTransitionsRef.current[key] = {
+            startValue: boneNode.rotation[axis],
+            targetValue: restRad,
+            startTime: now,
+            duration: pending.revertDuration,
+            origin: "idle",
+            animated: false,
+          };
+        });
+      });
+    }
+
     for (const key of Object.keys(boneTransitionsRef.current)) {
       const transition = boneTransitionsRef.current[key];
       const [boneName, axis] = key.split(".") as [string, "x" | "y" | "z"];
@@ -309,6 +410,7 @@ export function useMovement({
     animatedHandSidesRef,
     customHandGesturesRef,
     scheduleMovement,
+    revertAnimatedBonesExcept,
     scheduleHandGesture,
     saveCustomHandGesture,
     updateMovement,
