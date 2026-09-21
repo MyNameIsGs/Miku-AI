@@ -14,6 +14,11 @@ export const VOICE_RATE_MAX = 100;
 
 export const IDLE_QUIRK_INTERVAL_MS = 150000; // 2.5 minutos
 
+// Cada cuánto revisar si llegó correo nuevo (ver lib/gmail/watcher.ts) --
+// mismo valor que usa la variante de Android, balance entre "se entera
+// pronto" y no ametrallar la API de Gmail en cada rato de silencio.
+export const GMAIL_CHECK_INTERVAL_MS = 300000; // 5 minutos
+
 // Fase 7: en cada tick idle, si ya tiene al menos un quirk propio guardado,
 // esta es la probabilidad de correrlo directamente (sin llamar al LLM) en
 // vez de preguntarle qué quiere hacer. Sin calibrar contra uso real todavía.

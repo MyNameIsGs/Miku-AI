@@ -2,10 +2,15 @@ import { loadGmailAccounts, getValidAccessTokenFor } from "./auth";
 
 export type GmailMessageSummary = {
   account: string;
+  id: string;
   from: string;
   subject: string;
   date: string;
   snippet: string;
+  // Viene en el recurso base del mensaje (siempre, sin importar el
+  // `format` pedido) -- se usa para filtrar promociones/social/spam al
+  // avisar de correo nuevo, sin necesitar un pedido extra a la API.
+  labelIds: string[];
 };
 
 async function gmailFetch(accessToken: string, path: string): Promise<Response> {
@@ -52,13 +57,24 @@ async function listRecentMessagesForAccount(
     const headers: { name: string; value: string }[] = data.payload?.headers ?? [];
     summaries.push({
       account: accountEmail,
+      id: data.id,
       from: headerValue(headers, "From"),
       subject: headerValue(headers, "Subject"),
       date: headerValue(headers, "Date"),
       snippet: data.snippet ?? "",
+      labelIds: data.labelIds ?? [],
     });
   }
   return summaries;
+}
+
+/** El mensaje más reciente de una cuenta, o null si no tiene ninguno. Usado por el aviso de correo nuevo (watcher.ts), no por revisar_correo. */
+export async function getLatestMessageForAccount(
+  accessToken: string,
+  accountEmail: string,
+): Promise<GmailMessageSummary | null> {
+  const messages = await listRecentMessagesForAccount(accessToken, accountEmail, 1, 3);
+  return messages[0] ?? null;
 }
 
 // Revisa TODAS las cuentas de Gmail conectadas (Sebastián usa varias) y

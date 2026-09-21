@@ -19,6 +19,7 @@ import { useWakeWord } from "./hooks/useWakeWord";
 import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useReminders } from "./hooks/useReminders";
+import { useGmailWatcher } from "./hooks/useGmailWatcher";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useAudioDevices } from "./hooks/useAudioDevices";
@@ -394,6 +395,12 @@ function App() {
     voiceRateRef,
   });
 
+  const gmailWatcher = useGmailWatcher({
+    speak: speech.speak,
+    voicePitchRef,
+    voiceRateRef,
+  });
+
   const memoryFiles = useMemoryFiles();
   const appLauncher = useAppLauncher();
   useAudioDevices();
@@ -664,6 +671,11 @@ function App() {
     // del quirk idle -- un timer de "en 5 minutos" no puede esperar a que
     // el silencio dispare el loop idle.
     reminders.checkReminders();
+
+    // Aviso de correo nuevo (variante de la idea original de enganchar
+    // Gmail al loop idle) -- chequeo propio, no depende de que el quirk
+    // idle decida hablar de eso.
+    gmailWatcher.checkGmail(now);
 
     // Etapa 7: suavizado de expresiones, parpadeo y mirada errante ahora
     // los procesa useFace.
