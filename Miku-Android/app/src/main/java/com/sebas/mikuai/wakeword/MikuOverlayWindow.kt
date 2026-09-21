@@ -22,6 +22,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.sebas.mikuai.ui.theme.MikuTheme
+import com.sebas.mikuai.voice.VoicePlaybackControl
 
 /**
  * Ventana de overlay de verdad (`TYPE_APPLICATION_OVERLAY`) para la
@@ -76,7 +77,16 @@ object MikuOverlayWindow {
                         if (phase is MikuOverlayPhase.Idle) hide(context)
                     }
 
-                    OverlayScreen(phase = phase, onDismiss = { MikuOverlayState.update(MikuOverlayPhase.Idle) })
+                    // Idea #12: cerrar la tarjeta también corta el audio en
+                    // curso -- antes solo se escondía la ventana y Miku
+                    // seguía hablando sola desde el bolsillo.
+                    OverlayScreen(
+                        phase = phase,
+                        onDismiss = {
+                            VoicePlaybackControl.stopCurrent()
+                            MikuOverlayState.update(MikuOverlayPhase.Idle)
+                        },
+                    )
                 }
             }
         }

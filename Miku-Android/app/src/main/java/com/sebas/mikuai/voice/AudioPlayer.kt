@@ -11,9 +11,20 @@ import android.media.AudioTrack
  */
 object AudioPlayer {
 
-    /** Reproduce [pcm] (mono, float32 en [-1,1]) a [sampleRate] Hz y bloquea hasta que termina. */
+    // Idea #12: cortar el audio de verdad a mitad de reproducción, no solo
+    // esconder la pantalla flotante. `stop()` puede llamarse desde
+    // cualquier hilo (el botón de cerrar corre en el hilo de UI) -- en vez
+    // de tocar el AudioTrack directamente desde ahí (riesgo real de
+    // concurrencia, por eso esta idea se había dejado afuera del Paso 5),
+    // solo prende una bandera que el propio hilo que reproduce revisa cada
+    // 50ms y actúa en consecuencia -- el AudioTrack nunca lo toca más de un
+    // hilo a la vez.
+    @Volatile private var stopRequested = false
+
+    /** Reproduce [pcm] (mono, float32 en [-1,1]) a [sampleRate] Hz y bloquea hasta que termina (o se pide [stop]). */
     fun play(pcm: FloatArray, sampleRate: Int) {
         if (pcm.isEmpty()) return
+        stopRequested = false
 
         val minBufferSize = AudioTrack.getMinBufferSize(
             sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
@@ -42,10 +53,20 @@ object AudioPlayer {
             track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
             track.play()
             val durationMs = (pcm.size.toLong() * 1000 / sampleRate) + 200
-            Thread.sleep(durationMs)
+            val stepMs = 50L
+            var elapsed = 0L
+            while (elapsed < durationMs && !stopRequested) {
+                Thread.sleep(stepMs)
+                elapsed += stepMs
+            }
         } finally {
             track.stop()
             track.release()
         }
+    }
+
+    /** Corta el audio actual, si hay alguno sonando (no-op si no hay nada reproduciéndose). */
+    fun stop() {
+        stopRequested = true
     }
 }

@@ -27,6 +27,9 @@ import androidx.core.content.ContextCompat
 import com.sebas.mikuai.MainActivity
 import com.sebas.mikuai.MikuApp
 import com.sebas.mikuai.R
+import com.sebas.mikuai.data.GmailApi
+import com.sebas.mikuai.data.GmailAuth
+import com.sebas.mikuai.data.GmailWatcher
 import com.sebas.mikuai.data.MarkerParser
 import com.sebas.mikuai.data.MikuRepository
 import com.sebas.mikuai.data.Prompts
@@ -38,6 +41,7 @@ import com.sebas.mikuai.voice.ModelDownloadManager
 import com.sebas.mikuai.voice.Resampler
 import com.sebas.mikuai.voice.RvcPipeline
 import com.sebas.mikuai.voice.StaticVoiceCache
+import com.sebas.mikuai.voice.VoicePlaybackControl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,16 +101,25 @@ class WakeWordService : Service() {
     /** Ventana rodante de los últimos `CONFIRMATION_FRAMES` resultados (score>=THRESHOLD sí/no) -- ver `startCapture()`. */
     private val recentScores = ArrayDeque<Boolean>(CONFIRMATION_FRAMES)
 
+    // Variante de la idea #8 propuesta por Sebastián en vivo: avisar de
+    // correo nuevo apenas llega, en vez de que el loop idle lo mencione de
+    // pasada. Ver GmailWatcher.kt.
+    private lateinit var gmailWatcher: GmailWatcher
+
     override fun onCreate() {
         super.onCreate()
         startForegroundWithNotification(statusText(R.string.wakeword_status_listening))
 
         engine = WakeWordEngine(applicationContext)
+        val prefs = SecurePrefs(applicationContext)
+        gmailWatcher = GmailWatcher(GmailApi(GmailAuth(applicationContext, prefs)), prefs)
+        scheduleGmailCheck()
 
         tts = TextToSpeech(applicationContext) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
             if (ttsReady) {
                 tts?.language = Locale("es", "ES")
+                VoicePlaybackControl.registerSystemTts(tts)
             }
         }
 
@@ -132,8 +145,11 @@ class WakeWordService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(gmailCheckRunnable)
         stopCapture()
         speechRecognizer?.destroy()
+        VoicePlaybackControl.registerSystemTts(null)
+        VoicePlaybackControl.registerStopCallback(null)
         tts?.shutdown()
         if (::engine.isInitialized) engine.close()
         rvcPipeline?.close()
@@ -351,6 +367,19 @@ class WakeWordService : Service() {
                     try { repo.appendToFile(memory, "memories", t) } catch (e: Exception) {}
                 }
 
+                // Idea #10: guardar el intercambio para que ChatScreen lo
+                // muestre la próxima vez que se abra la app -- fire-and-forget,
+                // un fallo acá no debe interrumpir la respuesta por voz. Solo
+                // se guardan intercambios reales (no las frases de error de
+                // más abajo, que no aportan nada al historial).
+                if (parsed.cleanText.isNotBlank()) {
+                    serviceScope.launch {
+                        try {
+                            repo.appendVoiceHistory(text, parsed.cleanText)
+                        } catch (e: Exception) {}
+                    }
+                }
+
                 speakAndReveal(text, parsed.cleanText) // vacío es un no-op adentro, pero igual reactiva el mic al final
             } catch (e: Exception) {
                 speakAndReveal(text, getString(R.string.wakeword_error), cacheKey = "error")
@@ -454,15 +483,68 @@ class WakeWordService : Service() {
      */
     private fun scheduleOverlayDismissAndResume(reply: String) {
         val estimatedMs = (reply.length * 60L) + 1200L
-        mainHandler.postDelayed({
+        val resumeRunnable = Runnable {
+            VoicePlaybackControl.registerStopCallback(null)
             MikuOverlayState.update(MikuOverlayPhase.Idle)
             resumeWakeWordListening()
-        }, estimatedMs)
+        }
+        // Si se pide cortar el audio (botón de cerrar de la pantalla
+        // flotante) antes de que se cumpla el tiempo estimado, no hace
+        // falta esperarlo -- se adelanta el mismo resumeRunnable ya
+        // armado, en vez de duplicar su lógica.
+        VoicePlaybackControl.registerStopCallback {
+            mainHandler.removeCallbacks(resumeRunnable)
+            mainHandler.post(resumeRunnable)
+        }
+        mainHandler.postDelayed(resumeRunnable, estimatedMs)
     }
 
     private fun resumeWakeWordListening() {
         updateNotification(statusText(R.string.wakeword_status_listening))
         startCapture()
+    }
+
+    /**
+     * Chequeo periódico de correo nuevo (ver GmailWatcher.kt) -- se
+     * reprograma a sí mismo cada [GMAIL_CHECK_INTERVAL_MS], mientras el
+     * servicio esté vivo. Solo corre si el wake-word está realmente
+     * escuchando en este momento ([capturing], fase Idle) -- si hay una
+     * conversación en curso, se saltea este turno y se reintenta en el
+     * próximo (no hay cola de audio acá como en desktop, así que evitar la
+     * superposición es más simple que resolverla).
+     *
+     * Antes de anunciar, corta la captura del wake-word con `stopCapture()`
+     * -- mismo motivo que `onWakeWordDetected()`: el mic no debe quedar
+     * escuchando mientras Miku habla (bug real ya resuelto una vez en el
+     * Paso 5, no repetirlo acá). `speakAndReveal` ya se encarga de
+     * reactivarlo solo cuando el audio termina.
+     */
+    // Runnable con nombre (no una lambda anónima nueva en cada postDelayed)
+    // para poder cancelarlo en onDestroy() -- si no, el Handler del
+    // Looper principal (no atado al ciclo de vida del Service) seguiría
+    // reprogramándose solo para siempre, reteniendo esta instancia viva.
+    private val gmailCheckRunnable = object : Runnable {
+        override fun run() {
+            if (capturing && MikuOverlayState.phase.value is MikuOverlayPhase.Idle) {
+                serviceScope.launch {
+                    try {
+                        val announcement = gmailWatcher.checkForNewMail()
+                        if (!announcement.isNullOrBlank()) {
+                            stopCapture()
+                            speakAndReveal("", announcement)
+                        }
+                    } catch (e: Exception) {
+                        // Sin Gmail conectado, o un error de red puntual --
+                        // se reintenta solo en el próximo chequeo.
+                    }
+                }
+            }
+            mainHandler.postDelayed(this, GMAIL_CHECK_INTERVAL_MS)
+        }
+    }
+
+    private fun scheduleGmailCheck() {
+        mainHandler.postDelayed(gmailCheckRunnable, GMAIL_CHECK_INTERVAL_MS)
     }
 
     // ---- Notificaciones ----
@@ -560,6 +642,11 @@ class WakeWordService : Service() {
         // problema. Ver el comentario largo en `startCapture()`.
         private const val CONFIRMATION_FRAMES = 3
         private const val COOLDOWN_MS = 3000L
+        // Cada cuánto revisar si llegó correo nuevo -- balance entre "se
+        // entera pronto" y no ametrallar la API de Gmail / batería con el
+        // servicio corriendo todo el día. Fácil de ajustar si en el uso
+        // real se siente muy lento o muy seguido.
+        private const val GMAIL_CHECK_INTERVAL_MS = 5 * 60_000L
         const val FOREGROUND_NOTIFICATION_ID = 4200
         const val OVERLAY_NOTIFICATION_ID = 4201
 

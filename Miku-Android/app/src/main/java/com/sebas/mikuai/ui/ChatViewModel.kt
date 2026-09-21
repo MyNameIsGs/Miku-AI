@@ -37,6 +37,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private var repo       = buildRepo()
     private var memory: MikuMemory? = null
     private val history    = mutableListOf<ChatMessage>()  // historial de sesión
+    private var voiceHistoryLoaded = false // ver comentario en loadMemory()
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState
@@ -91,6 +92,30 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 memory = r.loadMemory()
+
+                // Idea #10: mostrar las conversaciones por "Hey Miku" que
+                // pasaron mientras la app estaba cerrada -- se agregan tanto
+                // a la UI (con 🎙️ para distinguirlas) como al historial que
+                // se manda al LLM, para que recuerde lo que se le pidió por
+                // voz igual que si hubiera sido por texto. Un fallo acá no
+                // debe bloquear el resto del chat.
+                //
+                // Se carga UNA SOLA VEZ por instancia de ChatViewModel --
+                // "↺ Recargar memoria desde GitHub" llama a loadMemory() de
+                // nuevo sin recrear el ViewModel, y sin este guard cada
+                // recarga hubiera vuelto a agregar (duplicado) el mismo
+                // historial de voz que ya estaba en pantalla.
+                if (!voiceHistoryLoaded) {
+                    voiceHistoryLoaded = true
+                    try {
+                        r.loadVoiceHistory().sortedBy { it.timestampMs }.forEach { entry ->
+                            addMessage(UiMessage("user", "🎙️ ${entry.heard}"))
+                            history.add(ChatMessage("user", entry.heard))
+                            addMessage(UiMessage("miku", entry.reply))
+                            history.add(ChatMessage("assistant", entry.reply))
+                        }
+                    } catch (e: Exception) {}
+                }
 
                 // Mostrar mensaje de notificación pendiente si existe
                 val pending = prefs.getPendingNotificationMessage()

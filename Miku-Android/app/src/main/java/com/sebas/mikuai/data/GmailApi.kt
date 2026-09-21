@@ -9,10 +9,15 @@ import org.json.JSONObject
 
 data class GmailMessageSummary(
     val account: String,
+    val id: String,
     val from: String,
     val subject: String,
     val date: String,
     val snippet: String,
+    // labelIds viene en el recurso base del mensaje (siempre, sin importar
+    // el `format` pedido) -- se usa para filtrar promociones/social/spam
+    // al avisar de correo nuevo, sin necesitar una llamada extra a la API.
+    val labelIds: List<String> = emptyList(),
 )
 
 class GmailApi(private val auth: GmailAuth) {
@@ -61,17 +66,33 @@ class GmailApi(private val auth: GmailAuth) {
             if (!response.isSuccessful) continue
             val json = JSONObject(response.body!!.string())
             val headers = json.getJSONObject("payload").optJSONArray("headers") ?: JSONArray()
+            val labelIdsJson = json.optJSONArray("labelIds")
+            val labelIds = if (labelIdsJson != null) {
+                (0 until labelIdsJson.length()).map { labelIdsJson.getString(it) }
+            } else {
+                emptyList()
+            }
             result.add(
                 GmailMessageSummary(
                     account = email,
+                    id = json.getString("id"),
                     from = headerValue(headers, "From"),
                     subject = headerValue(headers, "Subject"),
                     date = headerValue(headers, "Date"),
                     snippet = json.optString("snippet", ""),
+                    labelIds = labelIds,
                 )
             )
         }
         result
+    }
+
+    fun listConnectedEmails(): List<String> = auth.listConnectedEmails()
+
+    /** El mensaje más reciente de [email], o null si no tiene ninguno (o falló el pedido). */
+    suspend fun latestMessageFor(email: String): GmailMessageSummary? {
+        val token = auth.getValidAccessToken(email) ?: return null
+        return listRecentForAccount(email, token, maxResults = 1, daysBack = 3).firstOrNull()
     }
 
     // Recorre TODAS las cuentas de Gmail conectadas y junta los

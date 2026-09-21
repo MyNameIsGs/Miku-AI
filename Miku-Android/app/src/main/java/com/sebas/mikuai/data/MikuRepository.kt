@@ -8,6 +8,7 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     private val ghApi = GitHubApi(ghToken)
     private val orApi = OpenRouterApi(orKey)
     private val pendientesRepo = PendientesRepository(ghApi)
+    private val voiceHistoryRepo = VoiceHistoryRepository(ghApi)
     private val spotifyAuth = SpotifyAuth(context, prefs)
     private val spotifyApi = SpotifyApi(spotifyAuth)
     private val gmailAuth = GmailAuth(context, prefs)
@@ -58,6 +59,10 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
 
     // Primer paso de tool calling en Android (ver Tools.kt / PendientesRepository.kt).
     suspend fun loadActivePendientes(): List<Pendiente> = pendientesRepo.loadActivePendientes()
+
+    // Idea #10: historial de conversaciones por "Hey Miku" (ver VoiceHistoryRepository.kt).
+    suspend fun loadVoiceHistory(): List<VoiceHistoryEntry> = voiceHistoryRepo.load()
+    suspend fun appendVoiceHistory(heard: String, reply: String) = voiceHistoryRepo.append(heard, reply)
 
     suspend fun chatWithTools(
         systemPrompt: String,

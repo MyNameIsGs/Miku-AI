@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.sebas.mikuai.ui.theme.MikuTheme
+import com.sebas.mikuai.voice.VoicePlaybackControl
 
 /**
  * Pantalla flotante que se muestra al decir "Hey Miku" (estilo "Hey
@@ -69,7 +70,16 @@ class MikuOverlayActivity : ComponentActivity() {
                     if (phase is MikuOverlayPhase.Idle) finish()
                 }
 
-                OverlayScreen(phase = phase, onDismiss = { finish() })
+                // Idea #12: cerrar la tarjeta también corta el audio en
+                // curso -- antes solo se escondía la UI y Miku seguía
+                // hablando sola desde el bolsillo.
+                OverlayScreen(
+                    phase = phase,
+                    onDismiss = {
+                        VoicePlaybackControl.stopCurrent()
+                        finish()
+                    },
+                )
             }
         }
     }

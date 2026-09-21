@@ -87,6 +87,27 @@ class SecurePrefs(context: Context) {
         prefs.edit().putString(KEY_GMAIL_ACCOUNTS, array.toString()).apply()
     }
 
+    // Último id de mensaje visto por cuenta de Gmail, para avisar solo de
+    // correo REALMENTE nuevo (GmailWatcher.kt) -- a diferencia de
+    // pendientes.json/voice_history.json, esto es puramente local: no
+    // aporta nada sincronizarlo entre dispositivos, es solo "hasta dónde
+    // ya avisé en ESTE teléfono".
+    fun getLastSeenGmailIds(): Map<String, String> {
+        val raw = prefs.getString(KEY_GMAIL_LAST_SEEN, null) ?: return emptyMap()
+        return try {
+            val obj = JSONObject(raw)
+            obj.keys().asSequence().associateWith { obj.getString(it) }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun setLastSeenGmailIds(ids: Map<String, String>) {
+        val obj = JSONObject()
+        ids.forEach { (email, id) -> obj.put(email, id) }
+        prefs.edit().putString(KEY_GMAIL_LAST_SEEN, obj.toString()).apply()
+    }
+
     /** Mensaje generado por el job de notificaciones, pendiente de mostrar en el chat. */
     fun getPendingNotificationMessage(): String? = prefs.getString(KEY_PENDING, null)
     fun setPendingNotificationMessage(msg: String) = prefs.edit().putString(KEY_PENDING, msg).apply()
@@ -108,6 +129,7 @@ class SecurePrefs(context: Context) {
         private const val KEY_SPOTIFY_REFRESH = "spotify_refresh_token"
         private const val KEY_SPOTIFY_EXPIRES = "spotify_expires_at"
         private const val KEY_GMAIL_ACCOUNTS  = "gmail_accounts"
+        private const val KEY_GMAIL_LAST_SEEN = "gmail_last_seen_ids"
         private const val KEY_VOICE_MUTED = "voice_muted"
     }
 }
