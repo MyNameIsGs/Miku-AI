@@ -1,4 +1,4 @@
-import { RefObject, useRef } from "react";
+import { RefObject, useRef, useState } from "react";
 
 const VISEME_MAP: Record<string, string> = {
   A: "neutral",
@@ -42,6 +42,12 @@ export function useSpeech({
   // speak() espera a que termine el anterior antes de arrancar el suyo.
   const speechQueueRef = useRef<Promise<void>>(Promise.resolve());
 
+  // Espejo en estado de React de isSpeakingRef (que ya se mantenía como ref
+  // para no re-renderizar en cada frame) -- App.tsx lo usa para el
+  // indicador visual de "hablando" cerca del avatar. Idea #18: mismo
+  // espíritu que el ícono pulsante de la pantalla flotante de Android.
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
   async function speakImmediately(
     text: string,
     pitch: number,
@@ -60,6 +66,7 @@ export function useSpeech({
         console.error("Error del servidor de voz:", response.status);
         setExpression("neutral");
         isSpeakingRef.current = false;
+        setIsSpeaking(false);
         onReveal?.(text);
         return;
       }
@@ -118,6 +125,7 @@ export function useSpeech({
       audio.onplay = () => {
         setExpression(expression);
         isSpeakingRef.current = true;
+        setIsSpeaking(true);
         onReveal?.("");
         updateMouthFromVisemes();
       };
@@ -135,6 +143,7 @@ export function useSpeech({
           URL.revokeObjectURL(audioUrl);
           setExpression("neutral");
           isSpeakingRef.current = false;
+          setIsSpeaking(false);
           onReveal?.(text);
           resolve();
         };
@@ -144,12 +153,14 @@ export function useSpeech({
           URL.revokeObjectURL(audioUrl);
           setExpression("neutral");
           isSpeakingRef.current = false;
+          setIsSpeaking(false);
           onReveal?.(text);
           resolve();
         };
         audio.play().catch(() => {
           setExpression("neutral");
           isSpeakingRef.current = false;
+          setIsSpeaking(false);
           onReveal?.(text);
           resolve();
         });
@@ -158,6 +169,7 @@ export function useSpeech({
       console.error("Error al conectar con el servidor de voz:", err);
       setExpression("neutral");
       isSpeakingRef.current = false;
+      setIsSpeaking(false);
       onReveal?.(text);
     }
   }
@@ -190,5 +202,5 @@ export function useSpeech({
     return result;
   }
 
-  return { speak };
+  return { speak, isSpeaking };
 }

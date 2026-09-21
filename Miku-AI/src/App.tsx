@@ -279,6 +279,15 @@ function App() {
   const [llmResponse, setLlmResponse] = useState("");
   const [isThinking, setIsThinking] = useState(false);
 
+  // Idea #18: indicador visual de "escuchando/pensando/hablando" en el
+  // avatar de desktop -- equivalente al ícono pulsante de la pantalla
+  // flotante de Android. Derivado de estados que ya existen, no hace falta
+  // uno nuevo: listening/transcribing (mic capturando o transcribiendo),
+  // isThinking (LLM + síntesis de voz, ver el fix de "Pensando..." de
+  // arriba), speech.isSpeaking (audio sonando). El orden de prioridad
+  // importa -- si está escuchando, eso manda aunque isThinking quedara
+  // colgado de un turno anterior.
+
   useWakeWord({
     isVoiceReady,
     listening: speechRecognition.listening,
@@ -356,6 +365,15 @@ function App() {
     isSpeakingRef: face.isSpeakingRef,
     mutedRef: voiceMutedRef,
   });
+
+  const avatarState: "idle" | "listening" | "thinking" | "speaking" =
+    speechRecognition.listening || speechRecognition.transcribing
+      ? "listening"
+      : speech.isSpeaking
+        ? "speaking"
+        : isThinking
+          ? "thinking"
+          : "idle";
 
   const idleQuirks = useIdleQuirks({
     boneTransitionsRef: movement.boneTransitionsRef,
@@ -956,6 +974,15 @@ function App() {
               </span>
             )}
           </div>
+        </div>
+      )}
+      {/* "hablando" no lleva insignia -- ya se ve directo (boca moviéndose
+          + texto revelándose), agregarla es redundante. Sebastián lo pidió
+          sacar tras ver las tres juntas. */}
+      {(avatarState === "listening" || avatarState === "thinking") && (
+        <div className={`avatar-state-badge avatar-state-${avatarState}`}>
+          {avatarState === "listening" && "🎙️ Escuchando..."}
+          {avatarState === "thinking" && "💭 Pensando..."}
         </div>
       )}
       {!hideResponseText && isThinking && (

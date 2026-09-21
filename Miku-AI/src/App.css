@@ -161,6 +161,39 @@ button {
 .response-box.with-input {
   bottom: 130px;
 }
+
+/* Idea #18: indicador de "escuchando/pensando/hablando" cerca del avatar,
+   mismo espíritu que el ícono pulsante de la pantalla flotante de Android. */
+.avatar-state-badge {
+  position: absolute;
+  top: 44px;
+  left: 16px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: white;
+  background: rgba(40, 20, 50, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  animation: avatar-state-pulse 1.6s ease-in-out infinite;
+}
+
+.avatar-state-listening {
+  background: rgba(220, 90, 60, 0.65);
+}
+
+.avatar-state-thinking {
+  background: rgba(200, 160, 40, 0.6);
+}
+
+@keyframes avatar-state-pulse {
+  0%, 100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
 .toolbar button {
   background: rgba(255, 255, 255, 0.1);
   border: none;
