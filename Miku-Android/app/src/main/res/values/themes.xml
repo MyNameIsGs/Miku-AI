@@ -2,4 +2,16 @@
 <resources>
 
     <style name="Theme.MikuAI" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Pantalla flotante que se dispara al decir "Hey Miku" (estilo
+         "Hey Gemini"), ver wakeword/MikuOverlayActivity.kt: transparente
+         para que se vea la app/pantalla de abajo detrás de la tarjeta. -->
+    <style name="Theme.MikuOverlay" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Toast</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

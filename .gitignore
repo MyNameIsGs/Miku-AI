@@ -36,6 +36,7 @@ Miku-AI/src-tauri/temp/
 Miku-AI/src-tauri/.cache/
 Miku-Voice-Service/rhubarb/
 Miku-Voice-Service/release-staging/
+Miku-Voice-Service/rvc-model-cache/
 
 # Backups and reference files
 *.bak

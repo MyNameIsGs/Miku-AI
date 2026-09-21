@@ -12,6 +12,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.sebas.mikuai.data.SecurePrefs
+import com.sebas.mikuai.voice.ModelDownloadManager
+import com.sebas.mikuai.voice.ModelDownloadState
 import com.sebas.mikuai.wakeword.WakeWordPrefs
 import com.sebas.mikuai.wakeword.WakeWordService
 import androidx.compose.animation.core.animateFloatAsState
@@ -83,6 +85,7 @@ fun ChatScreen(
     var wakeWordEnabled by remember { mutableStateOf(WakeWordPrefs.isEnabled(context)) }
     val securePrefs = remember { SecurePrefs(context) }
     var voiceMuted by remember { mutableStateOf(securePrefs.isVoiceMuted()) }
+    val modelDownloadManager = remember { ModelDownloadManager(context) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -269,6 +272,7 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("⚙️ Configuración", color = MikuTeal, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("v${com.sebas.mikuai.BuildConfig.VERSION_NAME}", color = MikuTextDim, fontSize = 10.sp)
                 OutlinedButton(
                     onClick = { showSettings = false; vm.reloadMemory() },
                     modifier = Modifier.fillMaxWidth(),
@@ -329,6 +333,33 @@ fun ChatScreen(
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
                     ) { Text("🔋 Evitar que el sistema corte el micrófono en segundo plano") }
+
+                    // Camino PRINCIPAL para que la pantalla flotante de
+                    // "Hey Miku" aparezca al instante siempre (bloqueado o
+                    // no) -- ver wakeword/MikuOverlayWindow.kt. Sin este
+                    // permiso cae a una notificación de pantalla completa
+                    // que Android solo abre sola con el teléfono bloqueado
+                    // (con la pantalla desbloqueada y en uso, a propósito
+                    // se queda como notificación que hay que tocar --
+                    // política de la plataforma, confirmado con Sebastián
+                    // que así pasaba, no un bug de acá).
+                    var canDrawOverlays by remember {
+                        mutableStateOf(Settings.canDrawOverlays(context))
+                    }
+                    if (!canDrawOverlays) {
+                        OutlinedButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                        ) { Text("🖼️ Habilitar que \"Hey Miku\" abra la pantalla sola") }
+                    }
                 }
 
                 Row(
@@ -349,11 +380,41 @@ fun ChatScreen(
                         )
                     }
                 }
-                Text(
-                    "Hoy responde con la voz del sistema (no con la de Miku todavía -- eso queda pendiente de un port on-device del RVC, ver el plan).",
-                    color = MikuTextDim,
-                    fontSize = 11.sp
-                )
+                val downloadState by modelDownloadManager.state.collectAsState()
+                when (val s = downloadState) {
+                    is ModelDownloadState.Ready -> {
+                        Text("Voz real descargada ✓ (~518MB)", color = MikuTeal, fontSize = 11.sp)
+                    }
+                    is ModelDownloadState.Downloading -> {
+                        val pct = if (s.totalBytes > 0) (s.downloadedBytes * 100 / s.totalBytes).toInt() else 0
+                        Text("Descargando ${s.fileName}... $pct%", color = MikuTextDim, fontSize = 11.sp)
+                        LinearProgressIndicator(
+                            progress = { if (s.totalBytes > 0) s.downloadedBytes.toFloat() / s.totalBytes else 0f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MikuTeal,
+                        )
+                    }
+                    is ModelDownloadState.Failed -> {
+                        Text("Error descargando la voz real: ${s.message}", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                        OutlinedButton(
+                            onClick = { scope.launch { modelDownloadManager.ensureModelsReady() } },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                        ) { Text("Reintentar descarga") }
+                    }
+                    is ModelDownloadState.NotStarted -> {
+                        OutlinedButton(
+                            onClick = { scope.launch { modelDownloadManager.ensureModelsReady() } },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                        ) { Text("Descargar voz real de Miku (~518MB)") }
+                        Text(
+                            "Se usa una sola vez -- conviene hacerlo con Wi-Fi antes de viajar. Hasta que se descargue, responde con la voz del sistema.",
+                            color = MikuTextDim,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
 
                 OutlinedButton(
                     onClick = {

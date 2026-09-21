@@ -4,12 +4,31 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Wake-word "Hey Miku" (wakeword/WakeWordService.kt): escucha
          continua en primer plano, equivalente a la Tarea 5.4 de desktop. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Sin este permiso, ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS no
+         muestra el diálogo del sistema (el botón "Evitar que el sistema
+         corte el micrófono" quedaba sin hacer nada). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Necesario para que la notificación de pantalla completa lance
+         MikuOverlayActivity de inmediato al decir "Hey Miku" (en vez de
+         quedar solo como una notificación normal que hay que tocar),
+         ver wakeword/MikuOverlayActivity.kt. Camino de RESPALDO nada más:
+         Android solo la abre sola con la pantalla bloqueada, es
+         política de la plataforma, no algo que este permiso solucione
+         del todo (ver wakeword/MikuOverlayWindow.kt, el camino principal). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Permiso de "Mostrar sobre otras apps": el camino PRINCIPAL para
+         la pantalla flotante (wakeword/MikuOverlayWindow.kt): aparece al
+         instante sin pasar por notificaciones, sin importar si la
+         pantalla está bloqueada o en uso. Hay que darlo a mano desde
+         Configuración (no se puede pedir con un diálogo normal). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".MikuApp"
@@ -60,6 +79,20 @@
             android:name=".wakeword.WakeWordService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- Pantalla flotante estilo "Hey Gemini" al decir "Hey Miku"
+             (ver wakeword/MikuOverlayActivity.kt). taskAffinity vacío +
+             excludeFromRecents: que no aparezca en Recientes ni se mezcle
+             con la tarea de MainActivity. singleTask: si ya está abierta,
+             reusar esa instancia en vez de apilar otra. -->
+        <activity
+            android:name=".wakeword.MikuOverlayActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MikuOverlay"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:noHistory="true" />
 
         <!-- Ficha de Ajustes Rápidos para prender/apagar "Hey Miku"
              (ver wakeword/WakeWordTileService.kt). -->

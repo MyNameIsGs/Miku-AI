@@ -1,4 +1,7 @@
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Properties
+import java.util.Locale
 
 plugins {
     alias(libs.plugins.android.application)
@@ -57,6 +60,13 @@ android {
             optimization {
                 enable = false
             }
+        }
+        // El versionName de debug lleva fecha+hora de build -- para no volver
+        // a confundir qué APK está instalado en el teléfono en medio de una
+        // sesión de prueba/error con varias versiones seguidas (ver charla
+        // sobre el debug de la voz real de Miku). Visible en Configuración.
+        debug {
+            versionNameSuffix = "-" + SimpleDateFormat("MMdd-HHmm", Locale.US).format(Date())
         }
     }
     compileOptions {
