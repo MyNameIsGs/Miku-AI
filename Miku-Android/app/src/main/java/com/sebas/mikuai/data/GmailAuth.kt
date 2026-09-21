@@ -51,6 +51,11 @@ class GmailAuth(context: Context, private val prefs: SecurePrefs) {
             // aunque esa cuenta ya se haya autorizado antes en la vida de
             // esta app (mismo motivo que prompt=consent en desktop).
             .requestOfflineAccess(WEB_CLIENT_ID, true)
+            // Sin esto, authorize() reutiliza en silencio la cuenta ya
+            // autorizada en el dispositivo y nunca ofrece elegir otra --
+            // por eso "+ Otra cuenta" reconfirmaba la misma. Equivalente
+            // Android de prompt=select_account del flujo de desktop.
+            .setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
             .build()
 
         val result = awaitTask(authorizationClient.authorize(request))

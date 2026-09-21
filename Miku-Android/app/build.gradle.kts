@@ -115,8 +115,12 @@ dependencies {
 
     // NUEVA — AuthorizationClient de Play Services, para la conexión
     // nativa de Gmail (sin navegador ni redirect -- Google restringe los
-    // esquemas de URL personalizados en Android, a diferencia de Spotify)
-    implementation("com.google.android.gms:play-services-auth:21.4.0")
+    // esquemas de URL personalizados en Android, a diferencia de Spotify).
+    // 22.0.0 (no 21.4.0): agrega AuthorizationRequest.Prompt/setPrompt,
+    // necesario para forzar el selector de cuenta en connect() -- ver
+    // GmailAuth.kt. Confirmado con javap contra el .aar real: setPrompt
+    // no existe en 21.4.0.
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
 
     // NUEVA — ONNX Runtime Mobile, para correr en el celular el MISMO
     // modelo entrenado con nanowakeword que usa el wake-word "Hey Miku"
