@@ -421,12 +421,19 @@ function App() {
 
       // Tarea 6.7: fecha de hoy (para que calcule fechas relativas al
       // anotar pendientes) y la lista de pendientes activos.
-      const todayLabel = new Date().toLocaleDateString("es-ES", {
+      const now = new Date();
+      const todayLabel = now.toLocaleDateString("es-ES", {
         weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
       });
+      // YYYY-MM-DD en hora LOCAL (no now.toISOString(), que convierte a
+      // UTC primero y puede dar la fecha de ayer/mañana cerca de
+      // medianoche) -- mismo formato que Android (LocalDate.now()), para
+      // que GUARDAR_MEMORIA se vea igual sin importar desde dónde se
+      // escriba (ver comentario en systemPrompt.ts).
+      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const activePendientes = getActivePendientes(await loadPendientes());
 
       const systemPrompt = buildSystemPrompt({
@@ -436,6 +443,7 @@ function App() {
         selfDescription,
         customGestureNames,
         todayLabel,
+        todayIso,
         activePendientes,
       });
 

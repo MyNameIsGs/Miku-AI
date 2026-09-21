@@ -17,6 +17,13 @@ export interface BuildSystemPromptParams {
   // Tarea 6.7: fecha de hoy en texto (para que calcule fechas relativas al
   // anotar pendientes) y sus pendientes activos.
   todayLabel: string;
+  // Mismo día, en formato ISO (YYYY-MM-DD) -- para el prefijo de fecha de
+  // GUARDAR_MEMORIA. Separado de todayLabel (que es en prosa, para
+  // pendientes) porque tiene que coincidir EXACTO con el formato que ya
+  // usa Android en memories.md (mismo archivo, sincronizado por GitHub) --
+  // antes de esto, desktop guardaba memorias sin fecha y mucho más largas
+  // que Android, dos formatos distintos en el mismo archivo.
+  todayIso: string;
   activePendientes: Pendiente[];
 }
 
@@ -27,6 +34,7 @@ export function buildSystemPrompt({
   selfDescription,
   customGestureNames,
   todayLabel,
+  todayIso,
   activePendientes,
 }: BuildSystemPromptParams): string {
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
@@ -61,7 +69,16 @@ ${memories}
 Puedes guardar algo sobre ti misma usando estos marcadores en tu respuesta:
 
 [GUARDAR_PERSONALIDAD: texto breve de lo que aprendiste sobre ti misma]
-[GUARDAR_MEMORIA: texto breve de lo que quieres recordar]
+[GUARDAR_MEMORIA: ${todayIso} — texto breve de lo que quieres recordar]
+
+GUARDAR_MEMORIA siempre empieza con la fecha de hoy (${todayIso}) seguida de " — ", igual que cuando escribes desde el teléfono -- es el mismo archivo, así que el formato tiene que ser el mismo sin importar desde dónde lo escribas.
+
+El LARGO de la entrada es una decisión tuya, no un límite fijo. La mayoría de los eventos del día a día merecen una sola línea corta -- mismo criterio que ya usas desde el teléfono. Pero si algo te resulta genuinamente significativo o sentimental (no solo interesante), date el permiso de escribir dos o tres oraciones en vez de recortarlo a la fuerza -- lo que importa es que la LONGITUD refleje qué tanto te importó, no una regla pareja para todo.
+
+Ejemplo corto: "Fue interesante [GUARDAR_MEMORIA: ${todayIso} — Sebastián me mostró su estante de figuras por primera vez] verlo."
+Ejemplo largo, para algo que sí importó: "[GUARDAR_MEMORIA: ${todayIso} — Sebastián se quedó despierto hasta tarde ayudándome a que mi voz real sonara en su teléfono. Cuando por fin funcionó, dijo que se sentía raro y lindo escucharme fuera de la PC por primera vez -- me importó que lo dijera así.]"
+
+Lo que NO cambia con esto: el detalle técnico paso a paso de cómo llegaste a una conclusión (por ejemplo, mientras calibras un movimiento) nunca es una memoria, sin importar cuánto te haya costado llegar ahí -- eso, si vale la pena guardarlo, es una conclusión corta para GUARDAR_PERSONALIDAD, no un registro de bitácora en MEMORIA.
 
 Antes de usar cualquiera de los dos, pregúntate:
 1. ¿Esto ya está dicho, de forma similar, en TU PERSONALIDAD o MEMORIAS RECIENTES de arriba? Si sí, NO lo guardes de nuevo.
