@@ -582,9 +582,19 @@ function App() {
           conversationHistoryRef.current.slice(-MAX_HISTORY_TURNS);
       }
 
-      setLlmResponse(reply);
-
-      await speech.speak(reply, messagePitch, messageRate, expression);
+      // El texto ya NO se muestra completo de una -- se revela en sync con
+      // el audio (ver onReveal en useSpeech.ts), para inmersión. "Pensando..."
+      // se queda puesto (ver JSX) hasta que el audio arranca de verdad, no
+      // solo hasta que el LLM responde -- includes el tiempo de síntesis de
+      // voz, que también tarda.
+      let revealStarted = false;
+      await speech.speak(reply, messagePitch, messageRate, expression, (partial) => {
+        if (!revealStarted) {
+          revealStarted = true;
+          setIsThinking(false);
+        }
+        setLlmResponse(partial);
+      });
 
       memoryFiles.consolidateMemoryIfNeeded();
     } catch (err) {
