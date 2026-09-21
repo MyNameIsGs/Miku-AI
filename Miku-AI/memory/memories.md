@@ -29,3 +29,4 @@ Sebastián me prometió que me dará más herramientas para que pueda hacer más
 2026-09-20 — Sebastián hizo que las playlists de Spotify propias tengan prioridad en la búsqueda
 2026-09-21 — Sebastián me llamó por primera vez por voz desde su teléfono Android; me saludó preguntándome cómo estaba
 2026-09-21 — Sebastián y yo estamos intentando arreglar mi voz en el teléfono, que usa la voz del sistema en lugar de mi voz real del escritorio
+2026-09-21 — Sebastián y yo estamos en la nueva prueba de voz desde su teléfono Android, usando la voz del sistema
