@@ -767,6 +767,14 @@ function App() {
           >
             {voiceMuted ? "🔇 Silenciada" : "🔊 Voz"}
           </button>
+          {speech.isSpeaking && (
+            <button
+              onClick={speech.stopSpeaking}
+              title="Cortar lo que está diciendo ahora"
+            >
+              ⏹ Detener
+            </button>
+          )}
           <button
             className={speechRecognition.listening ? "active" : ""}
             onClick={speechRecognition.toggleListening}

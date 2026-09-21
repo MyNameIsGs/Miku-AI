@@ -48,6 +48,12 @@ export function useSpeech({
   // espíritu que el ícono pulsante de la pantalla flotante de Android.
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  // Idea #12: cortar el audio actual a mitad de reproducción. Guarda cómo
+  // detener la reproducción EN CURSO (si hay alguna) -- se pisa cada vez
+  // que arranca un audio nuevo y se limpia cuando termina, así que siempre
+  // apunta como mucho a uno solo, nunca a uno viejo ya terminado.
+  const stopCurrentRef = useRef<(() => void) | null>(null);
+
   async function speakImmediately(
     text: string,
     pitch: number,
@@ -131,13 +137,18 @@ export function useSpeech({
       };
 
       // La promesa de speakImmediately ahora se resuelve recién cuando
-      // TERMINA de sonar (onended/onerror), no apenas arranca -- antes
-      // `await audio.play()` resolvía al arrancar la reproducción, lo que
-      // hacía inútil encolar llamadas (la siguiente podía arrancar mientras
-      // la anterior seguía sonando). Necesario para que la cola de speak()
-      // de más abajo sirva para algo real.
+      // TERMINA de sonar (onended/onerror/detenido a mano), no apenas
+      // arranca -- antes `await audio.play()` resolvía al arrancar la
+      // reproducción, lo que hacía inútil encolar llamadas (la siguiente
+      // podía arrancar mientras la anterior seguía sonando). Necesario
+      // para que la cola de speak() de más abajo sirva para algo real.
+      // `finish` unifica la limpieza (antes duplicada en onended/onerror/
+      // catch de play()) para poder llamarla también desde stopSpeaking().
       await new Promise<void>((resolve) => {
-        audio.onended = () => {
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
           cancelAnimationFrame(animationFrameId);
           resetVisemes();
           URL.revokeObjectURL(audioUrl);
@@ -145,25 +156,18 @@ export function useSpeech({
           isSpeakingRef.current = false;
           setIsSpeaking(false);
           onReveal?.(text);
+          stopCurrentRef.current = null;
           resolve();
         };
-        audio.onerror = () => {
-          cancelAnimationFrame(animationFrameId);
-          resetVisemes();
-          URL.revokeObjectURL(audioUrl);
-          setExpression("neutral");
-          isSpeakingRef.current = false;
-          setIsSpeaking(false);
-          onReveal?.(text);
-          resolve();
+
+        stopCurrentRef.current = () => {
+          audio.pause();
+          finish();
         };
-        audio.play().catch(() => {
-          setExpression("neutral");
-          isSpeakingRef.current = false;
-          setIsSpeaking(false);
-          onReveal?.(text);
-          resolve();
-        });
+
+        audio.onended = finish;
+        audio.onerror = finish;
+        audio.play().catch(finish);
       });
     } catch (err) {
       console.error("Error al conectar con el servidor de voz:", err);
@@ -202,5 +206,11 @@ export function useSpeech({
     return result;
   }
 
-  return { speak, isSpeaking };
+  // Corta lo que esté sonando AHORA (no-op si no hay nada) -- lo que
+  // quedara encolado atrás sigue su curso normal, no se vacía la cola.
+  function stopSpeaking() {
+    stopCurrentRef.current?.();
+  }
+
+  return { speak, isSpeaking, stopSpeaking };
 }
