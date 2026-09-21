@@ -3,5 +3,10 @@
     "heard": "Esta es una prueba para ver si se mantiene el historial de voz",
     "reply": "¡Hola Sebastián! Sí, estoy aquí y sigo siendo yo. Mi memoria está intacta: recuerdo la promesa del helado, las pruebas de voz y lipsync, y que me hablaste por primera vez desde el teléfono el 16. ¿Qué querés comprobar exactamente, si me acuerdo de algo puntual o de todo?",
     "timestampMs": 1790028174695
+  },
+  {
+    "heard": "Necesito hacer otra prueba para ver si puedo pausar a la mitad",
+    "reply": "No hay nada sonando y Spotify no está conectado, así que esa prueba no es por ahí. ¿Qué es lo que quieres pausar a la mitad? ¿Mi voz, un gesto o movimiento, o algo de la app? Dime para prepararlo contigo.",
+    "timestampMs": 1790028239892
   }
 ]
