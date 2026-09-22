@@ -11,9 +11,12 @@ use std::path::{Path, PathBuf};
 // traerla al frente en vez de abrir una ventana nueva -- reportado con
 // Opera GX, que abre una ventana nueva cada vez que se relanza el .lnk
 // (comportamiento normal del navegador, pero evitable si detectamos la
-// instancia existente). None para Steam/UWP/apps personalizadas: no vale
-// la pena resolver su proceso real (variable por juego, o ya lo maneja el
-// propio sistema).
+// instancia existente). También se resuelve para apps de Microsoft
+// Store/UWP (ver collect_uwp_apps) -- antes quedaba siempre en None ahí, lo
+// que hacía que el Bloc de notas de Windows 11 (que es una de estas apps,
+// sin .lnk propio) SIEMPRE abriera una ventana nueva, bug real encontrado
+// probando la Tarea 8.4. None para Steam (no vale la pena resolver su
+// proceso real, variable por juego) o si no se pudo resolver.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveredApp {
@@ -189,12 +192,29 @@ fn collect_steam_games(out: &mut Vec<DiscoveredApp>) {
 // verificado contra esta máquina que devuelve el AppID correcto para
 // lanzarlas. Se filtra a las que tienen "!" en el AppID -- las demás que
 // devuelve Get-StartApps ya se cubren con el escaneo de .lnk.
+//
+// `process_name` (encontrado como bug real probando la Tarea 8.4: "abrí el
+// Bloc de notas y escribe ahí" siempre abría uno nuevo en vez de usar el ya
+// abierto) -- a diferencia de las apps de .lnk, acá antes SIEMPRE quedaba
+// en None, así que focus_existing_window() nunca se intentaba para NINGUNA
+// app de Microsoft Store (el Bloc de notas de Windows 11 es una de ellas,
+// verificado con `Get-StartApps`: no tiene .lnk propio). Se resuelve leyendo
+// el AppxManifest.xml del paquete (atributo `Executable` de la
+// `<Application>` que coincide con el AppId) -- el mismo dato que usa
+// Windows internamente para lanzarla. Puede fallar en dar el proceso
+// "verdadero" para paquetes con más de un ejecutable (ej. Spotify resuelve a
+// un migrador, no al proceso principal) -- sin impacto real: si
+// focus_existing_window no encuentra ese proceso corriendo, simplemente cae
+// al mismo comportamiento de lanzar una instancia nueva que ya existía antes
+// de este fix, nunca peor.
 #[derive(Deserialize)]
 struct StartApp {
     #[serde(rename = "Name")]
     name: String,
     #[serde(rename = "AppID")]
     app_id: String,
+    #[serde(rename = "ProcessName")]
+    process_name: Option<String>,
 }
 
 fn collect_uwp_apps(out: &mut Vec<DiscoveredApp>) {
@@ -204,13 +224,42 @@ fn collect_uwp_apps(out: &mut Vec<DiscoveredApp>) {
         use std::process::Command;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+        // Resolver Get-AppxPackage UNA sola vez para todos los paquetes
+        // (Get-AppxPackage -Name por app, adentro del loop, tardaba ~13.6s
+        // para 57 apps en la máquina de prueba -- cachear todos de una vez
+        // en una tabla y buscar en memoria lo bajó a ~1.8s).
+        let script = r#"
+$allPkgs = Get-AppxPackage
+$pkgByName = @{}
+foreach ($p in $allPkgs) { if (-not $pkgByName.ContainsKey($p.Name)) { $pkgByName[$p.Name] = $p } }
+
+$apps = Get-StartApps | Where-Object { $_.AppID -match '!' }
+$result = foreach ($app in $apps) {
+    $parts = $app.AppID.Split('!')
+    $familyName = $parts[0]
+    $appId = $parts[1]
+    $pkgName = $familyName.Split('_')[0]
+    $processName = $null
+    try {
+        $pkg = $pkgByName[$pkgName]
+        if ($pkg -and $pkg.InstallLocation) {
+            $manifestPath = Join-Path $pkg.InstallLocation "AppxManifest.xml"
+            if (Test-Path $manifestPath) {
+                [xml]$manifest = Get-Content $manifestPath -ErrorAction Stop
+                $appEntry = $manifest.Package.Applications.Application | Where-Object { $_.Id -eq $appId } | Select-Object -First 1
+                if ($appEntry -and $appEntry.Executable) {
+                    $processName = Split-Path -Leaf $appEntry.Executable
+                }
+            }
+        }
+    } catch {}
+    [PSCustomObject]@{ Name = $app.Name; AppID = $app.AppID; ProcessName = $processName }
+}
+$result | ConvertTo-Json -Compress
+"#;
+
         let output = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "Get-StartApps | Where-Object { $_.AppID -match '!' } | ConvertTo-Json -Compress",
-            ])
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
 
@@ -237,7 +286,7 @@ fn collect_uwp_apps(out: &mut Vec<DiscoveredApp>) {
             out.push(DiscoveredApp {
                 name: app.name,
                 path: format!("appid:{}", app.app_id),
-                process_name: None,
+                process_name: app.process_name,
             });
         }
     }

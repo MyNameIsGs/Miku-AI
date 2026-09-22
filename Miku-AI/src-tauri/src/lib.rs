@@ -4,6 +4,7 @@ mod audio_session;
 mod voice_server_provision;
 mod app_launcher;
 mod media_control;
+mod text_input;
 mod audio_device;
 mod screen_capture;
 mod oauth_loopback;
@@ -236,6 +237,7 @@ pub fn run() {
             app_launcher::launch_app_by_path,
             media_control::control_medios,
             media_control::ajustar_volumen,
+            text_input::escribir_texto,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,
