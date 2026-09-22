@@ -66,6 +66,17 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     suspend fun loadVoiceHistory(): List<VoiceHistoryEntry> = voiceHistoryRepo.load()
     suspend fun appendVoiceHistory(heard: String, reply: String) = voiceHistoryRepo.append(heard, reply)
 
+    // Idea #8 (de verdad): Miku decide en personaje si vale la pena
+    // mencionar un correo nuevo, en vez de una plantilla fija -- mismo
+    // criterio que useGmailWatcher.ts del lado desktop.
+    suspend fun mentionNewMail(candidates: List<GmailMessageSummary>): String? {
+        val memory = loadMemory()
+        val prompt = Prompts.buildMailPrompt(memory, candidates)
+        val raw = orApi.chat(prompt, emptyList(), "Revisa el correo nuevo y decide si me cuentas algo.")
+        val clean = MarkerParser.parse(raw).cleanText
+        return if (clean.isBlank() || clean.uppercase().contains("SILENCIO")) null else clean
+    }
+
     suspend fun chatWithTools(
         systemPrompt: String,
         history: List<ChatMessage>,

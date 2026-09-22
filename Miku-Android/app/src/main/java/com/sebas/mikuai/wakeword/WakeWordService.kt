@@ -32,11 +32,15 @@ import com.sebas.mikuai.data.CalendarAuth
 import com.sebas.mikuai.data.CalendarWatcher
 import com.sebas.mikuai.data.GmailApi
 import com.sebas.mikuai.data.GmailAuth
+import com.sebas.mikuai.data.GitHubApi
 import com.sebas.mikuai.data.GmailWatcher
 import com.sebas.mikuai.data.MarkerParser
 import com.sebas.mikuai.data.MikuRepository
+import com.sebas.mikuai.data.PendientesRepository
+import com.sebas.mikuai.data.PendientesWatcher
 import com.sebas.mikuai.data.Prompts
 import com.sebas.mikuai.data.SecurePrefs
+import com.sebas.mikuai.data.isQuietHours
 import com.sebas.mikuai.voice.AudioPlayer
 import com.sebas.mikuai.voice.EdgeTtsClient
 import com.sebas.mikuai.voice.Mp3Decoder
@@ -104,20 +108,29 @@ class WakeWordService : Service() {
     /** Ventana rodante de los últimos `CONFIRMATION_FRAMES` resultados (score>=THRESHOLD sí/no) -- ver `startCapture()`. */
     private val recentScores = ArrayDeque<Boolean>(CONFIRMATION_FRAMES)
 
-    // Variante de la idea #8 propuesta por Sebastián en vivo: avisar de
-    // correo nuevo apenas llega, en vez de que el loop idle lo mencione de
-    // pasada. Ver GmailWatcher.kt.
+    // Idea #8 (de verdad): detecta correo nuevo -- avisar apenas llega, en
+    // vez de que el loop idle lo mencione de pasada. Ver GmailWatcher.kt.
+    // La decisión de SI vale la pena mencionarlo (y con qué palabras) la
+    // toma mikuRepoForIdleChecks.mentionNewMail(), no esta clase.
     private lateinit var gmailWatcher: GmailWatcher
     // Idea #7: mismo mecanismo, para Calendar -- dos avisos independientes
     // (evento por empezar, y anticipación larga), ver CalendarWatcher.kt.
     private lateinit var calendarWatcher: CalendarWatcher
+    // Idea #21: pendientes vencidos o por vencer, mismo criterio que el
+    // loop idle de desktop -- null si no hay token de GitHub configurado
+    // (mismo caso ya contemplado para el resto del chequeo de fondo).
+    private var pendientesWatcher: PendientesWatcher? = null
+    // Idea #8: repo compartido para las dos llamadas al LLM que necesita el
+    // chequeo de fondo (decidir si mencionar correo nuevo) -- null si no
+    // hay token de GitHub u OpenRouter configurado.
+    private var mikuRepoForIdleChecks: MikuRepository? = null
 
-    // Resumen agrupado (idea nueva): correo nuevo y avisos de anticipación
-    // larga NO son urgentes -- se acumulan acá y se leen juntos cada
-    // NOTIFICATION_DIGEST_INTERVAL_MS, en vez de interrumpir apenas se
-    // detectan. El aviso de "está por empezar" es la excepción a
-    // propósito: sigue siendo inmediato, retrasarlo le quitaría el
-    // sentido.
+    // Resumen agrupado: correo nuevo, avisos de anticipación larga de
+    // Calendar, y (idea #21) pendientes vencidos, NO son urgentes -- se
+    // acumulan acá y se leen juntos cada NOTIFICATION_DIGEST_INTERVAL_MS,
+    // en vez de interrumpir apenas se detectan. El aviso de "está por
+    // empezar" es la excepción a propósito: sigue siendo inmediato,
+    // retrasarlo le quitaría el sentido.
     private val pendingDigestItems = mutableListOf<String>()
     private var lastDigestFlushAt = 0L
 
@@ -129,6 +142,13 @@ class WakeWordService : Service() {
         val prefs = SecurePrefs(applicationContext)
         gmailWatcher = GmailWatcher(GmailApi(GmailAuth(applicationContext, prefs)), prefs)
         calendarWatcher = CalendarWatcher(CalendarApi(CalendarAuth(applicationContext, prefs)), prefs)
+        val ghToken = prefs.getGitHubToken()
+        if (ghToken != null) {
+            pendientesWatcher = PendientesWatcher(PendientesRepository(GitHubApi(ghToken)))
+            prefs.getOpenRouterKey()?.let { orKey ->
+                mikuRepoForIdleChecks = MikuRepository(ghToken, orKey, applicationContext, prefs)
+            }
+        }
         lastDigestFlushAt = System.currentTimeMillis()
         scheduleBackgroundChecks()
 
@@ -561,28 +581,48 @@ class WakeWordService : Service() {
         override fun run() {
             if (capturing && MikuOverlayState.phase.value is MikuOverlayPhase.Idle) {
                 serviceScope.launch {
-                    // Urgente de verdad -- va directo, nunca se acumula.
+                    // Idea #20: durante el horario de no molestar nada habla
+                    // solo -- ni siquiera el aviso urgente de "está por
+                    // empezar", que se encola junto con el resto en vez de
+                    // interrumpir de madrugada.
+                    val quietNow = isQuietHours()
+
+                    // Urgente de verdad -- normalmente va directo, nunca se
+                    // acumula (salvo en horario de no molestar).
                     val urgent = mutableListOf<String>()
                     try {
-                        calendarWatcher.checkImminentEvent()?.let { urgent.add(it) }
+                        calendarWatcher.checkImminentEvent()?.let {
+                            if (quietNow) pendingDigestItems.add(it) else urgent.add(it)
+                        }
                     } catch (e: Exception) {
                     }
 
                     // No urgente -- correo nuevo y anticipación larga se
-                    // acumulan para el resumen agrupado.
+                    // acumulan para el resumen agrupado. Idea #8 (de
+                    // verdad): si hay candidatos, es Miku (vía LLM) quien
+                    // decide si vale la pena mencionarlos, no una plantilla.
                     try {
-                        gmailWatcher.checkForNewMail()?.let { pendingDigestItems.add(it) }
+                        gmailWatcher.checkForNewMail()?.let { candidates ->
+                            mikuRepoForIdleChecks?.mentionNewMail(candidates)?.let { pendingDigestItems.add(it) }
+                        }
                     } catch (e: Exception) {
-                        // Sin Gmail conectado, o un error de red puntual --
-                        // se reintenta solo en el próximo chequeo.
+                        // Sin Gmail conectado, sin OpenRouter configurado, o
+                        // un error de red puntual -- se reintenta solo en el
+                        // próximo chequeo.
                     }
                     try {
                         calendarWatcher.checkMilestoneEvent()?.let { pendingDigestItems.add(it) }
                     } catch (e: Exception) {
                     }
+                    // Idea #21: pendientes vencidos, mismo criterio que
+                    // correo/calendario -- no urgente, se acumula.
+                    try {
+                        pendientesWatcher?.checkDuePendientes()?.let { pendingDigestItems.add(it) }
+                    } catch (e: Exception) {
+                    }
 
                     val now = System.currentTimeMillis()
-                    val shouldFlushDigest = now - lastDigestFlushAt >= NOTIFICATION_DIGEST_INTERVAL_MS
+                    val shouldFlushDigest = !quietNow && now - lastDigestFlushAt >= NOTIFICATION_DIGEST_INTERVAL_MS
                     val digestToSpeak = if (shouldFlushDigest && pendingDigestItems.isNotEmpty()) {
                         lastDigestFlushAt = now
                         val items = pendingDigestItems.toList()

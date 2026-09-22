@@ -270,6 +270,13 @@ fun ChatScreen(
             onDismissRequest = { showSettings = false },
             containerColor   = MikuSurface
         ) {
+            // Idea #16: cada vez que se abre Configuración, si la voz real ya
+            // está descargada, revisa contra el manifest.json remoto si hay
+            // una versión nueva -- sin esto, Sebastián solo se enteraría de
+            // un cambio del pipeline de voz recibiendo un APK nuevo a mano.
+            LaunchedEffect(Unit) {
+                modelDownloadManager.checkForUpdate()
+            }
             Column(
                 modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -387,6 +394,15 @@ fun ChatScreen(
                 when (val s = downloadState) {
                     is ModelDownloadState.Ready -> {
                         Text("Voz real descargada ✓ (~518MB)", color = MikuTeal, fontSize = 11.sp)
+                    }
+                    is ModelDownloadState.UpdateAvailable -> {
+                        Text("Voz real descargada ✓ (~518MB)", color = MikuTeal, fontSize = 11.sp)
+                        Text("Hay una versión nueva disponible.", color = MikuTextDim, fontSize = 11.sp)
+                        OutlinedButton(
+                            onClick = { scope.launch { modelDownloadManager.ensureModelsReady() } },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                        ) { Text("Actualizar voz de Miku") }
                     }
                     is ModelDownloadState.Downloading -> {
                         val pct = if (s.totalBytes > 0) (s.downloadedBytes * 100 / s.totalBytes).toInt() else 0

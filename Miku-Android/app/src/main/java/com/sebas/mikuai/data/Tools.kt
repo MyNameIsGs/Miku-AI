@@ -23,6 +23,10 @@ object Tools {
                         put("type", "string")
                         put("description", "Fecha estimada en formato YYYY-MM-DD, calculada a partir de la fecha de hoy y lo que dijo Sebastián.")
                     })
+                    put("condicion", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Opcional. Solo si esto es algo verificable buscando en la web y cambia con el tiempo (ej. \"el pasaje baja de \$800\"). Nota: desde el celular queda anotado pero todavía no lo revisas sola -- eso solo lo hace la versión de escritorio por ahora.")
+                    })
                 },
                 required = listOf("descripcion", "fecha_estimada"),
             )
@@ -200,6 +204,7 @@ object Tools {
                 "anotar_pendiente" -> pendientes.anotarPendiente(
                     args.getString("descripcion"),
                     args.getString("fecha_estimada"),
+                    if (args.has("condicion") && !args.isNull("condicion")) args.getString("condicion") else null,
                 )
                 "cerrar_pendiente" -> pendientes.cerrarPendiente(args.getString("descripcion"))
                 "buscar_cancion" -> {

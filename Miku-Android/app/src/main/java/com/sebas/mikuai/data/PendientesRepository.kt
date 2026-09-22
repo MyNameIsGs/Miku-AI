@@ -23,17 +23,27 @@ class PendientesRepository(private val ghApi: GitHubApi) {
         }
     }
 
-    suspend fun anotarPendiente(descripcion: String, fechaEstimada: String): String {
+    // Idea #9: condicion es opcional -- si viene, esto queda como tarea de
+    // seguimiento (ver Pendiente.kt). Android todavía no tiene forma de
+    // revisarlas sola (le falta el equivalente de buscar_en_web), así que
+    // por ahora solo queda anotada -- desktop es quien la revisa.
+    suspend fun anotarPendiente(descripcion: String, fechaEstimada: String, condicion: String? = null): String {
         val nuevo = Pendiente(
             id = UUID.randomUUID().toString(),
             descripcion = descripcion,
             fechaEstimada = fechaEstimada,
             creadoEn = Instant.now().toString(),
             estado = "activo",
-            ultimoRecordatorio = null
+            ultimoRecordatorio = null,
+            condicion = condicion,
+            ultimaRevisionCondicion = null
         )
         writeWithRetry { current -> current + nuevo }
-        return "Anotado: \"$descripcion\" (estimado: $fechaEstimada)."
+        return if (condicion != null) {
+            "Anotado como tarea de seguimiento: \"$descripcion\" (condición: $condicion)."
+        } else {
+            "Anotado: \"$descripcion\" (estimado: $fechaEstimada)."
+        }
     }
 
     // Mismo criterio que cerrar_pendiente en desktop: coincidencia parcial
@@ -56,6 +66,17 @@ class PendientesRepository(private val ghApi: GitHubApi) {
             "Cerrado: \"${closed.descripcion}\"."
         } else {
             "No encontré ningún pendiente activo que coincida con \"$query\"."
+        }
+    }
+
+    // Idea #21: marca cuándo se mencionaron estos pendientes por última vez
+    // (mismo campo ultimoRecordatorio que ya usa desktop) -- así
+    // PendientesWatcher no repite el mismo aviso en cada chequeo de fondo.
+    suspend fun marcarRecordados(ids: List<String>) {
+        if (ids.isEmpty()) return
+        val ts = Instant.now().toString()
+        writeWithRetry { current ->
+            current.map { p -> if (p.id in ids) p.copy(ultimoRecordatorio = ts) else p }
         }
     }
 

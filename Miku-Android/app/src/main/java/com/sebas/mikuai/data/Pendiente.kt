@@ -7,13 +7,21 @@ import org.json.JSONObject
 // es el MISMO archivo, sincronizado por GitHub, así que hay que preservar
 // todos los campos al escribir aunque Android no use ultimoRecordatorio
 // para nada todavía (eso es lógica del loop idle de desktop).
+//
+// Idea #9: condicion/ultimaRevisionCondicion son de las tareas de
+// seguimiento (desktop, lib/pendientes.ts) -- Android todavía no tiene un
+// equivalente de buscar_en_web para revisarlas sola (ver Tools.kt), así
+// que por ahora solo lee/preserva estos dos campos al escribir, para no
+// perderlos si Android toca un pendiente creado desde desktop (o al revés).
 data class Pendiente(
     val id: String,
     val descripcion: String,
     val fechaEstimada: String,
     val creadoEn: String,
     val estado: String, // "activo" | "cerrado"
-    val ultimoRecordatorio: String?
+    val ultimoRecordatorio: String?,
+    val condicion: String? = null,
+    val ultimaRevisionCondicion: String? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -22,6 +30,8 @@ data class Pendiente(
         put("creadoEn", creadoEn)
         put("estado", estado)
         put("ultimoRecordatorio", ultimoRecordatorio ?: JSONObject.NULL)
+        put("condicion", condicion ?: JSONObject.NULL)
+        put("ultimaRevisionCondicion", ultimaRevisionCondicion ?: JSONObject.NULL)
     }
 
     companion object {
@@ -32,7 +42,11 @@ data class Pendiente(
             creadoEn = obj.getString("creadoEn"),
             estado = obj.getString("estado"),
             ultimoRecordatorio = if (obj.isNull("ultimoRecordatorio")) null
-            else obj.getString("ultimoRecordatorio")
+            else obj.getString("ultimoRecordatorio"),
+            condicion = if (!obj.has("condicion") || obj.isNull("condicion")) null
+            else obj.getString("condicion"),
+            ultimaRevisionCondicion = if (!obj.has("ultimaRevisionCondicion") || obj.isNull("ultimaRevisionCondicion")) null
+            else obj.getString("ultimaRevisionCondicion")
         )
     }
 }

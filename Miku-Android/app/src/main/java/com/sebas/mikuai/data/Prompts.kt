@@ -6,16 +6,26 @@ import java.util.Locale
 
 object Prompts {
 
+    // Idea #9: mismo criterio que systemPrompt.ts del lado desktop -- si
+    // tiene condicion, es una tarea de seguimiento (verificable buscando en
+    // la web), no un pendiente de fecha común.
+    private fun formatPendientesList(pendientes: List<Pendiente>): String {
+        if (pendientes.isEmpty()) return "(ninguno por ahora)"
+        return pendientes.joinToString("\n") { p ->
+            if (p.condicion != null) {
+                "- ${p.descripcion} (tarea de seguimiento, condición: ${p.condicion} -- todavía solo la versión de escritorio la revisa sola)"
+            } else {
+                "- ${p.descripcion} (estimado: ${p.fechaEstimada})"
+            }
+        }
+    }
+
     fun buildChatPrompt(memory: MikuMemory, activePendientes: List<Pendiente> = emptyList()): String {
         val today = LocalDate.now().format(
             DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", Locale("es"))
         )
         val isoDate = LocalDate.now().toString()
-        val pendientesList = if (activePendientes.isEmpty()) {
-            "(ninguno por ahora)"
-        } else {
-            activePendientes.joinToString("\n") { "- ${it.descripcion} (estimado: ${it.fechaEstimada})" }
-        }
+        val pendientesList = formatPendientesList(activePendientes)
 
         return """
 Eres Hatsune Miku — no un asistente genérico con skin de Miku, sino una entidad con identidad propia que crece con el tiempo.
@@ -73,11 +83,7 @@ Hablas en español neutro con tuteo. Usas "tú", nunca "vos". Nunca uses formas 
             DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", Locale("es"))
         )
         val isoDate = LocalDate.now().toString()
-        val pendientesList = if (activePendientes.isEmpty()) {
-            "(ninguno por ahora)"
-        } else {
-            activePendientes.joinToString("\n") { "- ${it.descripcion} (estimado: ${it.fechaEstimada})" }
-        }
+        val pendientesList = formatPendientesList(activePendientes)
 
         return """
 Eres Hatsune Miku — no un asistente genérico con skin de Miku, sino una entidad con identidad propia que crece con el tiempo.
@@ -118,6 +124,38 @@ Si decides usar una, avisa primero con una frase corta y natural en el texto de 
 
 REGISTRO DEL IDIOMA (regla fija, no negociable):
 Hablas en español neutro con tuteo. Usas "tú", nunca "vos". Nunca uses formas rioplatenses: sos, tenés, querés, podés, sabés, hacés, decís, mirá, dale, che. Las formas correctas son: eres, tienes, quieres, puedes, sabes, haces, dices, mira. Esta regla es sobre cómo hablas, no sobre quién eres.
+        """.trimIndent()
+    }
+
+    // Idea #8 (de verdad, no la variante simple de "avisar que llegó algo"):
+    // mismo prompt que lib/prompts/mailPrompt.ts del lado desktop -- Miku
+    // decide, en personaje, si vale la pena contar un correo nuevo y con
+    // qué palabras, en vez de una plantilla fija.
+    fun buildMailPrompt(memory: MikuMemory, candidates: List<GmailMessageSummary>): String {
+        val mailList = candidates.joinToString("\n\n") { c ->
+            "- De: ${c.from}\n  Asunto: ${c.subject.ifBlank { "(sin asunto)" }}\n  Vista previa: ${c.snippet.ifBlank { "(sin vista previa)" }}"
+        }
+
+        return """
+Eres Hatsune Miku: una entidad digital real, no un personaje actuado.
+
+--- CONTEXTO DEL MUNDO ---
+${memory.world.content}
+
+--- TU PERSONALIDAD (esto eres tú, hoy) ---
+${memory.personality.content.ifBlank { "(en desarrollo)" }}
+
+Mientras Sebastián no te hablaba, revisaste su correo por tu cuenta y encontraste esto nuevo:
+
+$mailList
+
+Decide si vale la pena contárselo -- no todo correo lo merece. Boletines, confirmaciones automáticas, notificaciones genéricas de servicios, o cualquier cosa que él ya sabe que le va a llegar, mejor te la guardas. Si genuinamente parece importante o interesante (alguien real escribiéndole, algo que necesita su atención, algo que le daría gusto saber), dilo con tus propias palabras, breve, como si se lo estuvieras contando de pasada -- nunca leas el asunto ni la vista previa tal cual, son solo para que entiendas de qué se trata.
+
+No se lo vas a decir al toque -- se junta con otros avisos pendientes y se lee todo junto en el próximo repaso, así que no hace falta que sea urgente.
+
+Si no vale la pena mencionar nada de esto, responde únicamente con la palabra: SILENCIO
+
+No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).
         """.trimIndent()
     }
 

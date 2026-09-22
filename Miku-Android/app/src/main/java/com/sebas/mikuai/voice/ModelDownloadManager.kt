@@ -20,6 +20,10 @@ sealed class ModelDownloadState {
     data object Ready : ModelDownloadState()
     data class Downloading(val fileName: String, val downloadedBytes: Long, val totalBytes: Long) : ModelDownloadState()
     data class Failed(val message: String) : ModelDownloadState()
+    // Idea #16: ya están descargados y siguen siendo válidos para correr,
+    // pero el manifest.json remoto cambió -- Sebastián subió una versión
+    // nueva de alguno de los 4 modelos sin necesidad de un APK nuevo.
+    data class UpdateAvailable(val fileNames: List<String>) : ModelDownloadState()
 }
 
 /**
@@ -45,6 +49,13 @@ class ModelDownloadManager(private val context: Context) {
 
     fun areModelsReady(): Boolean = RvcModelPaths.allReady(context)
 
+    private fun modelTargets(): Map<String, File> = mapOf(
+        "generator" to RvcModelPaths.generator(context),
+        "hubert" to RvcModelPaths.hubert(context),
+        "rmvpe" to RvcModelPaths.rmvpe(context),
+        "melspectrogram" to RvcModelPaths.melspectrogram(context),
+    )
+
     /** Descarga (o re-verifica) los 4 modelos. Seguro de reintentar: los archivos ya presentes+verificados se saltean. */
     suspend fun ensureModelsReady() = withContext(Dispatchers.IO) {
         try {
@@ -53,12 +64,7 @@ class ModelDownloadManager(private val context: Context) {
 
             val manifestJson = fetchManifest()
 
-            for ((key, target) in mapOf(
-                "generator" to RvcModelPaths.generator(context),
-                "hubert" to RvcModelPaths.hubert(context),
-                "rmvpe" to RvcModelPaths.rmvpe(context),
-                "melspectrogram" to RvcModelPaths.melspectrogram(context),
-            )) {
+            for ((key, target) in modelTargets()) {
                 val entry = manifestJson.getJSONObject(key)
                 val fileName = entry.getString("file")
                 val expectedSize = entry.getLong("size")
@@ -76,6 +82,34 @@ class ModelDownloadManager(private val context: Context) {
             _state.value = ModelDownloadState.Ready
         } catch (e: Exception) {
             _state.value = ModelDownloadState.Failed(e.message ?: "Error desconocido descargando la voz de Miku")
+        }
+    }
+
+    // Idea #16: compara el manifest.json remoto contra lo ya descargado SIN
+    // bajar nada -- solo para avisar en Configuración que hay una versión
+    // nueva. Se llama a pedido (al abrir Configuración), no en un loop de
+    // fondo -- hashear ~518MB no es gratis, no conviene hacerlo seguido sin
+    // que Sebastián esté mirando la pantalla. ensureModelsReady() ya sabe
+    // redescargar solo lo que cambió si después toca "Actualizar".
+    suspend fun checkForUpdate() = withContext(Dispatchers.IO) {
+        if (_state.value !is ModelDownloadState.Ready) return@withContext
+        try {
+            val manifestJson = fetchManifest()
+            val stale = mutableListOf<String>()
+            for ((key, target) in modelTargets()) {
+                val entry = manifestJson.getJSONObject(key)
+                val expectedSize = entry.getLong("size")
+                val expectedSha256 = entry.getString("sha256")
+                if (!(target.exists() && target.length() == expectedSize && sha256Of(target) == expectedSha256)) {
+                    stale.add(entry.getString("file"))
+                }
+            }
+            if (stale.isNotEmpty()) {
+                _state.value = ModelDownloadState.UpdateAvailable(stale)
+            }
+        } catch (e: Exception) {
+            // Sin red o el manifest no respondió -- no es un error real acá,
+            // se reintenta la próxima vez que se abra Configuración.
         }
     }
 
