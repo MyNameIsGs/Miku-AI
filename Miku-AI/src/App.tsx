@@ -19,6 +19,7 @@ import { useWakeWord } from "./hooks/useWakeWord";
 import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useVoiceActivityDetection } from "./hooks/useVoiceActivityDetection";
+import { useBriefing } from "./hooks/useBriefing";
 import { useReminders } from "./hooks/useReminders";
 import { useGmailWatcher } from "./hooks/useGmailWatcher";
 import { useCalendarWatcher } from "./hooks/useCalendarWatcher";
@@ -481,6 +482,14 @@ function App() {
     onSpeechDuringPlayback: handleSpeechDuringPlayback,
   });
 
+  // Tarea 8.7: briefing automático al sentarse -- se dispara desde el
+  // arranque de askMiku (ver más abajo), no acá.
+  const briefing = useBriefing({
+    speak: speech.speak,
+    voicePitchRef,
+    voiceRateRef,
+  });
+
   const avatarState: "idle" | "listening" | "thinking" | "speaking" =
     speechRecognition.listening || speechRecognition.transcribing
       ? "listening"
@@ -542,6 +551,13 @@ function App() {
     if (!isVoiceReady) return;
     setIsThinking(true);
     idleQuirks.lastInteractionTimeRef.current = performance.now();
+    // Tarea 8.7: fire-and-forget a propósito -- no se espera, para no
+    // demorar la respuesta real a lo que Sebastián acaba de decir. Si hay
+    // algo que contar, queda encolado en speech ANTES que la respuesta de
+    // este turno (se escucha primero); si no hay nada, no hace nada.
+    briefing.maybeGiveBriefing().catch((err) =>
+      console.error("Error en el briefing automático:", err),
+    );
     try {
       const { personality, world, memories } = await loadMemoryContext();
 

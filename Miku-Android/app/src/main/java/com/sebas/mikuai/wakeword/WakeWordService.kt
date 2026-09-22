@@ -408,6 +408,24 @@ class WakeWordService : Service() {
                 val raw = repo.chatWithTools(prompt, emptyList(), text)
                 val parsed = MarkerParser.parse(raw)
 
+                // Idea #8.7: briefing automático al sentarse -- si es la
+                // primera vez que Sebastián habla hoy, se antepone al
+                // mensaje real (mismo texto único, misma llamada a
+                // speakAndReveal de siempre) en vez de un segundo audio
+                // aparte -- así no se toca la lógica ya calibrada de
+                // cuándo reactivar el mic (ver el comentario largo de
+                // speakAndReveal más abajo).
+                val briefingText = try {
+                    repo.maybeBuildBriefing(prefs)
+                } catch (e: Exception) {
+                    null
+                }
+                val finalReply = if (!briefingText.isNullOrBlank()) {
+                    if (parsed.cleanText.isBlank()) briefingText else "$briefingText ${parsed.cleanText}"
+                } else {
+                    parsed.cleanText
+                }
+
                 parsed.savePersonality.forEach { t ->
                     try { repo.appendToFile(memory, "personality", t) } catch (e: Exception) {}
                 }
@@ -428,7 +446,7 @@ class WakeWordService : Service() {
                     }
                 }
 
-                speakAndReveal(text, parsed.cleanText) // vacío es un no-op adentro, pero igual reactiva el mic al final
+                speakAndReveal(text, finalReply) // vacío es un no-op adentro, pero igual reactiva el mic al final
             } catch (e: Exception) {
                 speakAndReveal(text, getString(R.string.wakeword_error), cacheKey = "error")
             }

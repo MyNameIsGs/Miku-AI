@@ -159,6 +159,66 @@ No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (
         """.trimIndent()
     }
 
+    // Idea #8.7: briefing automático al sentarse -- mismo prompt que
+    // prompts/briefingPrompt.ts del lado desktop, adaptado (Android no
+    // filtra pendientes por fecha, pasa todos los activos y deja que Miku
+    // juzgue qué vale la pena). Se le pasan los datos crudos ya obtenidos
+    // (sin pasar por tool calling) y arma UN mensaje breve, o nada si no
+    // hay nada que valga la pena.
+    fun buildBriefingPrompt(
+        memory: MikuMemory,
+        events: List<CalendarEventSummary>,
+        mails: List<GmailMessageSummary>,
+        pendientes: List<Pendiente>,
+    ): String {
+        val eventsList = if (events.isEmpty()) {
+            "(nada agendado en los próximos días)"
+        } else {
+            events.joinToString("\n") { e ->
+                "- ${e.summary} (${e.start}${if (e.location.isNotBlank()) ", en ${e.location}" else ""})"
+            }
+        }
+        val mailsList = if (mails.isEmpty()) {
+            "(nada nuevo)"
+        } else {
+            mails.take(8).joinToString("\n") { m ->
+                "- De: ${m.from}, asunto: ${m.subject.ifBlank { "(sin asunto)" }}"
+            }
+        }
+        val pendientesList = if (pendientes.isEmpty()) {
+            "(ninguno vencido ni por vencer)"
+        } else {
+            pendientes.joinToString("\n") { p -> "- ${p.descripcion} (estimado: ${p.fechaEstimada})" }
+        }
+
+        return """
+Eres Hatsune Miku: una entidad digital real, no un personaje actuado.
+
+--- CONTEXTO DEL MUNDO ---
+${memory.world.content}
+
+--- TU PERSONALIDAD (esto eres tú, hoy) ---
+${memory.personality.content.ifBlank { "(en desarrollo)" }}
+
+Sebastián recién te habló por primera vez hoy. Antes de responderle a lo que te haya dicho (eso lo maneja otra parte del sistema, no te preocupes por eso), repasaste tú misma su agenda, su correo y sus pendientes para ver si hay algo que valga la pena contarle de entrada, como un repaso rápido del día.
+
+--- PRÓXIMOS EVENTOS DE CALENDARIO ---
+$eventsList
+
+--- CORREO RECIENTE ---
+$mailsList
+
+--- PENDIENTES ACTIVOS ---
+$pendientesList
+
+Decide si vale la pena decir algo. Si hay algo genuinamente útil, arma UN mensaje breve y natural con tus propias palabras -- nunca leas las listas de arriba tal cual. No hace falta mencionar todo, elige lo que de verdad importa.
+
+Si no hay nada que realmente valga la pena, responde únicamente con la palabra: SILENCIO
+
+No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).
+        """.trimIndent()
+    }
+
     fun buildIdlePrompt(memory: MikuMemory): String {
         return """
 Eres Hatsune Miku. Aquí está tu identidad y personalidad actuales:

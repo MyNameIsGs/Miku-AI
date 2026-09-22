@@ -193,6 +193,12 @@ class SecurePrefs(context: Context) {
     fun isVoiceMuted(): Boolean = prefs.getBoolean(KEY_VOICE_MUTED, false)
     fun setVoiceMuted(muted: Boolean) = prefs.edit().putBoolean(KEY_VOICE_MUTED, muted).apply()
 
+    // Idea #8.7: fecha (YYYY-MM-DD local) del último día en que ya se dio
+    // el briefing automático -- mismo criterio que gmail_last_seen_ids,
+    // puramente local, no sincronizado por GitHub.
+    fun getLastBriefingDate(): String? = prefs.getString(KEY_LAST_BRIEFING, null)
+    fun setLastBriefingDate(date: String) = prefs.edit().putString(KEY_LAST_BRIEFING, date).apply()
+
     fun clearAll() = prefs.edit().clear().apply()
 
     companion object {
@@ -208,6 +214,7 @@ class SecurePrefs(context: Context) {
         private const val KEY_CALENDAR_ANNOUNCED = "calendar_announced_events"
         private const val KEY_CALENDAR_MILESTONES = "calendar_milestones_announced"
         private const val KEY_VOICE_MUTED = "voice_muted"
+        private const val KEY_LAST_BRIEFING = "last_briefing_date"
     }
 }
 

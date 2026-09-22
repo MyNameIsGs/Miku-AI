@@ -77,6 +77,40 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
         return if (clean.isBlank() || clean.uppercase().contains("SILENCIO")) null else clean
     }
 
+    // Idea #8.7: briefing automático al sentarse -- mismo criterio que
+    // useBriefing.ts del lado desktop: la primera vez que Sebastián habla
+    // en el día, junta calendario+correo+pendientes (sin pasar por tool
+    // calling) y arma UN mensaje. El flag se marca ANTES de terminar --
+    // mejor perderse el de hoy que reintentarlo en cada mensaje si algo
+    // falla, mismo criterio que el resto de los chequeos de fondo.
+    suspend fun maybeBuildBriefing(prefs: SecurePrefs): String? {
+        val today = LocalDate.now().toString()
+        if (prefs.getLastBriefingDate() == today) return null
+        prefs.setLastBriefingDate(today)
+
+        val events = try {
+            calendarApi.listUpcomingEventsAllAccounts(7, 15)
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val mails = try {
+            gmailApi.listRecentMessagesAllAccounts(15, 3)
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val pendientes = try {
+            pendientesRepo.loadActivePendientes()
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val memory = loadMemory()
+        val prompt = Prompts.buildBriefingPrompt(memory, events, mails, pendientes)
+        val raw = orApi.chat(prompt, emptyList(), "Repasa mi día y decide si me cuentas algo antes de responderme.")
+        val clean = MarkerParser.parse(raw).cleanText
+        return if (clean.isBlank() || clean.uppercase().contains("SILENCIO")) null else clean
+    }
+
     suspend fun chatWithTools(
         systemPrompt: String,
         history: List<ChatMessage>,
