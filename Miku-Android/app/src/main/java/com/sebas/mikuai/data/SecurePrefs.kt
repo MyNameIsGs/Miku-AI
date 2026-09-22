@@ -87,6 +87,80 @@ class SecurePrefs(context: Context) {
         prefs.edit().putString(KEY_GMAIL_ACCOUNTS, array.toString()).apply()
     }
 
+    // Google Calendar (idea #7) -- mismo criterio que Gmail: varias
+    // cuentas, serializado como JSON.
+    fun getCalendarAccounts(): List<CalendarAccount> {
+        val raw = prefs.getString(KEY_CALENDAR_ACCOUNTS, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            (0 until array.length()).map { i ->
+                val obj = array.getJSONObject(i)
+                CalendarAccount(
+                    email = obj.getString("email"),
+                    accessToken = obj.getString("accessToken"),
+                    refreshToken = obj.getString("refreshToken"),
+                    expiresAt = obj.getLong("expiresAt"),
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setCalendarAccounts(accounts: List<CalendarAccount>) {
+        val array = JSONArray()
+        accounts.forEach { a ->
+            array.put(JSONObject().apply {
+                put("email", a.email)
+                put("accessToken", a.accessToken)
+                put("refreshToken", a.refreshToken)
+                put("expiresAt", a.expiresAt)
+            })
+        }
+        prefs.edit().putString(KEY_CALENDAR_ACCOUNTS, array.toString()).apply()
+    }
+
+    // Aviso de evento próximo (minutos antes) -- id de evento -> epoch ms
+    // de cuándo se anunció. Puramente local, no sincronizado por GitHub
+    // (mismo criterio que gmailLastSeenIds).
+    fun getCalendarAnnouncedEvents(): Map<String, Long> {
+        val raw = prefs.getString(KEY_CALENDAR_ANNOUNCED, null) ?: return emptyMap()
+        return try {
+            val obj = JSONObject(raw)
+            obj.keys().asSequence().associateWith { obj.getLong(it) }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun setCalendarAnnouncedEvents(announced: Map<String, Long>) {
+        val obj = JSONObject()
+        announced.forEach { (id, ts) -> obj.put(id, ts) }
+        prefs.edit().putString(KEY_CALENDAR_ANNOUNCED, obj.toString()).apply()
+    }
+
+    // Avisos de anticipación larga (1 semana/3 días/el día anterior) -- id
+    // de evento -> lista de umbrales (en días) ya anunciados para ESE
+    // evento puntual.
+    fun getCalendarMilestonesAnnounced(): Map<String, List<Int>> {
+        val raw = prefs.getString(KEY_CALENDAR_MILESTONES, null) ?: return emptyMap()
+        return try {
+            val obj = JSONObject(raw)
+            obj.keys().asSequence().associateWith { key ->
+                val arr = obj.getJSONArray(key)
+                (0 until arr.length()).map { arr.getInt(it) }
+            }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun setCalendarMilestonesAnnounced(announced: Map<String, List<Int>>) {
+        val obj = JSONObject()
+        announced.forEach { (id, days) -> obj.put(id, JSONArray(days)) }
+        prefs.edit().putString(KEY_CALENDAR_MILESTONES, obj.toString()).apply()
+    }
+
     // Último id de mensaje visto por cuenta de Gmail, para avisar solo de
     // correo REALMENTE nuevo (GmailWatcher.kt) -- a diferencia de
     // pendientes.json/voice_history.json, esto es puramente local: no
@@ -130,9 +204,13 @@ class SecurePrefs(context: Context) {
         private const val KEY_SPOTIFY_EXPIRES = "spotify_expires_at"
         private const val KEY_GMAIL_ACCOUNTS  = "gmail_accounts"
         private const val KEY_GMAIL_LAST_SEEN = "gmail_last_seen_ids"
+        private const val KEY_CALENDAR_ACCOUNTS = "calendar_accounts"
+        private const val KEY_CALENDAR_ANNOUNCED = "calendar_announced_events"
+        private const val KEY_CALENDAR_MILESTONES = "calendar_milestones_announced"
         private const val KEY_VOICE_MUTED = "voice_muted"
     }
 }
 
 data class SpotifyTokens(val accessToken: String, val refreshToken: String, val expiresAt: Long)
 data class GmailAccount(val email: String, val accessToken: String, val refreshToken: String, val expiresAt: Long)
+data class CalendarAccount(val email: String, val accessToken: String, val refreshToken: String, val expiresAt: Long)

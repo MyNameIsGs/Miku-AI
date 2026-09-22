@@ -13,6 +13,8 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     private val spotifyApi = SpotifyApi(spotifyAuth)
     private val gmailAuth = GmailAuth(context, prefs)
     private val gmailApi = GmailApi(gmailAuth)
+    private val calendarAuth = CalendarAuth(context, prefs)
+    private val calendarApi = CalendarApi(calendarAuth)
 
     suspend fun loadMemory(): MikuMemory {
         return MikuMemory(
@@ -75,7 +77,7 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
         userMessage,
         userImageBase64,
         Tools.schemas(),
-    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi) }
+    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi) }
 
     // Segundo paso de "Miku en Android" (ver SpotifyAuth.kt / SpotifyApi.kt).
     suspend fun connectSpotify() = spotifyAuth.connect()
@@ -85,4 +87,9 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     suspend fun connectGmail(): String = gmailAuth.connect()
     fun listConnectedGmailEmails(): List<String> = gmailAuth.listConnectedEmails()
     fun disconnectGmailAccount(email: String) = gmailAuth.disconnect(email)
+
+    // Idea #7: Google Calendar (ver CalendarAuth.kt / CalendarApi.kt).
+    suspend fun connectCalendar(): String = calendarAuth.connect()
+    fun listConnectedCalendarEmails(): List<String> = calendarAuth.listConnectedEmails()
+    fun disconnectCalendarAccount(email: String) = calendarAuth.disconnect(email)
 }

@@ -84,6 +84,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         repo?.disconnectGmailAccount(email)
     }
 
+    fun listConnectedCalendarEmails(): List<String> = repo?.listConnectedCalendarEmails() ?: emptyList()
+
+    fun connectCalendar(onResult: (email: String?, error: String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val r = repo ?: throw IllegalStateException("Sin credenciales")
+                val email = r.connectCalendar()
+                onResult(email, null)
+            } catch (e: Exception) {
+                onResult(null, e.message)
+            }
+        }
+    }
+
+    fun disconnectCalendarAccount(email: String) {
+        repo?.disconnectCalendarAccount(email)
+    }
+
     private fun loadMemory() {
         viewModelScope.launch {
             try {

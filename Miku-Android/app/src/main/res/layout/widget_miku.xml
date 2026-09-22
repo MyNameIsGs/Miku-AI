@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Idea #6: widget de pantalla de inicio, un solo botón, sin estado
+     propio que mostrar (a diferencia de la ficha de Ajustes Rápidos, que
+     sí refleja si "Hey Miku" está prendido). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_miku_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center"
+    android:background="@drawable/widget_miku_background"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🎙️"
+        android:textSize="20sp"
+        android:layout_marginEnd="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hablar con Miku"
+        android:textColor="#DDE3F0"
+        android:textSize="14sp" />
+</LinearLayout>

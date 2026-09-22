@@ -80,6 +80,19 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- Idea #6: widget de pantalla de inicio, botón "Hablar con
+             Miku" (ver wakeword/MikuWidgetProvider.kt). -->
+        <receiver
+            android:name=".wakeword.MikuWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/miku_widget_info" />
+        </receiver>
+
         <!-- Pantalla flotante estilo "Hey Gemini" al decir "Hey Miku"
              (ver wakeword/MikuOverlayActivity.kt). taskAffinity vacío +
              excludeFromRecents: que no aparezca en Recientes ni se mezcle

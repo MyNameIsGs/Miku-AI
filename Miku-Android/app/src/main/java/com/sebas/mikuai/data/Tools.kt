@@ -166,6 +166,19 @@ object Tools {
                 required = emptyList(),
             )
         )
+        put(
+            buildTool(
+                name = "revisar_calendario",
+                description = "Revisa los próximos eventos de TODOS los calendarios de Google que Sebastián tenga conectados -- solo lectura, nunca crea, edita ni borra nada. Devuelve de qué cuenta es cada evento, título, cuándo empieza y el lugar si tiene. Úsala cuando Sebastián pregunte qué tiene agendado, o quieras revisar si hay algo próximo que valga la pena mencionar.",
+                properties = JSONObject().apply {
+                    put("dias", JSONObject().apply {
+                        put("type", "number")
+                        put("description", "Cuántos días hacia adelante revisar. Por defecto 7.")
+                    })
+                },
+                required = emptyList(),
+            )
+        )
     }
 
     suspend fun execute(
@@ -174,6 +187,7 @@ object Tools {
         pendientes: PendientesRepository,
         spotify: SpotifyApi,
         gmail: GmailApi,
+        calendar: CalendarApi,
     ): String {
         val args = try {
             JSONObject(argumentsJson)
@@ -287,6 +301,22 @@ object Tools {
                     } else {
                         messages.joinToString("\n---\n") {
                             "Cuenta: ${it.account}\nDe: ${it.from}\nAsunto: ${it.subject}\nFecha: ${it.date}\nFragmento: ${it.snippet}"
+                        }
+                    }
+                }
+                "revisar_calendario" -> {
+                    val dias = if (args.has("dias") && args.get("dias") is Number) {
+                        args.getInt("dias").coerceAtLeast(1)
+                    } else {
+                        7
+                    }
+                    val events = calendar.listUpcomingEventsAllAccounts(dias, 15)
+                    if (events.isEmpty()) {
+                        "No hay eventos agendados en los próximos $dias días."
+                    } else {
+                        events.joinToString("\n---\n") {
+                            "Cuenta: ${it.account}\nEvento: ${it.summary}\nCuándo: ${it.start}" +
+                                if (it.location.isNotBlank()) "\nLugar: ${it.location}" else ""
                         }
                     }
                 }

@@ -12,7 +12,10 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-private const val MODEL = "deepseek/deepseek-v4-flash-vision-exp"
+// Tarea 6.0b: mismo modelo que el lado desktop (OPENROUTER_MODEL en
+// config/constants.ts) -- cambiado a v4.1-flash tras probar compatibilidad
+// con scripts/tarea-6.0-test-tools.mjs, misma Miku en los dos lados.
+private const val MODEL = "deepseek/deepseek-v4.1-flash"
 private const val OR_URL = "https://openrouter.ai/api/v1/chat/completions"
 private const val REFERER = "https://github.com/MyNameIsGs/Miku-AI"
 

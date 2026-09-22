@@ -82,6 +82,9 @@ fun ChatScreen(
     var gmailAccounts by remember { mutableStateOf(vm.listConnectedGmailEmails()) }
     var gmailConnecting by remember { mutableStateOf(false) }
     var gmailError by remember { mutableStateOf<String?>(null) }
+    var calendarAccounts by remember { mutableStateOf(vm.listConnectedCalendarEmails()) }
+    var calendarConnecting by remember { mutableStateOf(false) }
+    var calendarError by remember { mutableStateOf<String?>(null) }
     var wakeWordEnabled by remember { mutableStateOf(WakeWordPrefs.isEnabled(context)) }
     val securePrefs = remember { SecurePrefs(context) }
     var voiceMuted by remember { mutableStateOf(securePrefs.isVoiceMuted()) }
@@ -489,6 +492,54 @@ fun ChatScreen(
                 }
                 if (gmailError != null) {
                     Text(gmailError.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                }
+                calendarAccounts.forEach { email ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(email, color = MikuText, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        IconButton(onClick = {
+                            vm.disconnectCalendarAccount(email)
+                            calendarAccounts = calendarAccounts.filter { it != email }
+                        }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Desconectar cuenta de Calendar",
+                                tint = MikuTextDim,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        calendarConnecting = true
+                        calendarError = null
+                        vm.connectCalendar { email, error ->
+                            calendarConnecting = false
+                            if (email != null) {
+                                calendarAccounts = calendarAccounts.filter { it != email } + email
+                            } else {
+                                calendarError = error
+                            }
+                        }
+                    },
+                    enabled = !calendarConnecting,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
+                ) {
+                    Text(
+                        when {
+                            calendarConnecting -> "Conectando..."
+                            calendarAccounts.isEmpty() -> "Conectar Calendar"
+                            else -> "+ Otra cuenta de Calendar"
+                        }
+                    )
+                }
+                if (calendarError != null) {
+                    Text(calendarError.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
                 }
                 OutlinedButton(
                     onClick = { showSettings = false; vm.logout(); onLogout() },
