@@ -18,6 +18,7 @@ import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useWakeWord } from "./hooks/useWakeWord";
 import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
+import { useVoiceActivityDetection } from "./hooks/useVoiceActivityDetection";
 import { useReminders } from "./hooks/useReminders";
 import { useGmailWatcher } from "./hooks/useGmailWatcher";
 import { useCalendarWatcher } from "./hooks/useCalendarWatcher";
@@ -451,6 +452,35 @@ function App() {
     mutedRef: voiceMutedRef,
   });
 
+  // Tarea 8.1: silencio sostenido mientras se graba corta sola, sin
+  // soltar el botón -- y a diferencia de un corte manual, "voz sin manos"
+  // de verdad manda el mensaje solo en vez de dejarlo esperando un click
+  // de "Enviar" (bug real reportado por Sebastián en la primera prueba:
+  // cortaba en el momento justo pero el mensaje se quedaba sin mandar).
+  async function handleAutoStopRecording() {
+    const text = await speechRecognition.autoStopListening();
+    handleSendTranscript(text);
+  }
+
+  // Tarea 8.1: voz sostenida detectada mientras Miku habla (barge-in) o
+  // durante la ventana de seguimiento tras su respuesta (sin repetir
+  // "Hey Miku") -- en los dos casos, arrancar a escuchar es lo que hay
+  // que hacer; si además está hablando, primero se la corta.
+  function handleSpeechDuringPlayback() {
+    if (speech.isSpeaking) {
+      speech.stopSpeaking();
+    }
+    speechRecognition.toggleListening();
+  }
+
+  const vad = useVoiceActivityDetection({
+    isVoiceReady,
+    listening: speechRecognition.listening,
+    isSpeaking: speech.isSpeaking,
+    onAutoStopRecording: handleAutoStopRecording,
+    onSpeechDuringPlayback: handleSpeechDuringPlayback,
+  });
+
   const avatarState: "idle" | "listening" | "thinking" | "speaking" =
     speechRecognition.listening || speechRecognition.transcribing
       ? "listening"
@@ -732,6 +762,12 @@ function App() {
         setLlmResponse(partial);
       });
 
+      // Tarea 8.1: solo tras una respuesta conversacional real (no un
+      // quirk idle, ni el resumen agrupado, ni un recordatorio) se abre la
+      // ventana de seguimiento -- seguir la conversación sin repetir
+      // "Hey Miku" tiene sentido acá, no después de un aviso de fondo.
+      vad.armFollowUpWindow();
+
       memoryFiles.consolidateMemoryIfNeeded();
     } catch (err) {
       console.error("Error al consultar el LLM:", err);
@@ -741,8 +777,12 @@ function App() {
     }
   }
 
-  const handleSendTranscript = () => {
-    const messageToSend = transcript.trim();
+  // Tarea 8.1: acepta un texto explícito (ver handleAutoStopRecording) para
+  // el caso de "voz sin manos" -- el VAD ya transcribió y quiere mandarlo
+  // sin pasar por el cuadro de texto. Sin argumento, usa lo que haya en el
+  // cuadro (flujo manual de siempre).
+  const handleSendTranscript = (textOverride?: string) => {
+    const messageToSend = (textOverride ?? transcript).trim();
     if ((!messageToSend && !attachedImage) || isThinking || !isVoiceReady) {
       return;
     }
@@ -1039,7 +1079,7 @@ function App() {
           </button>
           <button
             className="send-button"
-            onClick={handleSendTranscript}
+            onClick={() => handleSendTranscript()}
             disabled={!isVoiceReady || isThinking}
           >
             Enviar

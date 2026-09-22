@@ -50,6 +50,13 @@ export function useSpeechRecognition({
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // Tarea 8.1: cuando el corte de grabación lo dispara el VAD (no un click
+  // manual, ver autoStopListening), quien pidió el corte quiere el texto
+  // final para mandarlo solo -- "voz sin manos" de verdad no debería
+  // necesitar un click de "Enviar" después. Un corte manual (toggleListening)
+  // no resuelve nada acá, deja el texto en el cuadro para revisar como
+  // siempre.
+  const pendingAutoStopResolveRef = useRef<((text: string) => void) | null>(null);
   const partialIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const partialInFlightRef = useRef(false);
   // Palabras del último resultado parcial (crudas, para comparar contra la
@@ -153,13 +160,23 @@ export function useSpeechRecognition({
             body: audioBlob,
           });
           const data = await response.json();
+          const text = data.error ? "" : String(data.text ?? "");
           if (data.error) {
             console.error("Error de transcripción:", data.error);
           } else {
-            setTranscript(data.text ?? "");
+            setTranscript(text);
           }
+          // Tarea 8.1: si este corte lo pidió autoStopListening(), le
+          // devuelve el texto final ya transcripto -- quien llamó decide
+          // si lo manda solo.
+          const resolveAutoStop = pendingAutoStopResolveRef.current;
+          pendingAutoStopResolveRef.current = null;
+          resolveAutoStop?.(text);
         } catch (err) {
           console.error("Error al enviar audio para transcribir:", err);
+          const resolveAutoStop = pendingAutoStopResolveRef.current;
+          pendingAutoStopResolveRef.current = null;
+          resolveAutoStop?.("");
         } finally {
           setTranscribing(false);
         }
@@ -195,5 +212,21 @@ export function useSpeechRecognition({
     }
   };
 
-  return { listening, transcribing, toggleListening };
+  // Tarea 8.1: corte automático por VAD (silencio sostenido) -- a
+  // diferencia de toggleListening, resuelve con el texto final ya
+  // transcripto para que quien llamó (ver useVoiceActivityDetection.ts)
+  // pueda mandarlo solo, sin esperar un click de "Enviar". Si no había
+  // nada grabándose, resuelve con "" de una -- no hay nada que transcribir.
+  const autoStopListening = (): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!listening || !mediaRecorderRef.current) {
+        resolve("");
+        return;
+      }
+      pendingAutoStopResolveRef.current = resolve;
+      stopListening();
+    });
+  };
+
+  return { listening, transcribing, toggleListening, autoStopListening };
 }
