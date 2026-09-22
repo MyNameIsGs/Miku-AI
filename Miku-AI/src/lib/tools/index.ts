@@ -24,6 +24,7 @@ import { modoRepeticion } from "./modoRepeticion";
 import { revisarCorreo } from "./revisarCorreo";
 import { revisarCalendario } from "./revisarCalendario";
 import { escribirTexto } from "./escribirTexto";
+import { buscarArchivos } from "./buscarArchivos";
 import { ToolDefinition, ToolSchema } from "./types";
 import { ChatContent } from "../../types";
 
@@ -51,6 +52,7 @@ const STATIC_TOOLS: ToolDefinition[] = [
   revisarCorreo,
   revisarCalendario,
   escribirTexto,
+  buscarArchivos,
 ];
 
 // Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que

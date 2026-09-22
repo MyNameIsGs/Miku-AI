@@ -6,6 +6,7 @@ mod app_launcher;
 mod media_control;
 mod text_input;
 mod window_control;
+mod file_search;
 mod audio_device;
 mod screen_capture;
 mod oauth_loopback;
@@ -242,6 +243,7 @@ pub fn run() {
             window_control::minimizar_ventana,
             window_control::mover_ventana,
             window_control::modo_foco,
+            file_search::buscar_archivos,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,
