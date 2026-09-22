@@ -21,6 +21,7 @@ import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useReminders } from "./hooks/useReminders";
 import { useGmailWatcher } from "./hooks/useGmailWatcher";
 import { useCalendarWatcher } from "./hooks/useCalendarWatcher";
+import { useTaskWatcher } from "./hooks/useTaskWatcher";
 import { useNotificationDigest } from "./hooks/useNotificationDigest";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
@@ -459,13 +460,22 @@ function App() {
           ? "thinking"
           : "idle";
 
+  // Creado antes que useIdleQuirks: idea #21, los pendientes vencidos que
+  // el loop idle decide mencionar ya no hablan directo -- se encolan acá,
+  // igual que correo nuevo y los avisos de Calendar no urgentes.
+  const notificationDigest = useNotificationDigest({
+    speak: speech.speak,
+    voicePitchRef,
+    voiceRateRef,
+  });
+
   const idleQuirks = useIdleQuirks({
     boneTransitionsRef: movement.boneTransitionsRef,
     boneRestRotationRef,
     scheduleMovement: movement.scheduleMovement,
     revertAnimatedBonesExcept: movement.revertAnimatedBonesExcept,
     scheduleHandGesture: movement.scheduleHandGesture,
-    speak: speech.speak,
+    queueAnnouncement: notificationDigest.queueAnnouncement,
     voicePitchRef,
     voiceRateRef,
     captureQuirkImagesAfterDelays,
@@ -479,12 +489,6 @@ function App() {
     voiceRateRef,
   });
 
-  const notificationDigest = useNotificationDigest({
-    speak: speech.speak,
-    voicePitchRef,
-    voiceRateRef,
-  });
-
   const gmailWatcher = useGmailWatcher({
     queueAnnouncement: notificationDigest.queueAnnouncement,
   });
@@ -493,6 +497,10 @@ function App() {
     speak: speech.speak,
     voicePitchRef,
     voiceRateRef,
+    queueAnnouncement: notificationDigest.queueAnnouncement,
+  });
+
+  const taskWatcher = useTaskWatcher({
     queueAnnouncement: notificationDigest.queueAnnouncement,
   });
 
@@ -784,8 +792,15 @@ function App() {
     // está por empezar.
     calendarWatcher.checkCalendar(now);
 
+    // Idea #9: tareas de seguimiento (pendientes con condición) -- revisa
+    // como mucho una por ciclo, cada TASK_WATCH_INTERVAL_MS (horas, no
+    // minutos, porque cada revisión cuesta una búsqueda real).
+    taskWatcher.checkTasks(now);
+
     // Resumen agrupado: lee junto todo lo que se haya acumulado (correo,
-    // avisos de anticipación larga) cada NOTIFICATION_DIGEST_INTERVAL_MS.
+    // avisos de anticipación larga, y ahora también pendientes vencidos que
+    // el quirk idle de arriba haya decidido mencionar -- idea #21) cada
+    // NOTIFICATION_DIGEST_INTERVAL_MS.
     notificationDigest.checkDigest(now);
 
     // Etapa 7: suavizado de expresiones, parpadeo y mirada errante ahora

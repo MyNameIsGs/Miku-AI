@@ -47,15 +47,11 @@ type UseIdleQuirksParams = {
     origin: MovementOrigin,
     autoRevertDelayMs?: number,
   ) => void;
-  // Tarea 6.7, Nivel 2: para poder hablar cuando saca a colación un
-  // pendiente -- necesita lo mismo que una respuesta normal (voz base +
-  // expresión), no solo el marcador de movimiento que ya tenía.
-  speak: (
-    text: string,
-    pitch: number,
-    rate: number,
-    expression: string,
-  ) => Promise<void>;
+  // Idea #21: cuando saca a colación un pendiente vencido, ya no habla al
+  // toque -- se acumula en el resumen agrupado (ver useNotificationDigest.ts)
+  // igual que el correo nuevo y los avisos de Calendar no urgentes, en vez
+  // de ser un cuarto mecanismo de aviso independiente.
+  queueAnnouncement: (text: string) => void;
   voicePitchRef: RefObject<number>;
   voiceRateRef: RefObject<number>;
   // Fase 7: cuando un quirk todavía en evaluación se ejecuta, hay que
@@ -80,7 +76,7 @@ export function useIdleQuirks({
   scheduleMovement,
   revertAnimatedBonesExcept,
   scheduleHandGesture,
-  speak,
+  queueAnnouncement,
   voicePitchRef,
   voiceRateRef,
   captureQuirkImagesAfterDelays,
@@ -209,7 +205,8 @@ export function useIdleQuirks({
   // ningún movimiento. Los quirks son silenciosos por defecto (sin TTS) y
   // no hay ningún reseteo forzado a reposo -- eso se eliminó a propósito.
   // Tarea 6.7: la única excepción es cuando hay un pendiente vencido o por
-  // vencer -- ahí sí puede hablar, ver buildIdlePrompt.
+  // vencer -- ahí sí puede decir algo, ver buildIdlePrompt (idea #21: ese
+  // texto ya no se habla al toque, se encola en el resumen agrupado).
   // Fase 7: antes de gastar una llamada al LLM, con cierta probabilidad
   // corre directamente uno de sus quirks ya inventados (con más peso hacia
   // los que todavía está evaluando) -- así el "vocabulario" de movimientos
@@ -297,7 +294,7 @@ export function useIdleQuirks({
       await processQuirkMarkers(quirks, parsed.createQuirk, parsed.quirkReady);
 
       if (parsed.cleanText && duePendientes.length > 0) {
-        await speak(parsed.cleanText, parsed.pitch, parsed.rate, parsed.expression);
+        queueAnnouncement(parsed.cleanText);
         await markPendientesReminded(duePendientes.map((p) => p.id));
       }
     } catch (err) {

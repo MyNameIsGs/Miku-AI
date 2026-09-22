@@ -1,9 +1,11 @@
 import { RefObject, useRef } from "react";
 import { NOTIFICATION_DIGEST_INTERVAL_MS } from "../config/constants";
+import { isQuietHours } from "../lib/quietHours";
 
-// Resumen agrupado: correo nuevo y avisos de Calendar de anticipación
-// larga no son urgentes -- en vez de interrumpir apenas se detectan
-// (como hacía antes cada watcher por separado), se acumulan acá y se
+// Resumen agrupado: correo nuevo, avisos de Calendar de anticipación
+// larga, y (idea #21) pendientes vencidos que el loop idle decide sacar a
+// colación, no son urgentes -- en vez de interrumpir apenas se detectan
+// (como hacía antes cada mecanismo por separado), se acumulan acá y se
 // leen juntos cada NOTIFICATION_DIGEST_INTERVAL_MS. El aviso de "evento
 // por empezar" es la excepción a propósito: sigue yendo directo a
 // speech.speak(), no pasa por acá -- ver useCalendarWatcher.ts.
@@ -34,6 +36,10 @@ export function useNotificationDigest({
   // que los demás chequeos periódicos.
   function checkDigest(now: number) {
     if (now - lastFlushRef.current < NOTIFICATION_DIGEST_INTERVAL_MS) return;
+    // Idea #20: durante el horario de no molestar no se lee nada -- se
+    // sigue acumulando (no se toca lastFlushRef) para leerlo todo junto
+    // apenas termine la franja.
+    if (isQuietHours()) return;
     lastFlushRef.current = now;
 
     if (pendingRef.current.length === 0) return;

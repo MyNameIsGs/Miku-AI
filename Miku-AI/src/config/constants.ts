@@ -37,11 +37,28 @@ export const CALENDAR_REMINDER_LEAD_MINUTES = 20;
 // le quitaría el sentido.
 export const NOTIFICATION_DIGEST_INTERVAL_MS = 900000; // 15 minutos
 
+// Idea #20: horario de no molestar -- ningún aviso automático (ni el
+// urgente de "está por empezar", ni el resumen agrupado) habla solo
+// durante esta franja. Se acumulan igual (ver isQuietHours en
+// lib/quietHours.ts) y se leen apenas termina. NO afecta a
+// poner_recordatorio: ese lo pide Sebastián a propósito para un momento
+// puntual, no es un aviso pasivo del sistema.
+export const QUIET_HOURS_START_HOUR: number = 0; // 00:00
+export const QUIET_HOURS_END_HOUR: number = 7; // 07:00
+
 // Pedido de Sebastián: además del aviso de "está por empezar" (arriba),
 // avisos de anticipación larga -- una semana, 3 días y el día anterior.
 // Descendente a propósito (ver checkMilestoneEvents en watcher.ts, que
 // recorre esta lista de mayor a menor).
 export const CALENDAR_MILESTONE_DAYS = [7, 3, 1];
+
+// Idea #9: cada cuánto revisar si alguna tarea de seguimiento (pendiente
+// con "condición", ver lib/pendientes.ts) ya se cumplió -- cada revisión
+// hace una búsqueda web real ($0.02, ver buscarEnWeb.ts) más una llamada
+// chica al LLM para evaluar el resultado, así que el intervalo es mucho
+// más largo que el resto de los chequeos automáticos. Una tarea por ciclo
+// nada más (ver useTaskWatcher.ts), no todas de golpe.
+export const TASK_WATCH_INTERVAL_MS = 21600000; // 6 horas
 
 // Cuántos ciclos de vaivén corre un quirk ANIMADO antes de asentarse solo,
 // si Miku no eligió un valor propio con "ciclos=N" al crearlo (ver

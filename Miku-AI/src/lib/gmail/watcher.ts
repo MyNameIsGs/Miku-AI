@@ -12,6 +12,18 @@ import { getLatestMessageForAccount } from "./api";
 // sincronizarlo entre dispositivos no aportaría nada.
 const STORE_KEY = "gmailLastSeenIds";
 
+// Idea #8 (de verdad, no la variante simple de "avisar que llegó algo"):
+// en vez de armar acá un texto con plantilla fija, se devuelven los
+// candidatos crudos -- useGmailWatcher.ts le pasa esto al LLM para que
+// decida, en personaje, si vale la pena mencionarlo y con qué palabras
+// (ver prompts/mailPrompt.ts). SKIP_LABELS sigue siendo un primer filtro
+// barato (spam/promos evidentes, sin gastar tokens en descartarlos).
+export type GmailCandidate = {
+  from: string;
+  subject: string;
+  snippet: string;
+};
+
 // Mismo criterio de "filtrar spam/promociones" que ya estaba anotado en
 // la idea original, y el mismo conjunto que usa Android.
 const SKIP_LABELS = new Set([
@@ -35,12 +47,12 @@ async function saveLastSeenIds(ids: Record<string, string>) {
 // La primera vez que se revisa una cuenta (sin id previo guardado) NO se
 // anuncia nada -- solo establece la base, para no leer en voz alta todo
 // lo que ya estaba en la bandeja antes de activar esto.
-export async function checkForNewMail(): Promise<string | null> {
+export async function checkForNewMail(): Promise<GmailCandidate[] | null> {
   const accounts = await loadGmailAccounts();
   if (accounts.length === 0) return null;
 
   const lastSeen = await loadLastSeenIds();
-  let announcement: string | null = null;
+  const candidates: GmailCandidate[] = [];
 
   for (const account of accounts) {
     const token = await getValidAccessTokenFor(account.email);
@@ -61,13 +73,13 @@ export async function checkForNewMail(): Promise<string | null> {
     if (!previousId || previousId === latest.id) continue;
     if (latest.labelIds.some((label) => SKIP_LABELS.has(label))) continue;
 
-    if (!announcement) {
-      announcement = latest.subject
-        ? `Te llegó un correo nuevo de ${latest.from}, sobre "${latest.subject}".`
-        : `Te llegó un correo nuevo de ${latest.from}.`;
-    }
+    candidates.push({
+      from: latest.from,
+      subject: latest.subject,
+      snippet: latest.snippet,
+    });
   }
 
   await saveLastSeenIds(lastSeen);
-  return announcement;
+  return candidates.length > 0 ? candidates : null;
 }

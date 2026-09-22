@@ -58,7 +58,7 @@ export function buildIdlePrompt({
   // conviene engordarlo con pendientes lejanos en el tiempo.
   const pendientesNote =
     duePendientes.length > 0
-      ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación ahora mismo escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe -- en ese caso escribe el texto normal (puedes combinarlo con [EXPRESION] si corresponde). No es obligatorio; si no te nace decir nada, no escribas texto y sigue con el silencio o un gesto como siempre.\n`
+      ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe -- en ese caso escribe el texto normal (puedes combinarlo con [EXPRESION] si corresponde). No se lo vas a decir al toque, se junta con otros avisos pendientes (correo, calendario) y se lee todo junto en el próximo repaso, así que no hace falta que sea urgente. No es obligatorio; si no te nace decir nada, no escribas texto y sigue con el silencio o un gesto como siempre.\n`
       : "";
 
   // Fase 7: quirks propios -- gestos con nombre que ella misma decide

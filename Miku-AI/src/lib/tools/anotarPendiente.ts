@@ -23,7 +23,12 @@ export const anotarPendiente: ToolDefinition = {
           fecha_estimada: {
             type: "string",
             description:
-              "Fecha estimada en formato YYYY-MM-DD. Calcúlala tú misma a partir de la fecha de hoy (la tienes en tu contexto) y lo que haya dicho Sebastián (ej. 'en dos semanas', 'el viernes que viene').",
+              "Fecha estimada en formato YYYY-MM-DD. Calcúlala tú misma a partir de la fecha de hoy (la tienes en tu contexto) y lo que haya dicho Sebastián (ej. 'en dos semanas', 'el viernes que viene'). Si el pendiente tiene 'condicion' y no hay una fecha real en mente, usa una estimación amplia (ej. un mes) como plazo razonable, no la dejes sin sentido.",
+          },
+          condicion: {
+            type: "string",
+            description:
+              "Opcional. Úsala SOLO si esto es algo que se puede verificar buscando en la web y cambia con el tiempo (ej. 'el pasaje a Japón baja de $800', 'sale una fecha para el próximo álbum de tal artista'). En ese caso lo revisas sola de vez en cuando con una búsqueda real, y avisas cuando se cumpla. No la uses para cosas que Sebastián simplemente te contó que van a pasar -- para eso alcanza con descripcion y fecha_estimada.",
           },
         },
         required: ["descripcion", "fecha_estimada"],
@@ -33,6 +38,9 @@ export const anotarPendiente: ToolDefinition = {
   execute: async (args) => {
     const descripcion = String(args.descripcion ?? "").trim();
     const fechaEstimada = String(args.fecha_estimada ?? "").trim();
+    const condicionRaw = args.condicion;
+    const condicion =
+      typeof condicionRaw === "string" && condicionRaw.trim() ? condicionRaw.trim() : null;
 
     if (!descripcion) {
       return "Error: no se especificó qué es el pendiente.";
@@ -42,8 +50,10 @@ export const anotarPendiente: ToolDefinition = {
     }
 
     try {
-      await addPendiente(descripcion, fechaEstimada);
-      return `Anotado: "${descripcion}" (estimado para ${fechaEstimada}).`;
+      await addPendiente(descripcion, fechaEstimada, condicion);
+      return condicion
+        ? `Anotado como tarea de seguimiento: "${descripcion}" (condición: ${condicion}). La voy a revisar sola de vez en cuando.`
+        : `Anotado: "${descripcion}" (estimado para ${fechaEstimada}).`;
     } catch (err) {
       return `Error guardando el pendiente: ${
         err instanceof Error ? err.message : String(err)

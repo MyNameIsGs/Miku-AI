@@ -46,7 +46,11 @@ export function buildSystemPrompt({
   const pendientesList =
     activePendientes.length > 0
       ? activePendientes
-          .map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`)
+          .map((p) =>
+            p.condicion
+              ? `- ${p.descripcion} (tarea de seguimiento, condición: ${p.condicion} -- la revisas sola cada tanto buscando en la web)`
+              : `- ${p.descripcion} (estimado: ${p.fechaEstimada})`,
+          )
           .join("\n")
       : "(ninguno por ahora)";
 

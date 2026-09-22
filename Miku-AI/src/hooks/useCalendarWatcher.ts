@@ -1,11 +1,14 @@
 import { RefObject, useRef } from "react";
 import { CALENDAR_CHECK_INTERVAL_MS } from "../config/constants";
 import { checkUpcomingEvents, checkMilestoneEvents } from "../lib/calendar/watcher";
+import { isQuietHours } from "../lib/quietHours";
 
 type UseCalendarWatcherParams = {
   // "Está por empezar" sigue siendo inmediato a propósito -- es urgente
   // de verdad, meterlo en el resumen agrupado le quitaría el sentido
-  // (podría avisar después de que el evento ya arrancó).
+  // (podría avisar después de que el evento ya arrancó). Única excepción:
+  // idea #20, durante el horario de no molestar tampoco habla solo -- se
+  // encola igual que el resto, en vez de interrumpir de madrugada.
   speak: (
     text: string,
     pitch: number,
@@ -40,7 +43,11 @@ export function useCalendarWatcher({
     Promise.all([checkUpcomingEvents(), checkMilestoneEvents()])
       .then(async ([imminent, milestone]) => {
         if (imminent) {
-          await speak(imminent, voicePitchRef.current, voiceRateRef.current, "neutral");
+          if (isQuietHours()) {
+            queueAnnouncement(imminent);
+          } else {
+            await speak(imminent, voicePitchRef.current, voiceRateRef.current, "neutral");
+          }
         }
         if (milestone) {
           queueAnnouncement(milestone);
