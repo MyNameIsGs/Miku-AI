@@ -20,10 +20,20 @@ import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useReminders } from "./hooks/useReminders";
 import { useGmailWatcher } from "./hooks/useGmailWatcher";
+import { useCalendarWatcher } from "./hooks/useCalendarWatcher";
+import { useNotificationDigest } from "./hooks/useNotificationDigest";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
+import { QuirksPanel } from "./components/QuirksPanel";
+import {
+  loadQuirks,
+  confirmQuirk,
+  revertQuirkToEvaluando,
+  deleteQuirk,
+  QuirksStore,
+} from "./lib/quirks";
 import { ChatContentPart, ChatContent, ChatMessage } from "./types";
 import {
   OPENROUTER_MODEL,
@@ -49,6 +59,11 @@ import {
   disconnectGmailAccount,
   listConnectedGmailEmails,
 } from "./lib/gmail/auth";
+import {
+  connectCalendar,
+  disconnectCalendarAccount,
+  listConnectedCalendarEmails,
+} from "./lib/calendar/auth";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -71,6 +86,8 @@ function App() {
   const voiceMutedRef = useRef(voiceMuted);
   const [showConfig, setShowConfig] = useState(false);
   const [showAppLauncher, setShowAppLauncher] = useState(false);
+  const [showQuirksPanel, setShowQuirksPanel] = useState(false);
+  const [quirksState, setQuirksState] = useState<QuirksStore>({});
   const [hideResponseText, setHideResponseText] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
   const [freeCamera, setFreeCamera] = useState(false);
@@ -83,6 +100,9 @@ function App() {
   const [gmailAccounts, setGmailAccounts] = useState<string[]>([]);
   const [gmailConnecting, setGmailConnecting] = useState(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  const [calendarAccounts, setCalendarAccounts] = useState<string[]>([]);
+  const [calendarConnecting, setCalendarConnecting] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
   const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
@@ -114,8 +134,18 @@ function App() {
   // la foto/descripción de un quirk en evaluación -- así no se pisa con la
   // captura de una conversación real si coinciden en el tiempo, y viaja a
   // la PRÓXIMA consulta idle (ver useIdleQuirks.ts), no a la conversación.
-  const quirkImageCaptureAtRef = useRef<number | null>(null);
-  const quirkSelfImageRef = useRef<string | null>(null);
+  //
+  // Bug real encontrado por Sebastián: una sola foto no alcanza para un
+  // quirk ANIMADO -- cae en un punto arbitrario del ciclo de oscilación
+  // (no necesariamente el pico ni el centro), así que ni siquiera muestra
+  // la pose más representativa, mucho menos el vaivén. DeepSeek no acepta
+  // video como input (verificado contra la documentación real de
+  // OpenRouter/DeepSeek, no asumido) -- la alternativa real es varias
+  // fotos en distintos puntos del mismo ciclo, mandadas juntas como
+  // imágenes separadas en el mismo mensaje. Por eso estos dos ahora son
+  // listas, no un solo timestamp/imagen.
+  const quirkImageCaptureAtRef = useRef<number[]>([]);
+  const quirkSelfImagesRef = useRef<string[]>([]);
   const pendingQuirkDescriptionRef = useRef<string | null>(null);
   const boneRestRotationRef = useRef<
     Record<string, { x: number; y: number; z: number }>
@@ -191,6 +221,9 @@ function App() {
     listConnectedGmailEmails()
       .then(setGmailAccounts)
       .catch((err) => console.error("Error consultando cuentas de Gmail:", err));
+    listConnectedCalendarEmails()
+      .then(setCalendarAccounts)
+      .catch((err) => console.error("Error consultando cuentas de Calendar:", err));
   }, []);
 
   const handleConnectSpotify = async () => {
@@ -227,6 +260,51 @@ function App() {
     } catch (err) {
       console.error("Error desconectando cuenta de Gmail:", err);
     }
+  };
+
+  const handleConnectCalendar = async () => {
+    setCalendarConnecting(true);
+    setCalendarError(null);
+    try {
+      const email = await connectCalendar();
+      setCalendarAccounts((prev) => [...prev.filter((e) => e !== email), email]);
+    } catch (err) {
+      console.error("Error conectando Calendar:", err);
+      setCalendarError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCalendarConnecting(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async (email: string) => {
+    try {
+      await disconnectCalendarAccount(email);
+      setCalendarAccounts((prev) => prev.filter((e) => e !== email));
+    } catch (err) {
+      console.error("Error desconectando cuenta de Calendar:", err);
+    }
+  };
+
+  // Panel de quirks (idea nueva): recién carga cuando se abre, no hace
+  // falta tenerlo cargado todo el tiempo -- el loop idle sigue siendo el
+  // único que los crea/confirma normalmente vía marcadores.
+  useEffect(() => {
+    if (!showQuirksPanel) return;
+    loadQuirks()
+      .then(setQuirksState)
+      .catch((err) => console.error("Error cargando quirks:", err));
+  }, [showQuirksPanel]);
+
+  const handleConfirmQuirk = async (name: string) => {
+    setQuirksState(await confirmQuirk(quirksState, name));
+  };
+
+  const handleRevertQuirkToEvaluando = async (name: string) => {
+    setQuirksState(await revertQuirkToEvaluando(quirksState, name));
+  };
+
+  const handleDeleteQuirk = async (name: string) => {
+    setQuirksState(await deleteQuirk(quirksState, name));
   };
 
   useEffect(() => {
@@ -353,10 +431,15 @@ function App() {
     selfImageCaptureAtRef.current = performance.now() + delayMs;
   }
 
-  // Fase 7: mismo mecanismo que captureSelfImageAfterDelay, para la foto de
-  // un quirk en evaluación -- ver el contrato en onAfterRender más abajo.
-  function captureQuirkImageAfterDelay(delayMs: number) {
-    quirkImageCaptureAtRef.current = performance.now() + delayMs;
+  // Fase 7: mismo mecanismo que captureSelfImageAfterDelay, pero acepta
+  // VARIOS delays -- una foto por punto del ciclo que se quiera capturar
+  // (ver el contrato en onAfterRender más abajo, y el comentario en
+  // quirkImageCaptureAtRef sobre por qué una sola no alcanza para
+  // animados). Para un quirk no animado, se sigue llamando con un solo
+  // delay -- el comportamiento de antes queda intacto para ese caso.
+  function captureQuirkImagesAfterDelays(delaysMs: number[]) {
+    const now = performance.now();
+    quirkImageCaptureAtRef.current = delaysMs.map((d) => now + d);
   }
 
   const speech = useSpeech({
@@ -385,8 +468,8 @@ function App() {
     speak: speech.speak,
     voicePitchRef,
     voiceRateRef,
-    captureQuirkImageAfterDelay,
-    quirkSelfImageRef,
+    captureQuirkImagesAfterDelays,
+    quirkSelfImagesRef,
     pendingQuirkDescriptionRef,
   });
 
@@ -396,10 +479,21 @@ function App() {
     voiceRateRef,
   });
 
-  const gmailWatcher = useGmailWatcher({
+  const notificationDigest = useNotificationDigest({
     speak: speech.speak,
     voicePitchRef,
     voiceRateRef,
+  });
+
+  const gmailWatcher = useGmailWatcher({
+    queueAnnouncement: notificationDigest.queueAnnouncement,
+  });
+
+  const calendarWatcher = useCalendarWatcher({
+    speak: speech.speak,
+    voicePitchRef,
+    voiceRateRef,
+    queueAnnouncement: notificationDigest.queueAnnouncement,
   });
 
   const memoryFiles = useMemoryFiles();
@@ -686,6 +780,14 @@ function App() {
     // idle decida hablar de eso.
     gmailWatcher.checkGmail(now);
 
+    // Idea #7: mismo mecanismo, para avisar de un evento de Calendar que
+    // está por empezar.
+    calendarWatcher.checkCalendar(now);
+
+    // Resumen agrupado: lee junto todo lo que se haya acumulado (correo,
+    // avisos de anticipación larga) cada NOTIFICATION_DIGEST_INTERVAL_MS.
+    notificationDigest.checkDigest(now);
+
     // Etapa 7: suavizado de expresiones, parpadeo y mirada errante ahora
     // los procesa useFace.
     face.updateFace(now, delta);
@@ -704,17 +806,27 @@ function App() {
       }
     }
 
-    // Fase 7: mismo mecanismo, para la foto de un quirk en evaluación.
-    if (
-      quirkImageCaptureAtRef.current !== null &&
-      now >= quirkImageCaptureAtRef.current
-    ) {
-      quirkImageCaptureAtRef.current = null;
-      try {
-        quirkSelfImageRef.current = renderer.domElement.toDataURL("image/png");
-      } catch (err) {
-        console.error("Error capturando imagen del quirk:", err);
+    // Fase 7: mismo mecanismo, para las fotos de un quirk en evaluación --
+    // ahora puede haber varias pendientes (una por punto del ciclo, ver
+    // captureQuirkImagesAfterDelays). Se capturan en orden a medida que se
+    // cumple cada timestamp, sin descartar las que ya se sacaron.
+    if (quirkImageCaptureAtRef.current.length > 0) {
+      const stillPending: number[] = [];
+      for (const captureAt of quirkImageCaptureAtRef.current) {
+        if (now >= captureAt) {
+          try {
+            quirkSelfImagesRef.current = [
+              ...quirkSelfImagesRef.current,
+              renderer.domElement.toDataURL("image/png"),
+            ];
+          } catch (err) {
+            console.error("Error capturando imagen del quirk:", err);
+          }
+        } else {
+          stillPending.push(captureAt);
+        }
       }
+      quirkImageCaptureAtRef.current = stillPending;
     }
   }
 
@@ -829,6 +941,12 @@ function App() {
             Apps
           </button>
           <button
+            className={showQuirksPanel ? "active" : ""}
+            onClick={() => setShowQuirksPanel((v) => !v)}
+          >
+            Quirks
+          </button>
+          <button
             className={hideResponseText ? "active" : ""}
             onClick={() => setHideResponseText((v) => !v)}
             title="Ocultar el texto de respuesta (para sacar capturas limpias)"
@@ -938,6 +1056,16 @@ function App() {
         />
       )}
 
+      {showQuirksPanel && (
+        <QuirksPanel
+          quirks={quirksState}
+          onConfirm={handleConfirmQuirk}
+          onRevertToEvaluando={handleRevertQuirkToEvaluando}
+          onDelete={handleDeleteQuirk}
+          onClose={() => setShowQuirksPanel(false)}
+        />
+      )}
+
       {showConfig && (
         <div className="config-panel">
           <label>
@@ -1000,6 +1128,31 @@ function App() {
             {gmailError && (
               <span className="oauth-error" title={gmailError}>
                 Error al conectar Gmail
+              </span>
+            )}
+          </div>
+          <div className="oauth-connect-row gmail-accounts-row">
+            {calendarAccounts.map((email) => (
+              <span key={email} className="gmail-account-chip">
+                {email}
+                <button
+                  onClick={() => handleDisconnectCalendar(email)}
+                  title="Desconectar esta cuenta"
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            <button onClick={handleConnectCalendar} disabled={calendarConnecting}>
+              {calendarConnecting
+                ? "Conectando..."
+                : calendarAccounts.length > 0
+                  ? "+ Otra cuenta de Calendar"
+                  : "Conectar Calendar"}
+            </button>
+            {calendarError && (
+              <span className="oauth-error" title={calendarError}>
+                Error al conectar Calendar
               </span>
             )}
           </div>

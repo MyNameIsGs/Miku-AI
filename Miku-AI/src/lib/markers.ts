@@ -151,6 +151,11 @@ export interface ParsedQuirkCreation {
   animated: boolean;
   handLeft?: string;
   handRight?: string;
+  // Pedido de Sebastián: cuántas veces se repite el ciclo de un quirk
+  // ANIMADO antes de asentarse solo -- decisión de Miku por quirk, no un
+  // número fijo para todos (un suspiro corto no necesita durar lo mismo
+  // que un tarareo). Solo importa si animado=si; se ignora si no.
+  revertAfterCycles?: number;
 }
 
 export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null {
@@ -167,6 +172,7 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
   let animated = false;
   let handLeft: string | undefined;
   let handRight: string | undefined;
+  let revertAfterCycles: number | undefined;
   const entries: ParsedQuirkCreation["entries"] = [];
 
   for (const part of parts) {
@@ -185,6 +191,14 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
     }
     if (key === "animado") {
       animated = /^(si|sí|yes|true)$/i.test(rawValue);
+      continue;
+    }
+    if (key === "ciclos") {
+      const num = parseInt(rawValue, 10);
+      // Entre 1 (un solo vaivén) y 8 (bastante sostenido) -- sin tope
+      // arriba, un quirk "para siempre" reintroduciría el bug que ya se
+      // arregló.
+      if (!Number.isNaN(num)) revertAfterCycles = Math.max(1, Math.min(8, num));
       continue;
     }
     if (key === "mano_izq" && rawValue) {
@@ -209,7 +223,7 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
   if (!name) return null;
   if (entries.length === 0 && !handLeft && !handRight) return null;
 
-  return { name, entries, durationMs, animated, handLeft, handRight };
+  return { name, entries, durationMs, animated, handLeft, handRight, revertAfterCycles };
 }
 
 export function parseQuirkReadyMarker(text: string): string | null {

@@ -26,7 +26,10 @@ const ENV_PATH = path.join(REPO_ROOT, "Miku-AI", ".env");
 const MEMORY_DIR = path.join(process.env.APPDATA, "com.sebas.mikuai", "memory");
 const OUT_DIR = path.join(__dirname, "tarea-6.0-results");
 
-const OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-vision-exp";
+// TEST_MODEL permite reusar este script para evaluar un modelo candidato
+// (ej. Tarea 6.0b) sin tocar el default, que sigue siendo el modelo en
+// producción cuando se corre sin la variable.
+const OPENROUTER_MODEL = process.env.TEST_MODEL || "deepseek/deepseek-v4-flash-vision-exp";
 const VOICE_PITCH_MIN = -24;
 const VOICE_PITCH_MAX = 48;
 const VOICE_RATE_MIN = -60;

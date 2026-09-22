@@ -4,6 +4,7 @@ import {
   OPENROUTER_MODEL,
   DIRECT_QUIRK_RUN_CHANCE,
   DEFAULT_HAND_GESTURE_DURATION_MS,
+  DEFAULT_QUIRK_REVERT_CYCLES,
 } from "../config/constants";
 import { buildIdlePrompt, getHeldPoseSummary } from "../prompts/idlePrompt";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
@@ -58,12 +59,18 @@ type UseIdleQuirksParams = {
   voicePitchRef: RefObject<number>;
   voiceRateRef: RefObject<number>;
   // Fase 7: cuando un quirk todavía en evaluación se ejecuta, hay que
-  // pedirle a App.tsx (dueño del renderer) que capture una foto después de
-  // que el movimiento se asiente, y dejar la descripción numérica lista
-  // para la próxima consulta idle -- mismo patrón que usa askMiku con sus
-  // propios refs, pero separado para no pisarse con una conversación real.
-  captureQuirkImageAfterDelay: (delayMs: number) => void;
-  quirkSelfImageRef: RefObject<string | null>;
+  // pedirle a App.tsx (dueño del renderer) que capture fotos en distintos
+  // momentos, y dejar la descripción numérica lista para la próxima
+  // consulta idle -- mismo patrón que usa askMiku con sus propios refs,
+  // pero separado para no pisarse con una conversación real.
+  //
+  // Varias fotos, no una sola: un quirk ANIMADO oscila sin parar, y una
+  // sola captura cae en un punto arbitrario del ciclo (ver el comentario
+  // largo en App.tsx) -- no muestra el vaivén ni necesariamente la pose
+  // más representativa. DeepSeek no acepta video, así que la alternativa
+  // real es varias fotos fijas en distintos puntos del mismo ciclo.
+  captureQuirkImagesAfterDelays: (delaysMs: number[]) => void;
+  quirkSelfImagesRef: RefObject<string[]>;
   pendingQuirkDescriptionRef: RefObject<string | null>;
 };
 
@@ -76,8 +83,8 @@ export function useIdleQuirks({
   speak,
   voicePitchRef,
   voiceRateRef,
-  captureQuirkImageAfterDelay,
-  quirkSelfImageRef,
+  captureQuirkImagesAfterDelays,
+  quirkSelfImagesRef,
   pendingQuirkDescriptionRef,
 }: UseIdleQuirksParams) {
   // Tarea 3.1, Paso 3: silencio se mide desde lo último de estas dos cosas
@@ -92,6 +99,12 @@ export function useIdleQuirks({
   // va a adjuntar a la PRÓXIMA consulta idle (sea otra ejecución directa o
   // una llamada real), para que ella pueda juzgarlo antes de confirmarlo.
   function runStoredQuirk(name: string, quirk: StoredQuirk) {
+    // Pedido de Sebastián: cuántos ciclos de vaivén dura un quirk ANIMADO
+    // antes de asentarse solo es una decisión de Miku por quirk (ver
+    // "ciclos=N" en markers.ts), no un número fijo para todos -- el valor
+    // viejo (2, implícito) se sentía corto para algo como tararear.
+    const cycles = quirk.revertAfterCycles ?? DEFAULT_QUIRK_REVERT_CYCLES;
+
     if (quirk.movement) {
       // Antes de este quirk, apaga cualquier oscilación animada que haya
       // quedado colgada de un quirk anterior y que este no vaya a tocar
@@ -99,16 +112,28 @@ export function useIdleQuirks({
       revertAnimatedBonesExcept(
         quirk.movement.entries.map((e) => `${e.bone}.${e.axis}`),
       );
-      scheduleMovement(quirk.movement, "idle", quirk.movement.durationMs);
+      // Para un movimiento animado, "duración" es el período de UN ciclo
+      // -- el revert se programa recién después de `cycles` ciclos
+      // completos. Para uno no animado, "ciclos" no aplica: sigue
+      // sosteniendo la pose el mismo tiempo que tardó en llegar ahí,
+      // igual que antes.
+      const bodyRevertDelayMs = quirk.movement.animated
+        ? quirk.movement.durationMs * (cycles - 1)
+        : quirk.movement.durationMs;
+      scheduleMovement(quirk.movement, "idle", bodyRevertDelayMs);
     } else {
       revertAnimatedBonesExcept([]);
     }
     const handDuration = quirk.handDurationMs ?? DEFAULT_HAND_GESTURE_DURATION_MS;
+    // Mismo criterio para el wiggle de manos -- scheduleHandGesture solo
+    // usa este valor si el preset en sí es animado, pasarlo siempre no
+    // hace daño en el caso no animado.
+    const handRevertDelayMs = handDuration * (cycles - 1);
     if (quirk.handLeft) {
-      scheduleHandGesture("left", quirk.handLeft, handDuration, "idle", handDuration);
+      scheduleHandGesture("left", quirk.handLeft, handDuration, "idle", handRevertDelayMs);
     }
     if (quirk.handRight) {
-      scheduleHandGesture("right", quirk.handRight, handDuration, "idle", handDuration);
+      scheduleHandGesture("right", quirk.handRight, handDuration, "idle", handRevertDelayMs);
     }
 
     if (quirk.state === "evaluando") {
@@ -116,8 +141,17 @@ export function useIdleQuirks({
         quirk.movement?.durationMs ?? 0,
         quirk.handLeft || quirk.handRight ? handDuration : 0,
       );
-      if (maxDurationMs > 0) {
-        captureQuirkImageAfterDelay(maxDurationMs + 300);
+      if (quirk.movement?.animated) {
+        // Un ciclo completo de oscilación: centro (subiendo) -> pico ->
+        // centro (bajando) -> valle. quirk.movement.durationMs es el
+        // PERÍODO del ciclo (ver useMovement.ts), así que estas fracciones
+        // caen en puntos reales del vaivén, no en un momento arbitrario.
+        const cycleMs = quirk.movement.durationMs;
+        captureQuirkImagesAfterDelays(
+          [0.25, 0.5, 0.75, 1].map((fraction) => cycleMs * fraction),
+        );
+      } else if (maxDurationMs > 0) {
+        captureQuirkImagesAfterDelays([maxDurationMs + 300]);
       }
       const handGestureForDescription =
         quirk.handLeft || quirk.handRight
@@ -154,6 +188,7 @@ export function useIdleQuirks({
         handLeft: parsedCreateQuirk.handLeft,
         handRight: parsedCreateQuirk.handRight,
         handDurationMs: parsedCreateQuirk.durationMs,
+        revertAfterCycles: parsedCreateQuirk.revertAfterCycles,
       });
       // El primer ensayo cuenta: lo corre apenas lo crea.
       runStoredQuirk(parsedCreateQuirk.name, updated[parsedCreateQuirk.name]);
@@ -201,8 +236,8 @@ export function useIdleQuirks({
 
       const quirkFeedback = pendingQuirkDescriptionRef.current;
       pendingQuirkDescriptionRef.current = null;
-      const quirkImage = quirkSelfImageRef.current;
-      quirkSelfImageRef.current = null;
+      const quirkImages = quirkSelfImagesRef.current;
+      quirkSelfImagesRef.current = [];
 
       const idleSystemPrompt = buildIdlePrompt({
         world,
@@ -214,15 +249,22 @@ export function useIdleQuirks({
       });
 
       const messages: object[] = [{ role: "system", content: idleSystemPrompt }];
-      if (quirkImage) {
+      if (quirkImages.length > 0) {
+        // Varias fotos (si el quirk es animado, distintos puntos del mismo
+        // ciclo de vaivén; si no, una sola) -- ver el comentario largo en
+        // runStoredQuirk sobre por qué una sola no alcanza para animados.
+        const introText =
+          quirkImages.length > 1
+            ? "Así se vio tu cuerpo en distintos momentos del mismo movimiento, la última vez que corrió por tu cuenta un quirk que estás evaluando -- de la primera a la última imagen, en orden."
+            : "Así te quedó el cuerpo la última vez que corrió, por su cuenta, un quirk que estás evaluando.";
         messages.push({
           role: "user",
           content: [
-            {
-              type: "text",
-              text: "Así te quedó el cuerpo la última vez que corrió, por su cuenta, un quirk que estás evaluando.",
-            },
-            { type: "image_url", image_url: { url: quirkImage } },
+            { type: "text", text: introText },
+            ...quirkImages.map((url) => ({
+              type: "image_url",
+              image_url: { url },
+            })),
           ],
         });
       }

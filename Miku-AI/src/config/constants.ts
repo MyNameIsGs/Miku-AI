@@ -1,7 +1,13 @@
 export const WIDTH = 750;
 export const HEIGHT = 680;
 
-export const OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-vision-exp";
+// Tarea 6.0b: cambiado de deepseek-v4-flash-vision-exp (experimental) a
+// v4.1-flash (2026-09-10) -- arquitectura multimodal nativa desde el
+// pre-entrenamiento (mejor para propiocepción visual), probado antes de
+// cambiar con scripts/tarea-6.0-test-tools.mjs (TEST_MODEL=...): sigue
+// emitiendo marcadores con tools presente, habla antes de ejecutar una
+// tool, registro neutro sin rioplatense -- sin señales de degradación.
+export const OPENROUTER_MODEL = "deepseek/deepseek-v4.1-flash";
 
 export const MAX_HISTORY_TURNS = 20;
 
@@ -18,6 +24,30 @@ export const IDLE_QUIRK_INTERVAL_MS = 150000; // 2.5 minutos
 // mismo valor que usa la variante de Android, balance entre "se entera
 // pronto" y no ametrallar la API de Gmail en cada rato de silencio.
 export const GMAIL_CHECK_INTERVAL_MS = 300000; // 5 minutos
+
+// Idea #7: cada cuánto revisar el calendario (mismo balance que Gmail) y
+// con cuánta anticipación avisar de un evento que está por empezar.
+export const CALENDAR_CHECK_INTERVAL_MS = 300000; // 5 minutos
+export const CALENDAR_REMINDER_LEAD_MINUTES = 20;
+
+// Resumen agrupado (idea nueva): correo nuevo y avisos de anticipación
+// larga de Calendar no son urgentes -- en vez de interrumpir apenas se
+// detectan, se acumulan y se leen juntos cada tanto. El aviso de "está
+// por empezar" (arriba) sigue siendo inmediato a propósito -- retrasarlo
+// le quitaría el sentido.
+export const NOTIFICATION_DIGEST_INTERVAL_MS = 900000; // 15 minutos
+
+// Pedido de Sebastián: además del aviso de "está por empezar" (arriba),
+// avisos de anticipación larga -- una semana, 3 días y el día anterior.
+// Descendente a propósito (ver checkMilestoneEvents en watcher.ts, que
+// recorre esta lista de mayor a menor).
+export const CALENDAR_MILESTONE_DAYS = [7, 3, 1];
+
+// Cuántos ciclos de vaivén corre un quirk ANIMADO antes de asentarse solo,
+// si Miku no eligió un valor propio con "ciclos=N" al crearlo (ver
+// markers.ts/systemPrompt.ts) -- pedido de Sebastián: 2 (el valor viejo,
+// implícito) se sentía corto para algo como tararear.
+export const DEFAULT_QUIRK_REVERT_CYCLES = 3;
 
 // Fase 7: en cada tick idle, si ya tiene al menos un quirk propio guardado,
 // esta es la probabilidad de correrlo directamente (sin llamar al LLM) en

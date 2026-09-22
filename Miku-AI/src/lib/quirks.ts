@@ -14,6 +14,11 @@ export type StoredQuirk = {
   handLeft?: string;
   handRight?: string;
   handDurationMs?: number;
+  // Pedido de Sebastián: cuántos ciclos de vaivén corre un quirk ANIMADO
+  // antes de asentarse solo -- decisión de Miku por quirk (ver
+  // markers.ts), no un número fijo para todos. undefined = usa
+  // DEFAULT_QUIRK_REVERT_CYCLES.
+  revertAfterCycles?: number;
   state: QuirkState;
 };
 
@@ -68,6 +73,33 @@ export async function confirmQuirk(
   };
   await persistQuirks(updated);
   return updated;
+}
+
+// Panel de Configuración (idea nueva, pedida por Sebastián): dejarlo
+// volver a "evaluando" a mano -- mismo estado al que ya vuelve solo un
+// quirk recreado con [CREAR_QUIRK], pero disparado por Sebastián en vez
+// de por Miku (por ejemplo, si confirmó algo bajo una evaluación que
+// después resultó tener un bug real, como pasó con la de una sola foto).
+export async function revertQuirkToEvaluando(
+  quirks: QuirksStore,
+  name: string,
+): Promise<QuirksStore> {
+  if (!quirks[name]) return quirks;
+  const updated: QuirksStore = {
+    ...quirks,
+    [name]: { ...quirks[name], state: "evaluando" },
+  };
+  await persistQuirks(updated);
+  return updated;
+}
+
+export async function deleteQuirk(
+  quirks: QuirksStore,
+  name: string,
+): Promise<QuirksStore> {
+  const { [name]: _removed, ...rest } = quirks;
+  await persistQuirks(rest);
+  return rest;
 }
 
 // Mientras un quirk está "evaluando" pesa más en la selección al azar, para

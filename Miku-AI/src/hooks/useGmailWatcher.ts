@@ -1,28 +1,15 @@
-import { RefObject, useRef } from "react";
+import { useRef } from "react";
 import { GMAIL_CHECK_INTERVAL_MS } from "../config/constants";
 import { checkForNewMail } from "../lib/gmail/watcher";
 
 type UseGmailWatcherParams = {
-  // Misma firma que speech.speak -- ya encolada (ver useSpeech.ts), así
-  // que un aviso de correo que llega mientras habla de otra cosa
-  // simplemente espera su turno en vez de pisar el audio en curso. A
-  // diferencia de Android (que no tiene cola y por eso tiene que saltear
-  // el chequeo si hay una conversación en curso), acá no hace falta.
-  speak: (
-    text: string,
-    pitch: number,
-    rate: number,
-    expression: string,
-  ) => Promise<void>;
-  voicePitchRef: RefObject<number>;
-  voiceRateRef: RefObject<number>;
+  // Ya no habla directo -- correo nuevo no es urgente, se acumula en el
+  // resumen agrupado (ver useNotificationDigest.ts) en vez de interrumpir
+  // apenas se detecta.
+  queueAnnouncement: (text: string) => void;
 };
 
-export function useGmailWatcher({
-  speak,
-  voicePitchRef,
-  voiceRateRef,
-}: UseGmailWatcherParams) {
+export function useGmailWatcher({ queueAnnouncement }: UseGmailWatcherParams) {
   const lastCheckRef = useRef(performance.now());
   const isCheckingRef = useRef(false);
 
@@ -39,9 +26,7 @@ export function useGmailWatcher({
 
     checkForNewMail()
       .then((announcement) => {
-        if (announcement) {
-          return speak(announcement, voicePitchRef.current, voiceRateRef.current, "neutral");
-        }
+        if (announcement) queueAnnouncement(announcement);
       })
       .catch((err) => console.error("Error revisando correo nuevo:", err))
       .finally(() => {
