@@ -53,8 +53,10 @@ import {
   parseMovementMarker,
   parseHandGestureMarker,
   parseCreateHandGestureMarker,
+  parseMoodMarker,
   stripMarkers,
 } from "./lib/markers";
+import { getCurrentMood, setMood } from "./lib/mood";
 import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
 import { loadPendientes, getActivePendientes } from "./lib/pendientes";
 import { connectSpotify, isSpotifyConnected } from "./lib/spotify/auth";
@@ -594,6 +596,10 @@ function App() {
       // escriba (ver comentario en systemPrompt.ts).
       const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const activePendientes = getActivePendientes(await loadPendientes());
+      // Tarea 8.10: humor persistido entre conversaciones -- default de
+      // EXPRESION si esta respuesta no trae una expresión puntual propia
+      // (ver más abajo, donde se usa en vez del "neutral" fijo de antes).
+      const currentMood = await getCurrentMood();
 
       const systemPrompt = buildSystemPrompt({
         world,
@@ -604,6 +610,7 @@ function App() {
         todayLabel,
         todayIso,
         activePendientes,
+        currentMood,
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,
@@ -671,7 +678,17 @@ function App() {
       const expression =
         expressionMatches.length > 0
           ? expressionMatches[expressionMatches.length - 1][1].toLowerCase()
-          : "neutral";
+          : currentMood;
+
+      // Tarea 8.10: si esta respuesta cambió su humor de base, se
+      // persiste para las próximas conversaciones -- fire-and-forget, no
+      // hace falta esperar para seguir con el resto de la respuesta.
+      const newMood = parseMoodMarker(reply);
+      if (newMood) {
+        setMood(newMood).catch((err) =>
+          console.error("Error guardando el estado de ánimo:", err),
+        );
+      }
 
       const clamp = (value: number, min: number, max: number) =>
         Math.max(min, Math.min(max, value));

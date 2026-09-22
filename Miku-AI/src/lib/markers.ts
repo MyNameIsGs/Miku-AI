@@ -233,11 +233,26 @@ export function parseQuirkReadyMarker(text: string): string | null {
   return name || null;
 }
 
+// Tarea 8.10: estado de ánimo persistente -- a diferencia de [EXPRESION]
+// (dura un mensaje), esto queda guardado (ver lib/mood.ts) y es el
+// default de [EXPRESION] cuando una respuesta no trae una expresión
+// puntual propia. Mismo vocabulario cerrado que EXPRESION a propósito --
+// el humor termina siendo, en la práctica, "cuál es tu expresión de base
+// hoy", no un concepto separado con su propio rango de valores.
+export function parseMoodMarker(text: string): string | null {
+  const matches = [
+    ...text.matchAll(/\[ESTADO_ANIMO:\s*(happy|angry|sad|relaxed|neutral)\]/gi),
+  ];
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1][1].toLowerCase();
+}
+
 export function stripMarkers(text: string): string {
   return text
     .replace(/\[GUARDAR_PERSONALIDAD:[\s\S]*?\]/g, "")
     .replace(/\[GUARDAR_MEMORIA:[\s\S]*?\]/g, "")
     .replace(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/gi, "")
+    .replace(/\[ESTADO_ANIMO:\s*(happy|angry|sad|relaxed|neutral)\]/gi, "")
     .replace(/\[VOZ_PITCH:\s*-?\d+(?:\.\d+)?\]/gi, "")
     .replace(/\[VOZ_RATE:\s*-?\d+(?:\.\d+)?\]/gi, "")
     .replace(/\[MOVIMIENTO:[\s\S]*?\]/gi, "")
@@ -252,6 +267,11 @@ export interface ParsedMarkersResult {
   personalityUpdates: string[];
   memoryUpdates: string[];
   expression: string;
+  // Tarea 8.10: null si esta respuesta no trajo [ESTADO_ANIMO] -- distinto
+  // de `expression`, que siempre tiene un valor (cae al humor persistido
+  // si no hay [EXPRESION] puntual). Quien llama decide si vale la pena
+  // persistir esto con setMood() (ver lib/mood.ts).
+  mood: string | null;
   pitch: number;
   rate: number;
   movement: ParsedMovement | null;
@@ -269,6 +289,12 @@ export function parseMarkers(
   reply: string,
   basePitch: number,
   baseRate: number,
+  // Tarea 8.10: humor persistido (ver lib/mood.ts) -- default de
+  // [EXPRESION] cuando la respuesta no trae una expresión puntual propia.
+  // Opcional con default "neutral" para no romper los llamadores que
+  // todavía no le pasan el humor actual (ver useGmailWatcher.ts, donde de
+  // todos modos se descarta `expression`).
+  baseMood: string = "neutral",
 ): ParsedMarkersResult {
   const personalityUpdates = [
     ...reply.matchAll(/\[GUARDAR_PERSONALIDAD:\s*([\s\S]*?)\]/g),
@@ -286,7 +312,9 @@ export function parseMarkers(
   const expression =
     expressionMatches.length > 0
       ? expressionMatches[expressionMatches.length - 1][1].toLowerCase()
-      : "neutral";
+      : baseMood;
+
+  const mood = parseMoodMarker(reply);
 
   const clamp = (value: number, min: number, max: number) =>
     Math.max(min, Math.min(max, value));
@@ -330,6 +358,7 @@ export function parseMarkers(
     personalityUpdates,
     memoryUpdates,
     expression,
+    mood,
     pitch: messagePitch,
     rate: messageRate,
     movement,

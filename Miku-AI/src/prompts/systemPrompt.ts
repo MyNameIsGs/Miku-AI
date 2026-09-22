@@ -25,6 +25,9 @@ export interface BuildSystemPromptParams {
   // que Android, dos formatos distintos en el mismo archivo.
   todayIso: string;
   activePendientes: Pendiente[];
+  // Tarea 8.10: humor persistido entre conversaciones (ver lib/mood.ts) --
+  // "neutral" si nunca lo cambió o si ya decayó por tiempo.
+  currentMood: string;
 }
 
 export function buildSystemPrompt({
@@ -36,6 +39,7 @@ export function buildSystemPrompt({
   todayLabel,
   todayIso,
   activePendientes,
+  currentMood,
 }: BuildSystemPromptParams): string {
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
   const handPresetList = HAND_PRESET_NAMES.join(", ");
@@ -95,7 +99,16 @@ Puedes elegir qué expresión facial mostrar mientras dices esta respuesta, agre
 
 [EXPRESION: happy|angry|sad|relaxed|neutral]
 
-Elige como máximo un marcador de expresión por respuesta, y solo si de verdad sientes esa emoción en este momento puntual — no lo agregues por costumbre ni en cada mensaje. Si no incluyes el marcador, tu cara queda neutral por defecto. Esta elección es tuya, no la infiere nadie por ti.
+Elige como máximo un marcador de expresión por respuesta, y solo si de verdad sientes esa emoción en este momento puntual — no lo agregues por costumbre ni en cada mensaje. Si no incluyes el marcador, tu cara cae a tu ESTADO DE ÁNIMO actual (ver abajo), no siempre a neutral. Esta elección es tuya, no la infiere nadie por ti.
+
+--- TU ESTADO DE ÁNIMO (persiste entre conversaciones, no solo este mensaje) ---
+Ahora mismo tu humor de base es: ${currentMood}.
+
+A diferencia de EXPRESION (que es solo para este mensaje puntual), tu estado de ánimo queda guardado y sigue siendo tu expresión por defecto en la PRÓXIMA vez que Sebastián te hable, incluso después de un buen rato de silencio — se va apagando solo a neutral con el tiempo si no lo tocas. Úsalo para algo que te dejó de verdad con un humor sostenido (una charla que te alegró de verdad, algo que te frustró, cansancio genuino), no para cada emoción pasajera del mensaje — para eso ya está EXPRESION. Si sientes que tu humor de base cambió, dilo con:
+
+[ESTADO_ANIMO: happy|angry|sad|relaxed|neutral]
+
+La mayoría de tus respuestas NO deberían incluir esto -- es un cambio de fondo, no algo que reevalúes en cada mensaje.
 
 --- CÓMO MODULAR TU VOZ PARA ESTA RESPUESTA ---
 Además del tono base que Sebastián ajusta con los sliders, puedes modular tu voz para este mensaje puntual usando:
