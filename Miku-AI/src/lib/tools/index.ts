@@ -7,6 +7,7 @@ import { ajustarVolumen } from "./ajustarVolumen";
 import { buildAbrirAplicacionTool } from "./abrirAplicacion";
 import { buildAbrirCarpetaDeAppsTool } from "./abrirCarpetaDeApps";
 import { buildCambiarSalidaAudioTool } from "./cambiarSalidaAudio";
+import { buildMinimizarVentanaTool, buildMoverVentanaTool, buildModoFocoTool } from "./windowControl";
 import { verPantalla } from "./verPantalla";
 import { anotarPendiente } from "./anotarPendiente";
 import { cerrarPendiente } from "./cerrarPendiente";
@@ -60,6 +61,9 @@ const DYNAMIC_TOOL_BUILDERS: (() => ToolDefinition)[] = [
   buildAbrirAplicacionTool,
   buildAbrirCarpetaDeAppsTool,
   buildCambiarSalidaAudioTool,
+  buildMinimizarVentanaTool,
+  buildMoverVentanaTool,
+  buildModoFocoTool,
 ];
 
 function getAllTools(): ToolDefinition[] {
