@@ -13,6 +13,16 @@ export function useVoiceServer() {
   const [isVoiceReady, setIsVoiceReady] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const hasLaunched = useRef(false);
+  // Tarea 8.9: punto de enganche para que otro hook (useDiary) corra algo
+  // ANTES de sync_memory_to_github al cerrar la app -- indirección por ref
+  // (no un parámetro del hook) porque useVoiceServer() se llama muy
+  // temprano en App.tsx, antes de que exista lo que useDiary necesita
+  // (conversationHistoryRef). registerBeforeSync se llama más abajo, desde
+  // un useEffect, una vez que todo lo demás ya está armado.
+  const beforeSyncRef = useRef<(() => Promise<void>) | null>(null);
+  const registerBeforeSync = useCallback((fn: () => Promise<void>) => {
+    beforeSyncRef.current = fn;
+  }, []);
 
   const shutdownVoiceServer = useCallback(async () => {
     try {
@@ -83,6 +93,9 @@ export function useVoiceServer() {
     const appWindow = getCurrentWindow();
     const unlisten = appWindow.onCloseRequested(async (event) => {
       event.preventDefault();
+      if (beforeSyncRef.current) {
+        await beforeSyncRef.current().catch(() => {});
+      }
       await invoke("sync_memory_to_github", { repoRoot: REPO_ROOT }).catch(
         () => {},
       );
@@ -99,5 +112,6 @@ export function useVoiceServer() {
     downloadProgress,
     shutdownVoiceServer,
     handleCloseApp,
+    registerBeforeSync,
   };
 }

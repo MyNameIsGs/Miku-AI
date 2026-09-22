@@ -66,7 +66,7 @@ fn pull_memory_from_github(repo_root: String) -> Result<(), String> {
     std::fs::create_dir_all(&memory_local)
         .map_err(|e| format!("No se pudo crear carpeta de memoria: {}", e))?;
 
-    for filename in &["personality.md", "memories.md", "world.md", "pendientes.json"] {
+    for filename in &["personality.md", "memories.md", "world.md", "pendientes.json", "diario.md"] {
         let src = memory_repo.join(filename);
         let dst = memory_local.join(filename);
         if src.exists() {
@@ -167,7 +167,7 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
     std::fs::create_dir_all(&memory_dest)
         .map_err(|e| format!("No se pudo crear memory/: {}", e))?;
 
-    for filename in &["personality.md", "memories.md", "world.md", "pendientes.json"] {
+    for filename in &["personality.md", "memories.md", "world.md", "pendientes.json", "diario.md"] {
         let src = memory_src.join(filename);
         let dst = memory_dest.join(filename);
         if src.exists() {

@@ -20,6 +20,7 @@ import { useMemoryFiles } from "./hooks/useMemoryFiles";
 import { useIdleQuirks } from "./hooks/useIdleQuirks";
 import { useVoiceActivityDetection } from "./hooks/useVoiceActivityDetection";
 import { useBriefing } from "./hooks/useBriefing";
+import { useDiary } from "./hooks/useDiary";
 import { useReminders } from "./hooks/useReminders";
 import { useGmailWatcher } from "./hooks/useGmailWatcher";
 import { useCalendarWatcher } from "./hooks/useCalendarWatcher";
@@ -106,7 +107,7 @@ function App() {
   const [calendarAccounts, setCalendarAccounts] = useState<string[]>([]);
   const [calendarConnecting, setCalendarConnecting] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
-  const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
+  const { isVoiceReady, downloadProgress, handleCloseApp, registerBeforeSync } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
     3000,
@@ -489,6 +490,16 @@ function App() {
     voicePitchRef,
     voiceRateRef,
   });
+
+  // Tarea 8.9: diario nocturno -- se engancha a useVoiceServer para correr
+  // ANTES de sync_memory_to_github al cerrar la app. registerBeforeSync es
+  // estable (useCallback con []), así que este efecto solo corre una vez
+  // en la práctica, pero igual se re-registra si por algo cambiara la
+  // referencia de maybeWriteDiaryEntry entre renders.
+  const diary = useDiary({ conversationHistoryRef });
+  useEffect(() => {
+    registerBeforeSync(diary.maybeWriteDiaryEntry);
+  }, [registerBeforeSync, diary.maybeWriteDiaryEntry]);
 
   const avatarState: "idle" | "listening" | "thinking" | "speaking" =
     speechRecognition.listening || speechRecognition.transcribing
