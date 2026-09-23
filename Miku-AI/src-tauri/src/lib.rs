@@ -7,6 +7,7 @@ mod media_control;
 mod text_input;
 mod window_control;
 mod file_search;
+mod mcp_client;
 mod audio_device;
 mod screen_capture;
 mod oauth_loopback;
@@ -244,6 +245,10 @@ pub fn run() {
             window_control::mover_ventana,
             window_control::modo_foco,
             file_search::buscar_archivos,
+            mcp_client::mcp_connect,
+            mcp_client::mcp_call_tool,
+            mcp_client::mcp_disconnect,
+            mcp_client::mcp_is_connected,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,

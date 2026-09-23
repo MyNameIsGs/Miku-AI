@@ -8,6 +8,7 @@ import { buildAbrirAplicacionTool } from "./abrirAplicacion";
 import { buildAbrirCarpetaDeAppsTool } from "./abrirCarpetaDeApps";
 import { buildCambiarSalidaAudioTool } from "./cambiarSalidaAudio";
 import { buildMinimizarVentanaTool, buildMoverVentanaTool, buildModoFocoTool } from "./windowControl";
+import { buildMcpTools } from "./mcpTools";
 import { verPantalla } from "./verPantalla";
 import { anotarPendiente } from "./anotarPendiente";
 import { cerrarPendiente } from "./cerrarPendiente";
@@ -68,8 +69,17 @@ const DYNAMIC_TOOL_BUILDERS: (() => ToolDefinition)[] = [
   buildModoFocoTool,
 ];
 
+// Tarea 8.2: a diferencia de los builders de arriba (una tool cada uno),
+// un servidor MCP conectado puede exponer varias tools a la vez -- estos
+// builders devuelven una lista, no una tool sola.
+const DYNAMIC_TOOL_LIST_BUILDERS: (() => ToolDefinition[])[] = [buildMcpTools];
+
 function getAllTools(): ToolDefinition[] {
-  return [...STATIC_TOOLS, ...DYNAMIC_TOOL_BUILDERS.map((build) => build())];
+  return [
+    ...STATIC_TOOLS,
+    ...DYNAMIC_TOOL_BUILDERS.map((build) => build()),
+    ...DYNAMIC_TOOL_LIST_BUILDERS.flatMap((build) => build()),
+  ];
 }
 
 export function getToolSchemas(): ToolSchema[] {

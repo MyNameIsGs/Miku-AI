@@ -57,6 +57,7 @@ import {
   stripMarkers,
 } from "./lib/markers";
 import { getCurrentMood, setMood } from "./lib/mood";
+import { MCP_SERVERS, McpServerConfig, connectMcpServer, disconnectMcpServer } from "./lib/mcp";
 import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
 import { loadPendientes, getActivePendientes } from "./lib/pendientes";
 import { connectSpotify, isSpotifyConnected } from "./lib/spotify/auth";
@@ -109,6 +110,13 @@ function App() {
   const [calendarAccounts, setCalendarAccounts] = useState<string[]>([]);
   const [calendarConnecting, setCalendarConnecting] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
+  // Tarea 8.2: Miku como cliente MCP -- qué servidores (ver MCP_SERVERS en
+  // lib/mcp.ts) están conectados ahora mismo, en esta sesión (no persiste
+  // entre reinicios a propósito: son subprocesos, no tiene sentido
+  // "recordar" que estaban conectados si el proceso real ya no existe).
+  const [mcpConnectedIds, setMcpConnectedIds] = useState<string[]>([]);
+  const [mcpConnectingId, setMcpConnectingId] = useState<string | null>(null);
+  const [mcpError, setMcpError] = useState<string | null>(null);
   const { isVoiceReady, downloadProgress, handleCloseApp, registerBeforeSync } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
@@ -231,6 +239,29 @@ function App() {
       .then(setCalendarAccounts)
       .catch((err) => console.error("Error consultando cuentas de Calendar:", err));
   }, []);
+
+  const handleConnectMcp = async (server: McpServerConfig) => {
+    setMcpConnectingId(server.id);
+    setMcpError(null);
+    try {
+      await connectMcpServer(server);
+      setMcpConnectedIds((prev) => [...prev.filter((id) => id !== server.id), server.id]);
+    } catch (err) {
+      setMcpError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMcpConnectingId(null);
+    }
+  };
+
+  const handleDisconnectMcp = async (serverId: string) => {
+    try {
+      await disconnectMcpServer(serverId);
+    } catch (err) {
+      console.error("Error desconectando servidor MCP:", err);
+    } finally {
+      setMcpConnectedIds((prev) => prev.filter((id) => id !== serverId));
+    }
+  };
 
   const handleConnectSpotify = async () => {
     setSpotifyConnecting(true);
@@ -1252,6 +1283,39 @@ function App() {
             {calendarError && (
               <span className="oauth-error" title={calendarError}>
                 Error al conectar Calendar
+              </span>
+            )}
+          </div>
+          <div className="oauth-connect-row gmail-accounts-row">
+            {MCP_SERVERS.map((server) => {
+              const connected = mcpConnectedIds.includes(server.id);
+              return (
+                <span key={server.id} className="gmail-account-chip">
+                  {server.label}
+                  <button
+                    onClick={() =>
+                      connected ? handleDisconnectMcp(server.id) : handleConnectMcp(server)
+                    }
+                    disabled={mcpConnectingId === server.id}
+                    className={connected ? "active" : ""}
+                    title={
+                      connected
+                        ? "Desconectar este servidor MCP"
+                        : "Conectar (puede tardar la primera vez, descarga el paquete)"
+                    }
+                  >
+                    {mcpConnectingId === server.id
+                      ? "Conectando..."
+                      : connected
+                        ? "Conectado ✕"
+                        : "Conectar"}
+                  </button>
+                </span>
+              );
+            })}
+            {mcpError && (
+              <span className="oauth-error" title={mcpError}>
+                Error al conectar servidor MCP
               </span>
             )}
           </div>
