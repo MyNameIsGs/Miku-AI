@@ -24,12 +24,17 @@ export type McpServerConfig = {
 // la pena escribirlo a mano. `@playwright/mcp` es el servidor oficial de
 // Microsoft; `npx -y` evita que la primera descarga se quede esperando
 // una confirmación que nadie va a ver (corre en segundo plano).
+//
+// `--headless`: Miku navega sin ventana. Si Sebastián pide ver algo, abre
+// la URL en su navegador normal con abrir_url (instrucción en
+// systemPrompt.ts) -- con/sin ventana se fija al lanzar el navegador, no
+// se puede cambiar en caliente, y su navegador ya tiene sus sesiones.
 export const MCP_SERVERS: McpServerConfig[] = [
   {
     id: "playwright",
     label: "Playwright (navegador)",
     command: "npx",
-    args: ["-y", "@playwright/mcp@latest"],
+    args: ["-y", "@playwright/mcp@latest", "--headless"],
   },
 ];
 
