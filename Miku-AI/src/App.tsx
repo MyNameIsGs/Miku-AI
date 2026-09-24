@@ -38,6 +38,10 @@ import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge } from "./lib/knowledge";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
+import { captureSelfView } from "./lib/selfView";
+import { registerSelfViewCapturer } from "./lib/selfViewStore";
+import { BONE_RANGES_DEG } from "./config/boneRanges";
+import { intensityToDegrees } from "./hooks/useMovement";
 import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
@@ -1118,6 +1122,47 @@ function App() {
     onAfterRender,
   });
   const isMikuReady = isVoiceReady && isVrmLoaded;
+
+  // Tool `mirarme` (ver lib/selfView.ts y lib/tools/mirarme.ts): la tool no
+  // ve la escena, así que se le registra acá la función que captura. Con
+  // una pose de prueba, se aplica a los huesos solo para la foto y después
+  // cada hueso vuelve exactamente a como estaba -- el siguiente cuadro de
+  // la ventana ni se entera.
+  useEffect(() => {
+    if (!isVrmLoaded) return;
+    registerSelfViewCapturer((angle, framing, preview) => {
+      const vrm = vrmRef.current;
+      const renderer = rendererRef.current;
+      const scene = sceneRef.current;
+      if (!vrm || !renderer || !scene) throw new Error("La escena todavía no está lista");
+
+      const saved: [THREE.Object3D, "x" | "y" | "z", number][] = [];
+      for (const { bone, axis, intensity } of preview?.entries ?? []) {
+        const node = movementBonesRef.current[bone];
+        const range = BONE_RANGES_DEG[bone]?.[axis];
+        if (!node || !range) continue;
+        saved.push([node, axis, node.rotation[axis]]);
+        const restRad = boneRestRotationRef.current[bone]?.[axis] ?? 0;
+        node.rotation[axis] = restRad + (intensityToDegrees(intensity, range[0], range[1]) * Math.PI) / 180;
+      }
+      try {
+        // Los huesos que se tocan son los "normalizados"; el modelo se
+        // dibuja con los reales -- esto los sincroniza (sin avanzar la
+        // física del pelo, que sí haría vrm.update).
+        if (saved.length > 0) vrm.humanoid?.update();
+        vrm.scene.updateMatrixWorld(true);
+        return captureSelfView(vrm, renderer, scene, angle, framing);
+      } finally {
+        for (const [node, axis, value] of saved.reverse()) node.rotation[axis] = value;
+        if (saved.length > 0) {
+          vrm.humanoid?.update();
+          vrm.scene.updateMatrixWorld(true);
+        }
+      }
+    });
+    return () => registerSelfViewCapturer(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVrmLoaded]);
 
   // Tarea 8.12: reacción al tacto (ver useTouchReactions.ts).
   const touch = useTouchReactions({

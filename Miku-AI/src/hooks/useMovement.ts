@@ -12,7 +12,7 @@ import {
   FingerCurls,
 } from "../types";
 
-function intensityToDegrees(
+export function intensityToDegrees(
   intensity: number,
   minDeg: number,
   maxDeg: number,
