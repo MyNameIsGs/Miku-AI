@@ -824,6 +824,10 @@ function App() {
         });
       }
       if (selfImage) {
+        contentParts.push({
+          type: "text",
+          text: "(Así quedó tu cuerpo después de tu último movimiento: frente, tu izquierda, espalda y tu derecha.)",
+        });
         contentParts.push({ type: "image_url", image_url: { url: selfImage } });
       }
       const userContent: ChatContent =
@@ -1071,6 +1075,20 @@ function App() {
     face.updateFace(now, delta);
   }
 
+  // Foto de sí misma (después de un movimiento, o de un quirk en
+  // evaluación): las 4 vistas de mirarme (lib/selfView.ts) en vez de la
+  // cámara de la ventana -- cuerpo entero (la ventana corta a la altura de
+  // los muslos), fondo neutro y 4 ángulos por imagen, que es lo que le
+  // falta para juzgar una pose (de frente, adelante/atrás casi no se ve).
+  // Costo medido: ~10 ms contra ~7 ms del PNG de la ventana; los dos entran
+  // en un cuadro. Si la escena no está lista, cae a la ventana como antes.
+  function captureSelfPhoto(renderer: THREE.WebGLRenderer): string {
+    const vrm = vrmRef.current;
+    const scene = sceneRef.current;
+    if (vrm && scene) return captureSelfView(vrm, renderer, scene, "cuatro", "cuerpo");
+    return renderer.domElement.toDataURL("image/png");
+  }
+
   function onAfterRender(renderer: THREE.WebGLRenderer, now: number) {
     perfMonitor.onFrame(renderer, now);
     if (
@@ -1079,7 +1097,7 @@ function App() {
     ) {
       selfImageCaptureAtRef.current = null;
       try {
-        lastSelfImageRef.current = renderer.domElement.toDataURL("image/png");
+        lastSelfImageRef.current = captureSelfPhoto(renderer);
       } catch (err) {
         console.error("Error capturando imagen de sí misma:", err);
       }
@@ -1096,7 +1114,7 @@ function App() {
           try {
             quirkSelfImagesRef.current = [
               ...quirkSelfImagesRef.current,
-              renderer.domElement.toDataURL("image/png"),
+              captureSelfPhoto(renderer),
             ];
           } catch (err) {
             console.error("Error capturando imagen del quirk:", err);

@@ -252,8 +252,8 @@ export function useIdleQuirks({
         // runStoredQuirk sobre por qué una sola no alcanza para animados.
         const introText =
           quirkImages.length > 1
-            ? "Así se vio tu cuerpo en distintos momentos del mismo movimiento, la última vez que corrió por tu cuenta un quirk que estás evaluando -- de la primera a la última imagen, en orden."
-            : "Así te quedó el cuerpo la última vez que corrió, por su cuenta, un quirk que estás evaluando.";
+            ? "Así se vio tu cuerpo en distintos momentos del mismo movimiento, la última vez que corrió por tu cuenta un quirk que estás evaluando -- de la primera a la última imagen, en orden. Cada imagen te muestra desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha."
+            : "Así te quedó el cuerpo la última vez que corrió, por su cuenta, un quirk que estás evaluando -- desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha.";
         messages.push({
           role: "user",
           content: [
