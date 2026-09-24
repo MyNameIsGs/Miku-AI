@@ -15,6 +15,10 @@ const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
 };
 
 const VISEME_SHAPES = ["aa", "ih", "ou", "ee", "oh"];
+// Cuánto tarda la boca en recorrer la mitad del camino hacia la forma
+// siguiente (ver setViseme). Más alto = más suave pero más "perezosa":
+// si se pasa, las vocales cortas no llegan a formarse del todo.
+const VISEME_HALF_LIFE_MS = 30;
 
 type UseFaceParams = {
   vrmRef: RefObject<VRM | null>;
@@ -66,21 +70,36 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
   // Un paso de suavizado hacia targetShape -- se llama una vez por tick
   // del rAF de lipsync (hoy dentro de speak() en App.tsx, mientras dura
   // el audio), igual que hacía updateMouthFromVisemes antes de moverse.
+  //
+  // Suavizado por TIEMPO, no por cuadro: antes era un 70% del camino por
+  // cuadro (llegaba en ~50 ms, y más brusco cuanto más FPS). Con la boca
+  // armada desde el texto (una forma por letra, ~70 ms cada una) eso se
+  // veía a saltos -- pidió Sebastián suavizarlo. Ahora cada forma se funde
+  // con la siguiente: tarda VISEME_HALF_LIFE_MS en recorrer la mitad del
+  // camino, a cualquier frame rate.
+  const lastVisemeUpdateRef = useRef<number | null>(null);
   function setViseme(targetShape: string) {
     const expressionManager = vrmRef.current?.expressionManager;
     if (!expressionManager) return;
-    const smoothing = 0.7;
+    const now = performance.now();
+    // Primer cuadro del audio (o después de una pausa larga del bucle): un
+    // paso de un cuadro normal, no un salto.
+    const elapsedMs =
+      lastVisemeUpdateRef.current === null ? 16 : Math.min(100, now - lastVisemeUpdateRef.current);
+    lastVisemeUpdateRef.current = now;
+    const blend = 1 - Math.pow(0.5, elapsedMs / VISEME_HALF_LIFE_MS);
     const maxIntensity = 1;
     const visemeWeights = visemeWeightsRef.current;
     for (const shape of VISEME_SHAPES) {
       const target = shape === targetShape ? maxIntensity : 0;
-      visemeWeights[shape] += (target - visemeWeights[shape]) * smoothing;
+      visemeWeights[shape] += (target - visemeWeights[shape]) * blend;
       expressionManager.setValue(shape, visemeWeights[shape]);
     }
   }
 
   // Reset duro (sin suavizar) al terminar el audio.
   function resetVisemes() {
+    lastVisemeUpdateRef.current = null;
     const expressionManager = vrmRef.current?.expressionManager;
     for (const shape of VISEME_SHAPES) {
       visemeWeightsRef.current[shape] = 0;
