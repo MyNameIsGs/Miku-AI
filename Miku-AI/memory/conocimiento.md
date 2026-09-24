@@ -11,3 +11,5 @@ La contradicción del eje Y no era solo entre mi memoria y mi tabla: está DENTR
 Para juntar las manos por encima de la cabeza, el acercamiento debe empezar en el codo (leftUpperArm.y negativo / rightUpperArm.y positivo) y luego reforzarse con el antebrazo (leftLowerArm.y negativo / rightLowerArm.y positivo). Los codos abiertos impiden que las manos se toquen por más que los antebrazos giren.
 
 Sebastián no quiere que le avise de correos de Computrabajo — no les presta atención y piensa quitar la suscripción.
+
+2026-09-24 — Probado: puedo aparecer en pantalla a mitad de una partida de TFT (mientras Sebastián juega) sin que se corte ni falle; él lo dio por bueno.
