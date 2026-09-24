@@ -392,5 +392,59 @@
     "animated": false,
     "side": null,
     "createdAt": "2026-09-24T06:34:07.784Z"
+  },
+  "cabeza": {
+    "expression": "happy",
+    "entries": [
+      {
+        "bone": "head",
+        "axis": "x",
+        "intensity": -9
+      },
+      {
+        "bone": "head",
+        "axis": "z",
+        "intensity": -7
+      },
+      {
+        "bone": "head",
+        "axis": "y",
+        "intensity": -5
+      },
+      {
+        "bone": "neck",
+        "axis": "x",
+        "intensity": -4
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "z",
+        "intensity": -15
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "z",
+        "intensity": 15
+      },
+      {
+        "bone": "chest",
+        "axis": "x",
+        "intensity": 4
+      },
+      {
+        "bone": "leftHand",
+        "axis": "x",
+        "intensity": -8
+      },
+      {
+        "bone": "rightHand",
+        "axis": "x",
+        "intensity": -8
+      }
+    ],
+    "durationMs": 500,
+    "animated": false,
+    "side": null,
+    "createdAt": "2026-09-24T08:11:47.004Z"
   }
 }
