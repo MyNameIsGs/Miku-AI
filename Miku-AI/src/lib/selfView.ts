@@ -54,8 +54,13 @@ function computeFraming(vrm: VRM, framing: SelfViewFraming): Framing {
       return { center, height: 0.32 };
     }
     case "cuerpo":
-    default:
-      return { center: new THREE.Vector3(hips.x, headTop / 2, hips.z), height: headTop + 0.12 };
+    default: {
+      // Con los brazos levantados, las manos quedan más arriba que la
+      // cabeza: el encuadre las incluye (si no, una pose "I" salía cortada).
+      const hands = [bonePos(vrm, "leftHand"), bonePos(vrm, "rightHand")];
+      const top = Math.max(headTop, ...hands.map((h) => (h ? h.y + 0.15 : 0)));
+      return { center: new THREE.Vector3(hips.x, top / 2, hips.z), height: top + 0.12 };
+    }
   }
 }
 

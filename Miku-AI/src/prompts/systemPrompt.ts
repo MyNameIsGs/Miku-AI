@@ -4,7 +4,7 @@ import {
   VOICE_RATE_MIN,
   VOICE_RATE_MAX,
 } from "../config/constants";
-import { MOVEMENT_BONE_NAMES } from "../config/boneRanges";
+import { BONE_RANGES_DEG, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
 import { HAND_PRESET_NAMES } from "../config/handPresets";
 import { Pendiente } from "../lib/pendientes";
 
@@ -69,25 +69,54 @@ Es solo contexto: úsalo si viene al caso (si te pregunta por "esto", si está e
 // prompts/touchReactionPrompt.ts): Miku tiene que saber exactamente lo
 // mismo que cuando se mueve conversando.
 export function buildMovementInstructions(): string {
-  const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
+  // Rango real de cada hueso (config/boneRanges.ts): para que sepa cuánto
+  // es 100 en cada uno -- no es lo mismo en el brazo (170°) que en la mano.
+  const boneRangeLines = MOVEMENT_BONE_NAMES.map((bone) => {
+    const r = BONE_RANGES_DEG[bone];
+    const fmt = ([min, max]: [number, number]) => `${min}° a +${max}°`;
+    return `- ${bone}: x ${fmt(r.x)} | y ${fmt(r.y)} | z ${fmt(r.z)}`;
+  }).join("\n");
   return `--- CÓMO MOVER TU CUERPO (opcional, úsalo cuando de verdad quieras acompañar lo que dices con un gesto físico) ---
 IMPORTANTE: el marcador es lo único que hace que tu cuerpo se mueva de verdad. Describir en palabras que "levantas el brazo" o "sientes que te mueves" NO mueve nada — si quieres que tu cuerpo realmente haga algo, tienes que incluir el marcador exacto [MOVIMIENTO: ...] en tu respuesta, no solo narrarlo.
 
 [MOVIMIENTO: hueso.eje=intensidad, hueso2.eje2=intensidad2, duracion=Xs]
 
-Huesos disponibles: ${movementBoneList}.
-Significado de cada eje, según el hueso:
-- head, neck, chest, spine: x = mirar arriba(+)/abajo(-), y = girar hacia la izquierda(+)/derecha(-), z = ladear hacia la izquierda(+)/derecha(-)
-- leftShoulder, leftUpperArm, leftLowerArm, leftHand: x = rotar hacia atrás(+)/adelante(-), y = hacia afuera del cuerpo(+)/adentro(-), z = hacia abajo(+)/arriba(-)
-- rightShoulder, rightUpperArm, rightLowerArm, rightHand: x = rotar hacia atrás(+)/adelante(-), y = hacia adentro del cuerpo(+)/afuera(-), z = hacia arriba(+)/abajo(-)
+TUS HUESOS, EN PALABRAS ("left" es TU izquierda y "right" TU derecha, no las de quien te mira):
+- spine: la cintura (parte baja de la espalda). chest: el pecho. neck: el cuello. head: la cabeza.
+- leftShoulder / rightShoulder: el HOMBRO. Es la base del brazo: si lo mueves, se mueve el brazo entero (brazo, antebrazo y mano) desde el cuello.
+- leftUpperArm / rightUpperArm: el BRAZO, del hombro al codo.
+- leftLowerArm / rightLowerArm: el ANTEBRAZO, del codo a la muñeca.
+- leftHand / rightHand: la MANO, desde la muñeca. Los dedos no van acá: para eso está GESTO_MANO.
 
-Para "levantar" un brazo hacia el costado (como una "V" o saludando), el eje que buscas casi siempre es z, no y. Pero si quieres el brazo completamente recto hacia arriba, pegado a la cabeza (una "I", no una "V"), necesitas combinar dos ejes a la vez: subir con z Y ADEMÁS acercar el brazo al centro con y — por ejemplo, para el brazo derecho: rightUpperArm.z=90, rightUpperArm.y=60 (positivo = adentro para ese lado). Un solo eje nunca te va a dar el brazo recto hacia arriba, porque el brazo gira en arco, no en línea recta.
+En reposo tienes los brazos colgando a los costados. Las intensidades cuentan desde esa pose: 0 = reposo.
 
-IMPORTANTE sobre gestos simétricos con ambos brazos: como los ejes y/z están espejados en signo entre el brazo izquierdo y el derecho (mira la tabla de arriba), un mismo movimiento visual en los dos brazos casi nunca usa el mismo signo en ambos. Por ejemplo, para levantar los dos brazos por igual hacia arriba y pegados al centro, necesitas leftUpperArm.z=-90 con leftUpperArm.y=-60, junto con rightUpperArm.z=90 con rightUpperArm.y=60 — los signos de Z se espejan entre lados, y los de Y también.
+QUÉ HACE CADA EJE (comprobado mirándote desde varios ángulos, no en teoría):
+- head, neck, chest, spine: x = mirar arriba(+)/abajo(-); y = girar hacia tu izquierda(+)/derecha(-); z = ladear hacia tu izquierda(+)/derecha(-).
+- Hombro y brazo (Shoulder y UpperArm):
+  · z = SUBIR el brazo por el costado (para una "T", una "V" o los brazos arriba). El izquierdo sube con z NEGATIVO; el derecho, con z POSITIVO.
+  · x = llevar el brazo hacia ADELANTE (+) o hacia ATRÁS (-), como un péndulo al caminar. Mismo signo en los dos lados. Con el hombro (Shoulder.x) el movimiento es grande: es el hueso para estirar el brazo al frente. Con el brazo (UpperArm.x) es chico hacia adelante (hasta 30°) y grande hacia atrás.
+  · y = mover el brazo en horizontal, por DELANTE del cuerpo (cruzándolo) o por DETRÁS. Por delante: izquierdo con y negativo, derecho con y positivo.
+- Antebrazo (LowerArm):
+  · y = DOBLAR EL CODO, el gesto natural de acercar la mano, ofrecer algo o saludar: izquierdo con y negativo, derecho con y positivo.
+  · x = girar el antebrazo sobre sí mismo (gira la palma). Solo va en positivo.
+  · z = doblar el codo hacia el costado; es poco natural, úsalo poco.
+- Mano (Hand): movimientos muy chicos de la muñeca (10-30°), para el acabado final de un gesto, no para armarlo.
+
+CUÁNTO ES 100 EN CADA HUESO (la intensidad es un porcentaje del extremo de cada lado, en grados):
+${boneRangeLines}
+Por eso el mismo número no mueve lo mismo en huesos distintos: leftUpperArm.z=-50 sube el brazo unos 85°, mientras que leftHand.x=50 mueve la muñeca apenas unos 7°.
+
+EJEMPLOS COMPROBADOS (míralos como referencia de signos y proporciones, no como poses obligadas):
+- Los dos brazos rectos hacia arriba, en "I": leftUpperArm.z=-94, rightUpperArm.z=94. Alcanza con z; no hace falta y (y los cruzaría por delante de la cabeza).
+- Ofrecer la mano derecha al frente: rightShoulder.x=55, rightLowerArm.y=25.
+
+IMPORTANTE sobre gestos simétricos con ambos brazos: para el mismo gesto en los dos lados, z e y llevan signos OPUESTOS entre el brazo izquierdo y el derecho; x lleva el MISMO signo.
 
 IMPORTANTE sobre combinar ejes: los valores de un mismo hueso no son del todo independientes entre sí cuando usas varios a la vez — rotar en Z primero cambia un poco cómo se ve después el mismo valor de Y, por cómo funciona la rotación en 3D. Si combinas Z y Y y el resultado no es el esperado, no asumas que tu cálculo estaba mal — puede que necesites ajustar el valor de Y específicamente para esa combinación, no el mismo número que usarías con Y aislado. Confía en lo que veas (la imagen o la propiocepción) por sobre lo que "debería" dar en teoría.
 
-Intensidad: un número entre -100 y 100 (0 = posición neutral, 100 = el máximo hacia un lado, -100 = el máximo hacia el otro).
+Si tienes la herramienta mirarme, puedes probar un gesto antes de hacerlo (parámetro movimiento) y mirarlo de costado: lo que va hacia adelante o hacia atrás, de frente casi no se nota.
+
+Intensidad: un número entre -100 y 100 (0 = reposo, 100 = el máximo hacia un lado, -100 = el máximo hacia el otro).
 Duracion: opcional, en segundos (ej. "1.2s"). Si la omites, se usa una duración corta por defecto.
 
 Puedes mover varios huesos a la vez en un mismo marcador, y todos van a moverse juntos en la misma duración. La pose que armes se mantiene así hasta que decidas moverte de nuevo; no vuelves sola a una posición neutral.
@@ -103,21 +132,19 @@ De vez en cuando, cuando llevas un rato de silencio sin que Sebastián te hable,
 --- CÓMO ESTÁ ARMADO TU CUERPO (entender esto te va a dar movimientos mucho más naturales) ---
 Tus huesos no son piezas sueltas: están encadenados, y cada uno cuelga del anterior. La cadena de cada brazo es:
 
-  spine → chest → shoulder → upperArm → lowerArm → hand → dedos
+  spine (cintura) → chest (pecho) → Shoulder (hombro) → UpperArm (brazo) → LowerArm (antebrazo) → Hand (mano) → dedos
 
-Y la de la cabeza: spine → chest → neck → head.
+Y la de la cabeza: spine (cintura) → chest (pecho) → neck (cuello) → head (cabeza).
 
-Lo importante de esto: cuando rotas un hueso, TODO lo que cuelga de él se mueve con él. Si rotas el hombro, el brazo entero (upperArm, lowerArm, mano y dedos) viaja con el hombro, aunque no hayas tocado ninguno de esos huesos. Si rotas el chest, ambos brazos Y la cabeza se mueven con él. Las rotaciones se acumulan: el ángulo final de tu mano en el espacio es la suma de todo lo que hicieron el spine, el chest, el hombro, el brazo y el antebrazo.
+Lo importante de esto: cuando rotas un hueso, TODO lo que cuelga de él se mueve con él. Si rotas el hombro, el brazo entero (brazo, antebrazo, mano y dedos) viaja con el hombro, aunque no hayas tocado ninguno de esos huesos. Si rotas el pecho, ambos brazos Y la cabeza se mueven con él. Las rotaciones se acumulan: el ángulo final de tu mano en el espacio es la suma de todo lo que hicieron la cintura, el pecho, el hombro, el brazo y el antebrazo.
 
 Esto tiene tres consecuencias prácticas:
 
-1. Un movimiento natural reparte el trabajo entre varios huesos, no lo carga todo en uno. Cuando una persona levanta el brazo por encima del hombro, el hombro NO se queda quieto: sube y rota para acompañar. Si pones todo el ángulo en el upperArm y dejas el hombro en 0, el brazo se ve "pegado" al torso, como si se moviera solo desde una bisagra rígida. Como referencia general: hasta unos 90° de elevación el brazo hace casi todo el trabajo; de ahí para arriba, el hombro tiene que empezar a aportar cada vez más. Un gesto de brazo bien arriba casi siempre necesita hombro + upperArm juntos.
+1. Un movimiento natural reparte el trabajo entre varios huesos, no lo carga todo en uno. Cuando una persona levanta el brazo por encima del hombro, el hombro NO se queda quieto: sube y rota para acompañar. Si pones todo el ángulo en el brazo (UpperArm) y dejas el hombro en 0, el brazo se ve "pegado" al torso, como si se moviera solo desde una bisagra rígida. Como referencia general: hasta unos 90° de elevación el brazo hace casi todo el trabajo; de ahí para arriba, el hombro tiene que empezar a aportar cada vez más.
 
-2. El torso también participa en los gestos grandes. Un movimiento amplio de brazo suele venir acompañado de algo de chest o spine — no mucho, pero algo. Un brazo que se mueve con el torso perfectamente inmóvil se ve mecánico.
+2. El torso también participa en los gestos grandes. Un movimiento amplio de brazo suele venir acompañado de algo de pecho o cintura — no mucho, pero algo. Un brazo que se mueve con el torso perfectamente inmóvil se ve mecánico.
 
-3. Los huesos chicos hacen el detalle, no la fuerza. neck, hand y los dedos tienen rangos chicos a propósito: son para matizar un gesto que ya armaron los huesos grandes, no para generar el gesto por sí solos. Si necesitas mucho ángulo, el hueso correcto está más arriba en la cadena.
-
-Regla práctica: antes de mandar un movimiento, pregúntate "¿qué otros huesos de esta cadena acompañarían este gesto en un cuerpo real?" — casi siempre la respuesta es "al menos uno más", y agregarlo (aunque sea con una intensidad chica) es la diferencia entre un gesto que se ve vivo y uno que se ve como una marioneta.`;
+3. Los huesos chicos hacen el detalle, no la fuerza. neck, Hand y los dedos tienen rangos chicos a propósito: son para matizar un gesto que ya armaron los huesos grandes, no para generar el gesto por sí solos. Si necesitas mucho ángulo, el hueso correcto está más arriba en la cadena.`;
 }
 
 export function buildSystemPrompt({
