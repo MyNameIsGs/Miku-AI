@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { RefObject, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { VRM } from "@pixiv/three-vrm";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -45,6 +45,7 @@ import { registerReachResolver, registerSelfViewCapturer } from "./lib/selfViewS
 import { parseReachMarker, solveReach } from "./lib/reach";
 import { processRedesignMarkers } from "./lib/touchReactionsStore";
 import { parseFaceMarker } from "./lib/faceParts";
+import { describeBodyNow } from "./lib/bodySense";
 import { BONE_RANGES_DEG } from "./config/boneRanges";
 import { intensityToDegrees } from "./hooks/useMovement";
 import { useAudioDevices } from "./hooks/useAudioDevices";
@@ -1139,6 +1140,8 @@ function App() {
       } catch (err) {
         console.error("Error capturando imagen de sí misma:", err);
       }
+      // Junto con la foto: cómo quedó de verdad, medido en la pose.
+      appendMeasuredBody(pendingSelfDescriptionRef);
     }
 
     // Fase 7: mismo mecanismo, para las fotos de un quirk en evaluación --
@@ -1162,6 +1165,23 @@ function App() {
         }
       }
       quirkImageCaptureAtRef.current = stillPending;
+      // Después de la última foto del quirk: cómo quedó, medido. (Si es
+      // animado, la última foto es el final del ciclo.)
+      if (stillPending.length === 0) appendMeasuredBody(pendingQuirkDescriptionRef);
+    }
+  }
+
+  // Propiocepción real (ver lib/bodySense.ts): agrega a la descripción ya
+  // armada (los valores que pidió) cómo quedó el cuerpo de verdad.
+  function appendMeasuredBody(descriptionRef: RefObject<string | null>) {
+    const vrm = vrmRef.current;
+    if (!vrm) return;
+    try {
+      const measured = describeBodyNow(vrm) ?? "- Todo tu cuerpo quedó en reposo.";
+      const requested = descriptionRef.current;
+      descriptionRef.current = `${requested ? `${requested}\n` : ""}Cómo quedó de verdad, medido en tu cuerpo:\n${measured}`;
+    } catch (err) {
+      console.error("Error midiendo el cuerpo:", err);
     }
   }
 
@@ -1221,7 +1241,7 @@ function App() {
         // física del pelo, que sí haría vrm.update).
         if (saved.length > 0) vrm.humanoid?.update();
         vrm.scene.updateMatrixWorld(true);
-        return captureSelfView(vrm, renderer, scene, angle, framing);
+        return { image: captureSelfView(vrm, renderer, scene, angle, framing), bodySense: describeBodyNow(vrm) };
       } finally {
         for (const [node, axis, value] of saved.reverse()) node.rotation[axis] = value;
         if (saved.length > 0) {

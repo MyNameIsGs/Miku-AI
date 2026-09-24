@@ -15,7 +15,12 @@ export type SelfViewCapturer = (
   // actual (para ver un gesto "limpio", como al diseñar una reacción al
   // tacto mientras todavía se está reproduciendo la de respaldo).
   fromRest?: boolean,
-) => string;
+) => {
+  image: string;
+  // Cómo queda el cuerpo con esa pose, medido (ver lib/bodySense.ts), o
+  // null si está en reposo y sin choques.
+  bodySense: string | null;
+};
 
 let capturer: SelfViewCapturer | null = null;
 

@@ -68,12 +68,13 @@ export const mirarme: ToolDefinition = {
     }
 
     try {
-      const dataUrl = capture(angle, framing, preview);
+      const { image, bodySense } = capture(angle, framing, preview);
       const tried = [rawMovement && `la pose "${rawMovement}"`, rawReach && `las manos "${rawReach}"`].filter(Boolean).join(" y ");
       const what = preview ? `probando ${tried} (solo para esta imagen)` : "tu pose actual";
+      const sense = bodySense ? `\nMedido en tu cuerpo:\n${bodySense}` : "\nMedido en tu cuerpo: estás en reposo.";
       return [
-        { type: "text", text: `Así te ves: ${framing}, desde ${angle === "cuatro" ? "cuatro ángulos" : angle}, ${what}.` },
-        { type: "image_url", image_url: { url: dataUrl } },
+        { type: "text", text: `Así te ves: ${framing}, desde ${angle === "cuatro" ? "cuatro ángulos" : angle}, ${what}.${sense}` },
+        { type: "image_url", image_url: { url: image } },
       ];
     } catch (err) {
       return `No se pudo generar la imagen: ${err instanceof Error ? err.message : String(err)}`;

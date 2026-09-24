@@ -40,6 +40,36 @@ export const REACH_PLACES: Record<string, Place> = {
   hacia_ti: { kind: "direction", dir: "camera", description: "el brazo estirado hacia quien te mira (Sebastián)" },
 };
 
+// Marco del cuerpo -> mundo, para una mano. Medido: en reposo Miku mira a
+// +z del mundo y su izquierda es +x, así que en reposo coinciden (con x
+// espejado para la mano derecha). Si el hueso de referencia se movió
+// (cabeza girada, torso inclinado), se le aplica ese giro: los huesos
+// normalizados en reposo tienen la orientación de su raíz, así que lo que
+// giró respecto de la raíz es cuánto se movió.
+export function makeBodyToWorld(vrm: VRM, side: Side) {
+  const s = side === "left" ? 1 : -1;
+  const hips = vrm.humanoid?.getNormalizedBoneNode("hips");
+  const restFrame = (hips?.parent ?? vrm.scene).getWorldQuaternion(new THREE.Quaternion());
+  return (v: Vec3, relativeTo?: THREE.Object3D) => {
+    const vec = new THREE.Vector3(v[0] * s, v[1], v[2]);
+    if (relativeTo) {
+      const moved = relativeTo.getWorldQuaternion(new THREE.Quaternion()).multiply(restFrame.clone().invert());
+      vec.applyQuaternion(moved);
+    }
+    return vec;
+  };
+}
+
+// Dónde está ahora (mundo) un lugar de tipo punto, para esa mano -- con la
+// pose actual. null si es una dirección ("adelante") o falta el hueso.
+export function placeWorldPoint(vrm: VRM, side: Side, placeName: string): THREE.Vector3 | null {
+  const place = REACH_PLACES[placeName];
+  if (!place || place.kind !== "point") return null;
+  const anchor = vrm.humanoid?.getNormalizedBoneNode(place.bone);
+  if (!anchor) return null;
+  return anchor.getWorldPosition(new THREE.Vector3()).add(makeBodyToWorld(vrm, side)(place.offset, anchor));
+}
+
 export type ParsedReach = { left?: string; right?: string; durationMs: number };
 
 export function parseReachMarker(text: string, defaultDurationMs: number): ParsedReach | null {
@@ -113,7 +143,6 @@ export function solveReach(
   const humanoid = vrm.humanoid;
   if (!place || !up || !low || !hand || !up.parent || !humanoid) return null;
 
-  const s = side === "left" ? 1 : -1;
   // El codo se dobla con y negativo en el izquierdo y positivo en el derecho.
   const flexSign = side === "left" ? -1 : 1;
   const armNodes: [string, THREE.Object3D][] = [[upName, up], [lowName, low], [handName, hand]];
@@ -124,22 +153,7 @@ export function solveReach(
     vrm.scene.updateMatrixWorld(true);
   };
   const worldPos = (node: THREE.Object3D) => node.getWorldPosition(new THREE.Vector3());
-  // Marco del cuerpo -> mundo. Medido: en reposo Miku mira a +z del mundo
-  // y su izquierda es +x, así que en reposo coinciden (con x espejado para
-  // la mano derecha). Si el hueso de referencia se movió (cabeza girada,
-  // torso inclinado), se le aplica ese giro: los huesos normalizados en
-  // reposo tienen la orientación de su raíz, así que lo que giró respecto
-  // de la raíz es cuánto se movió.
-  const hips = humanoid.getNormalizedBoneNode("hips");
-  const restFrame = (hips?.parent ?? vrm.scene).getWorldQuaternion(new THREE.Quaternion());
-  const bodyToWorld = (v: Vec3, relativeTo?: THREE.Object3D) => {
-    const vec = new THREE.Vector3(v[0] * s, v[1], v[2]);
-    if (relativeTo) {
-      const moved = relativeTo.getWorldQuaternion(new THREE.Quaternion()).multiply(restFrame.clone().invert());
-      vec.applyQuaternion(moved);
-    }
-    return vec;
-  };
+  const bodyToWorld = makeBodyToWorld(vrm, side);
 
   try {
     for (const [name, node] of armNodes) {

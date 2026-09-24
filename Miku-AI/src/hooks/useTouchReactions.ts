@@ -338,8 +338,9 @@ export function useTouchReactions({
         const capture = getSelfViewCapturer();
         if (capture && design.movement) {
           try {
-            const image = capture("cuatro", "cuerpo", { ...design.movement, animated: false }, true);
-            const reviewText = `Así se vería tu cuerpo con esa reacción, ya terminada, desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha${design.movement.animated ? " (es animada: esto es el extremo del vaivén)" : ""}. Si te convence tal cual, responde solo [LISTO]. Si quieres ajustarla, responde otra vez con la reacción completa ([EXPRESION], [MOVIMIENTO] y/o [LLEVAR_MANO]): reemplaza a la anterior. No repitas [GUARDAR_MEMORIA].`;
+            const { image, bodySense } = capture("cuatro", "cuerpo", { ...design.movement, animated: false }, true);
+            const sense = bodySense ? `\nMedido en tu cuerpo:\n${bodySense}\n` : "";
+            const reviewText = `Así se vería tu cuerpo con esa reacción, ya terminada, desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha${design.movement.animated ? " (es animada: esto es el extremo del vaivén)" : ""}.${sense} Si te convence tal cual, responde solo [LISTO]. Si quieres ajustarla, responde otra vez con la reacción completa ([EXPRESION] o [CARA], [MOVIMIENTO] y/o [LLEVAR_MANO]): reemplaza a la anterior. No repitas [GUARDAR_MEMORIA].`;
             const secondReply = await ask([
               { role: "system", content: prompt },
               { role: "assistant", content: firstReply },
