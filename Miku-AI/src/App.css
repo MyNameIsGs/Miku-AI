@@ -200,6 +200,32 @@ button {
     opacity: 1;
   }
 }
+/* Modo juego (useGameMode.ts): se desvanece hacia abajo antes de
+   esconderse, y aparece deslizándose hacia arriba con un pequeño rebote. */
+.app-container.game-hiding,
+.app-container.game-hidden {
+  opacity: 0;
+  transform: translateY(24px) scale(0.97);
+  transition:
+    opacity 0.35s ease-in,
+    transform 0.35s ease-in;
+}
+
+.app-container.game-appearing {
+  animation: miku-appear 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes miku-appear {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Agarre para arrastrar la ventana -- a la izquierda de la barra, el
    resto de los botones siguen a la derecha. */
 .toolbar-grip {

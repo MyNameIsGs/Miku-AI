@@ -38,7 +38,7 @@ pub struct ActiveWindowInfo {
     pub seconds_ago: u64,
 }
 
-fn process_name_for_pid(pid: u32) -> Option<String> {
+pub(crate) fn process_name_for_pid(pid: u32) -> Option<String> {
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         let mut buf = [0u16; 1024];

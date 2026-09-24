@@ -11,6 +11,7 @@ mod mcp_client;
 mod active_window;
 mod obs_status;
 mod click_through;
+mod game_mode;
 mod audio_device;
 mod screen_capture;
 mod oauth_loopback;
@@ -258,6 +259,9 @@ pub fn run() {
             active_window::ventana_activa,
             obs_status::obs_estado,
             click_through::set_click_through,
+            game_mode::set_game_mode_enabled,
+            game_mode::game_mode_hide,
+            game_mode::game_mode_show,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,

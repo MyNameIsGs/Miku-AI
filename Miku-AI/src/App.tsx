@@ -31,6 +31,7 @@ import { useNotificationDigest } from "./hooks/useNotificationDigest";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useStreamMode } from "./hooks/useStreamMode";
+import { useGameMode } from "./hooks/useGameMode";
 import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge } from "./lib/knowledge";
 import { useTouchReactions } from "./hooks/useTouchReactions";
@@ -1067,6 +1068,14 @@ function App() {
     processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
 
+  // Modo juego (ver useGameMode.ts / game_mode.rs).
+  const gameMode = useGameMode({
+    busy: speechRecognition.listening || isThinking || speech.isSpeaking,
+    // Oculta, el bucle de dibujo (donde se revisan los recordatorios) está
+    // detenido: los recordatorios se revisan con el latido de Rust.
+    onHiddenHeartbeat: () => reminders.checkReminders(),
+  });
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0 && !freeCamera) {
       appWindow.startDragging();
@@ -1130,7 +1139,7 @@ function App() {
 
   return (
     <div
-      className="app-container"
+      className={`app-container ${gameMode.visual !== "shown" ? `game-${gameMode.visual}` : ""}`}
       onMouseEnter={() => setShowToolbar(true)}
       onMouseLeave={() => setShowToolbar(false)}
     >
@@ -1461,6 +1470,17 @@ function App() {
                   ? "Modo stream: sin conexión con OBS"
                   : "Modo stream: inactivo (OBS conectado)"}
             </span>
+          </div>
+          <div className="oauth-connect-row">
+            <label title="Con un juego (o cualquier app) a pantalla completa, Miku se esconde y deja libre la GPU; 'Hey Miku' la trae de vuelta">
+              <input
+                type="checkbox"
+                checked={gameMode.enabled}
+                onChange={(e) => gameMode.setEnabled(e.target.checked)}
+              />{" "}
+              Esconderse en juegos
+              {gameMode.game.active && ` (ahora: ${gameMode.game.processName})`}
+            </label>
           </div>
         </div>
       )}
