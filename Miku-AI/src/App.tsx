@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { VRM } from "@pixiv/three-vrm";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { load } from "@tauri-apps/plugin-store";
 import "./App.css";
@@ -28,6 +29,8 @@ import { useTaskWatcher } from "./hooks/useTaskWatcher";
 import { useNotificationDigest } from "./hooks/useNotificationDigest";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
+import { useStreamMode } from "./hooks/useStreamMode";
+import { isStreamModeActive } from "./lib/streamMode";
 import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
@@ -589,6 +592,7 @@ function App() {
 
   const memoryFiles = useMemoryFiles();
   const appLauncher = useAppLauncher();
+  const streamMode = useStreamMode();
   useAudioDevices();
 
   async function askMiku(userMessage: string, imageDataUrl?: string | null) {
@@ -631,6 +635,12 @@ function App() {
       // EXPRESION si esta respuesta no trae una expresión puntual propia
       // (ver más abajo, donde se usa en vez del "neutral" fijo de antes).
       const currentMood = await getCurrentMood();
+      // Tarea 8.3: qué estaba usando Sebastián (sin contar esta ventana).
+      const activeWindow = await invoke<{
+        title: string;
+        processName: string;
+        secondsAgo: number;
+      } | null>("ventana_activa").catch(() => null);
 
       const systemPrompt = buildSystemPrompt({
         world,
@@ -642,6 +652,8 @@ function App() {
         todayIso,
         activePendientes,
         currentMood,
+        activeWindow,
+        streamModeActive: isStreamModeActive(),
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,
@@ -1318,6 +1330,20 @@ function App() {
                 Error al conectar servidor MCP
               </span>
             )}
+          </div>
+          {/* Tarea 8.3: solo informativo -- el modo stream se prende y se
+              apaga solo según OBS, no hay nada que tocar acá. */}
+          <div className="oauth-connect-row">
+            <span
+              className={streamMode.obsError ? "oauth-error" : undefined}
+              title={streamMode.obsError ?? undefined}
+            >
+              {streamMode.active
+                ? `Modo stream: ACTIVO (OBS ${streamMode.streaming ? "transmitiendo" : "grabando"}) -- avisos y acciones en pausa`
+                : streamMode.obsError
+                  ? "Modo stream: sin conexión con OBS"
+                  : "Modo stream: inactivo (OBS conectado)"}
+            </span>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { RefObject, useRef } from "react";
 import { CALENDAR_CHECK_INTERVAL_MS } from "../config/constants";
 import { checkUpcomingEvents, checkMilestoneEvents } from "../lib/calendar/watcher";
-import { isQuietHours } from "../lib/quietHours";
+import { shouldHoldAnnouncements } from "../lib/quietHours";
 
 type UseCalendarWatcherParams = {
   // "Está por empezar" sigue siendo inmediato a propósito -- es urgente
@@ -43,7 +43,7 @@ export function useCalendarWatcher({
     Promise.all([checkUpcomingEvents(), checkMilestoneEvents()])
       .then(async ([imminent, milestone]) => {
         if (imminent) {
-          if (isQuietHours()) {
+          if (shouldHoldAnnouncements()) {
             queueAnnouncement(imminent);
           } else {
             await speak(imminent, voicePitchRef.current, voiceRateRef.current, "neutral");

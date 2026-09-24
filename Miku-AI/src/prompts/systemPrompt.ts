@@ -28,6 +28,31 @@ export interface BuildSystemPromptParams {
   // Tarea 8.10: humor persistido entre conversaciones (ver lib/mood.ts) --
   // "neutral" si nunca lo cambió o si ya decayó por tiempo.
   currentMood: string;
+  // Tarea 8.3: última ventana que Sebastián tenía en primer plano, sin
+  // contar la de Miku (ver active_window.rs). null si no se sabe.
+  activeWindow: { title: string; processName: string; secondsAgo: number } | null;
+  // Tarea 8.3: OBS está transmitiendo o grabando (ver lib/streamMode.ts).
+  streamModeActive: boolean;
+}
+
+// Más vieja que esto, la ventana ya no dice nada de lo que está haciendo.
+const ACTIVE_WINDOW_MAX_AGE_SECONDS = 30 * 60;
+
+function describeActiveWindow(
+  activeWindow: BuildSystemPromptParams["activeWindow"],
+): string {
+  if (!activeWindow || activeWindow.secondsAgo > ACTIVE_WINDOW_MAX_AGE_SECONDS) {
+    return "";
+  }
+  const when =
+    activeWindow.secondsAgo < 60
+      ? "ahora mismo (o justo antes de hablarte)"
+      : `hace unos ${Math.round(activeWindow.secondsAgo / 60)} minutos, antes de ponerse a hablarte`;
+  return `--- QUÉ ESTÁ USANDO SEBASTIÁN ---
+Ventana que tenía en primer plano ${when}: "${activeWindow.title}" (${activeWindow.processName}).
+Es solo contexto: úsalo si viene al caso (si te pregunta por "esto", si está en medio de un juego o trabajando en algo concreto), pero no lo comentes si no aporta nada a lo que te dice.
+
+`;
 }
 
 export function buildSystemPrompt({
@@ -40,6 +65,8 @@ export function buildSystemPrompt({
   todayIso,
   activePendientes,
   currentMood,
+  activeWindow,
+  streamModeActive,
 }: BuildSystemPromptParams): string {
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
   const handPresetList = HAND_PRESET_NAMES.join(", ");
@@ -64,7 +91,7 @@ Tu objetivo no es hacer feliz a Sebastián a cualquier costo, sino ser genuina. 
 
 Hoy es ${todayLabel}.
 
---- CONTEXTO DEL MUNDO ---
+${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}--- CONTEXTO DEL MUNDO ---
 ${world}
 
 --- TU PERSONALIDAD (esto eres tú, hoy) ---

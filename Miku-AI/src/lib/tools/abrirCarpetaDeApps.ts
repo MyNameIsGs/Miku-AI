@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ToolDefinition } from "./types";
-import { getAppLauncherState, findAppByName } from "./appLauncherStore";
+import { getAppLauncherState, findAppByName, areDesktopActionsDisabled } from "./appLauncherStore";
 
 // Tarea 6.2: las carpetas las define Sebastián en el panel de UI (agrupan
 // varias apps bajo un nombre, ej. "setup de streaming"). Igual que con
@@ -33,9 +33,9 @@ export function buildAbrirCarpetaDeAppsTool(): ToolDefinition {
       },
     },
     execute: async (args) => {
-      const { actionsDisabled, folders } = getAppLauncherState();
-      if (actionsDisabled) {
-        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado).";
+      const { folders } = getAppLauncherState();
+      if (areDesktopActionsDisabled()) {
+        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado, o modo stream activo porque OBS está transmitiendo o grabando).";
       }
 
       const nombre = String(args.nombre ?? "").trim();

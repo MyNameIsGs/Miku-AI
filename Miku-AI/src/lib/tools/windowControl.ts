@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ToolDefinition } from "./types";
-import { getAppLauncherState, findAppByName } from "./appLauncherStore";
+import { getAppLauncherState, findAppByName, areDesktopActionsDisabled } from "./appLauncherStore";
 
 // Tarea 8.5: control de ventanas -- minimizar, mover a otro monitor, "modo
 // foco" (ver window_control.rs). Mismas tres cosas que abrir_aplicacion:
@@ -51,9 +51,8 @@ export function buildMinimizarVentanaTool(): ToolDefinition {
       },
     },
     execute: async (args) => {
-      const { actionsDisabled } = getAppLauncherState();
-      if (actionsDisabled) {
-        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado).";
+      if (areDesktopActionsDisabled()) {
+        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado, o modo stream activo porque OBS está transmitiendo o grabando).";
       }
 
       const nombre = String(args.nombre ?? "").trim();
@@ -102,9 +101,8 @@ export function buildMoverVentanaTool(): ToolDefinition {
       },
     },
     execute: async (args) => {
-      const { actionsDisabled } = getAppLauncherState();
-      if (actionsDisabled) {
-        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado).";
+      if (areDesktopActionsDisabled()) {
+        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado, o modo stream activo porque OBS está transmitiendo o grabando).";
       }
 
       const nombre = String(args.nombre ?? "").trim();
@@ -154,9 +152,8 @@ export function buildModoFocoTool(): ToolDefinition {
       },
     },
     execute: async (args) => {
-      const { actionsDisabled } = getAppLauncherState();
-      if (actionsDisabled) {
-        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado).";
+      if (areDesktopActionsDisabled()) {
+        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado, o modo stream activo porque OBS está transmitiendo o grabando).";
       }
 
       const nombre = String(args.nombre ?? "").trim();

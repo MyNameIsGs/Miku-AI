@@ -8,6 +8,8 @@ mod text_input;
 mod window_control;
 mod file_search;
 mod mcp_client;
+mod active_window;
+mod obs_status;
 mod audio_device;
 mod screen_capture;
 mod oauth_loopback;
@@ -223,6 +225,9 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     audio_session::install();
 
+    #[cfg(target_os = "windows")]
+    active_window::start_tracker();
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -249,6 +254,8 @@ pub fn run() {
             mcp_client::mcp_call_tool,
             mcp_client::mcp_disconnect,
             mcp_client::mcp_is_connected,
+            active_window::ventana_activa,
+            obs_status::obs_estado,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,

@@ -1,6 +1,6 @@
 import { RefObject, useRef } from "react";
 import { NOTIFICATION_DIGEST_INTERVAL_MS } from "../config/constants";
-import { isQuietHours } from "../lib/quietHours";
+import { shouldHoldAnnouncements } from "../lib/quietHours";
 
 // Resumen agrupado: correo nuevo, avisos de Calendar de anticipación
 // larga, y (idea #21) pendientes vencidos que el loop idle decide sacar a
@@ -36,10 +36,11 @@ export function useNotificationDigest({
   // que los demás chequeos periódicos.
   function checkDigest(now: number) {
     if (now - lastFlushRef.current < NOTIFICATION_DIGEST_INTERVAL_MS) return;
-    // Idea #20: durante el horario de no molestar no se lee nada -- se
+    // Idea #20 / Tarea 8.3: durante el horario de no molestar o el modo
+    // stream no se lee nada -- se
     // sigue acumulando (no se toca lastFlushRef) para leerlo todo junto
     // apenas termine la franja.
-    if (isQuietHours()) return;
+    if (shouldHoldAnnouncements()) return;
     lastFlushRef.current = now;
 
     if (pendingRef.current.length === 0) return;

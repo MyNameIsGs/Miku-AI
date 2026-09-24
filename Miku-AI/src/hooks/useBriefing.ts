@@ -7,6 +7,7 @@ import { listUpcomingEventsAllAccounts } from "../lib/calendar/api";
 import { listRecentMessagesAllAccounts } from "../lib/gmail/api";
 import { buildBriefingPrompt } from "../prompts/briefingPrompt";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
+import { isStreamModeActive } from "../lib/streamMode";
 
 type UseBriefingParams = {
   speak: (
@@ -32,6 +33,10 @@ export function useBriefing({ speak, voicePitchRef, voiceRateRef }: UseBriefingP
 
   async function maybeGiveBriefing() {
     if (inFlightRef.current) return;
+    // Tarea 8.3: en pleno stream no se leen correos ni eventos en voz alta
+    // -- se posterga (sin marcarlo como dado) hasta la primera interacción
+    // después de que termine.
+    if (isStreamModeActive()) return;
     if (await hasGivenBriefingToday()) return;
 
     inFlightRef.current = true;

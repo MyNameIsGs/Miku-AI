@@ -1,3 +1,5 @@
+import { isStreamModeActive } from "../streamMode";
+
 // Tarea 6.2: las tools viven en módulos planos (no componentes de React),
 // pero necesitan leer el estado de aplicaciones descubiertas/config que
 // mantiene useAppLauncher. Este módulo es el punto de contacto: el hook
@@ -22,6 +24,12 @@ export function setAppLauncherState(next: AppLauncherToolState) {
 
 export function getAppLauncherState(): AppLauncherToolState {
   return state;
+}
+
+// Tarea 8.3: el interruptor global a mano, o el modo stream automático
+// (OBS transmitiendo/grabando) -- cualquiera de los dos frena las acciones.
+export function areDesktopActionsDisabled(): boolean {
+  return state.actionsDisabled || isStreamModeActive();
 }
 
 export function findAppByName(name: string) {

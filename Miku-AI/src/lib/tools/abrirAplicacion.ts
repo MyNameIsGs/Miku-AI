@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ToolDefinition } from "./types";
-import { getAppLauncherState, findAppByName } from "./appLauncherStore";
+import { getAppLauncherState, findAppByName, areDesktopActionsDisabled } from "./appLauncherStore";
 
 // Tarea 6.2: el schema se arma de nuevo en cada request (ver
 // lib/tools/index.ts) para que la lista de aplicaciones en la
@@ -34,9 +34,8 @@ export function buildAbrirAplicacionTool(): ToolDefinition {
       },
     },
     execute: async (args) => {
-      const { actionsDisabled } = getAppLauncherState();
-      if (actionsDisabled) {
-        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado).";
+      if (areDesktopActionsDisabled()) {
+        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado, o modo stream activo porque OBS está transmitiendo o grabando).";
       }
 
       const nombre = String(args.nombre ?? "").trim();
