@@ -16,6 +16,11 @@ export type McpServerConfig = {
   label: string;
   command: string;
   args: string[];
+  // Herramientas de este servidor que pasan por el diálogo de confirmación
+  // (Tarea 6.5). Si no se declara, TODAS lo piden -- es código de terceros
+  // y no se sabe de antemano qué hace cada una; la lista se arma a mano
+  // después de revisar las tools de ese servidor en particular.
+  confirmTools?: string[];
 };
 
 // Primer candidato concreto (Tarea 8.2, tal como lo proponía el plan): un
@@ -35,6 +40,13 @@ export const MCP_SERVERS: McpServerConfig[] = [
     label: "Playwright (navegador)",
     command: "npx",
     args: ["-y", "@playwright/mcp@latest", "--headless"],
+    // Es un navegador aislado (sin ventana, sin las sesiones de Sebastián),
+    // así que navegar/leer/clickear/evaluar JS en la página no toca nada
+    // suyo -- a pedido de él, esas no piden confirmación. Estas dos sí:
+    // run_code_unsafe corre código en el proceso Node, o sea en la PC y no
+    // dentro de la página; file_upload puede mandar archivos locales a un
+    // sitio web.
+    confirmTools: ["browser_run_code_unsafe", "browser_file_upload"],
   },
 ];
 

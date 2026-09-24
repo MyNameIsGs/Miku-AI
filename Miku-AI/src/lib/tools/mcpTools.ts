@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ToolDefinition } from "./types";
-import { getMcpState } from "../mcp";
+import { MCP_SERVERS, getMcpState } from "../mcp";
 
 // Tarea 8.2: cada tool de un servidor MCP conectado se expone al LLM con
 // un nombre prefijado (mcp_<servidor>_<tool>) -- deja claro de dónde viene
@@ -18,6 +18,7 @@ export function buildMcpTools(): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
 
   for (const [serverId, serverTools] of Object.entries(connectedServers)) {
+    const confirmTools = MCP_SERVERS.find((s) => s.id === serverId)?.confirmTools;
     for (const tool of serverTools) {
       const prefixedName = `mcp_${serverId}_${tool.name}`;
       const schema = tool.inputSchema as {
@@ -38,12 +39,11 @@ export function buildMcpTools(): ToolDefinition[] {
             },
           },
         },
-        // Tarea 6.5, mismo criterio previsto en el plan de la 8.2: es
-        // código de terceros (el servidor MCP decide qué hace de verdad
-        // con los argumentos), así que pasa por confirmación humana igual
-        // que cualquier acción sensible -- a diferencia de las tools
-        // propias, donde el código en sí ya es conocido y auditado.
-        requiresConfirmation: true,
+        // Tarea 6.5: es código de terceros (el servidor MCP decide qué hace
+        // de verdad con los argumentos), así que por defecto pasa por
+        // confirmación humana -- salvo que el servidor declare en
+        // MCP_SERVERS cuáles la necesitan de verdad (ver confirmTools).
+        requiresConfirmation: confirmTools ? confirmTools.includes(tool.name) : true,
         describeForConfirmation: (args) =>
           `Ejecutar "${tool.name}" del servidor MCP "${serverId}"\nArgumentos: ${JSON.stringify(args)}`,
         execute: async (args) => {
