@@ -277,12 +277,35 @@ function App() {
       .catch((err) => console.error("Error consultando cuentas de Calendar:", err));
   }, []);
 
+  // Qué servidores MCP quedan conectados solos al abrir la app: los que
+  // Sebastián dejó conectados la última vez (pidió no tener que conectar
+  // Playwright a mano cada vez). Desconectar a mano lo saca de la lista.
+  // Seguro de reconectar en cada arranque: medido, si la app muere sin
+  // desconectar, Playwright cierra solo todo su árbol (node + Chrome sin
+  // ventana, 14 procesos) al quedarse sin su entrada -- no se acumulan
+  // navegadores huérfanos.
+  const MCP_AUTOCONNECT_KEY = "mcpAutoConnect";
+  const setMcpAutoConnect = async (serverId: string, enabled: boolean) => {
+    try {
+      const store = await load(".settings.dat", { autoSave: false });
+      const current = (await store.get<string[]>(MCP_AUTOCONNECT_KEY)) ?? [];
+      const next = enabled
+        ? [...current.filter((id) => id !== serverId), serverId]
+        : current.filter((id) => id !== serverId);
+      await store.set(MCP_AUTOCONNECT_KEY, next);
+      await store.save();
+    } catch (err) {
+      console.error("Error guardando la reconexión de servidores MCP:", err);
+    }
+  };
+
   const handleConnectMcp = async (server: McpServerConfig) => {
     setMcpConnectingId(server.id);
     setMcpError(null);
     try {
       await connectMcpServer(server);
       setMcpConnectedIds((prev) => [...prev.filter((id) => id !== server.id), server.id]);
+      await setMcpAutoConnect(server.id, true);
     } catch (err) {
       setMcpError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -297,8 +320,27 @@ function App() {
       console.error("Error desconectando servidor MCP:", err);
     } finally {
       setMcpConnectedIds((prev) => prev.filter((id) => id !== serverId));
+      await setMcpAutoConnect(serverId, false);
     }
   };
+
+  useEffect(() => {
+    (async () => {
+      let ids: string[] = [];
+      try {
+        const store = await load(".settings.dat", { autoSave: false });
+        ids = (await store.get<string[]>(MCP_AUTOCONNECT_KEY)) ?? [];
+      } catch (err) {
+        console.error("Error leyendo la reconexión de servidores MCP:", err);
+      }
+      // Uno detrás del otro, en segundo plano: no frena el arranque.
+      for (const server of MCP_SERVERS.filter((s) => ids.includes(s.id))) {
+        console.log(`[MCP] Reconectando "${server.id}" (quedó conectado la última vez)...`);
+        await handleConnectMcp(server);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleConnectSpotify = async () => {
     setSpotifyConnecting(true);
