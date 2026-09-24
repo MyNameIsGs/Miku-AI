@@ -124,12 +124,21 @@ button {
   top: 0;
   left: 0;
   right: 0;
-  height: 36px;
+  /* Toda la franja (TOOLBAR_STRIP_HEIGHT en App.tsx), para que también los
+     últimos píxeles de abajo sirvan para arrastrar. */
+  height: 40px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  padding: 0 8px;
+  /* flex-start + scroll: si algún día no entran todos, lo que sobra queda a
+     la DERECHA y se puede desplazar -- con flex-end quedaba fuera por la
+     izquierda, sin forma de alcanzarlo. El agarre (margin-right: auto)
+     sigue empujando los botones a la derecha mientras entren. */
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 4px;
+  padding: 0 6px;
   background: rgba(20, 20, 30, 0.55);
   backdrop-filter: blur(4px);
   z-index: 10;
@@ -229,6 +238,7 @@ button {
 /* Agarre para arrastrar la ventana -- a la izquierda de la barra, el
    resto de los botones siguen a la derecha. */
 .toolbar-grip {
+  flex-shrink: 0;
   margin-right: auto;
   padding: 0 6px;
   font-size: 18px;
@@ -244,6 +254,14 @@ button {
   padding: 4px 8px;
   cursor: pointer;
   font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toolbar button.icon-btn {
+  padding: 4px 6px;
+  font-size: 15px;
+  line-height: 1;
 }
 .config-panel {
   position: absolute;

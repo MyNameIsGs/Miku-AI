@@ -1150,10 +1150,30 @@ function App() {
 
   // Arrastrar la ventana: desde el agarre o cualquier parte vacía de la
   // barra (no desde sus botones).
+  // Arrastrar desde CUALQUIER parte de la barra (pedido de Sebastián):
+  // desde el fondo o el agarre, al instante; desde un botón, recién si el
+  // mouse se mueve más de unos píxeles con el botón apretado -- así un clic
+  // quieto sigue siendo un clic. Una vez que arranca el arrastre, Windows
+  // se queda con el mouse y el clic del botón ya no llega.
+  const toolbarPressRef = useRef<{ x: number; y: number } | null>(null);
   const handleToolbarMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
-    if (target === e.currentTarget || target.classList.contains("toolbar-grip")) {
+    if (target.closest("button")) {
+      toolbarPressRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+    appWindow.startDragging();
+  };
+  const handleToolbarMouseMove = (e: React.MouseEvent) => {
+    const press = toolbarPressRef.current;
+    if (!press) return;
+    if (!(e.buttons & 1)) {
+      toolbarPressRef.current = null;
+      return;
+    }
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) {
+      toolbarPressRef.current = null;
       appWindow.startDragging();
     }
   };
@@ -1183,47 +1203,69 @@ function App() {
       onMouseLeave={() => setShowToolbar(false)}
     >
       {showToolbar && (
-        <div className="toolbar" onMouseDown={handleToolbarMouseDown}>
+        <div
+          className="toolbar"
+          onMouseDown={handleToolbarMouseDown}
+          onMouseMove={handleToolbarMouseMove}
+          onMouseUp={() => {
+            toolbarPressRef.current = null;
+          }}
+          onMouseLeave={() => {
+            toolbarPressRef.current = null;
+          }}
+        >
           <span className="toolbar-grip" title="Arrastrar para mover a Miku">
             ⠿
           </span>
+          {/* Los botones de alternar van como íconos (con su explicación al
+              pasar el mouse): con texto no entraban los 13 en 750 px, y los
+              de la izquierda quedaban cortados fuera de la barra. */}
           <button
-            className={freeCamera ? "active" : ""}
+            className={`icon-btn ${freeCamera ? "active" : ""}`}
             onClick={() => setFreeCamera((v) => !v)}
+            title="Cámara libre (mover la vista con el mouse)"
           >
-            Camara
+            🎥
           </button>
-          <button onClick={handleSaveCamera}>Guardar posicion</button>
+          <button className="icon-btn" onClick={handleSaveCamera} title="Guardar la posición de la cámara">
+            💾
+          </button>
           <button
-            className={clickThrough ? "active" : ""}
+            className={`icon-btn ${clickThrough ? "active" : ""}`}
             onClick={() => setClickThrough((v) => !v)}
+            title="Bloquear a Miku: los clics pasan a lo que hay detrás (Ctrl+Shift+M)"
           >
-            Click-through
+            🔒
           </button>
           <button
-            className={voiceMuted ? "active" : ""}
+            className={`icon-btn ${voiceMuted ? "active" : ""}`}
             onClick={() => setVoiceMuted((v) => !v)}
-            title={voiceMuted ? "Miku está silenciada" : "Silenciar la voz de Miku"}
+            title={voiceMuted ? "Miku está silenciada (clic para volver a oírla)" : "Silenciar la voz de Miku"}
           >
-            {voiceMuted ? "🔇 Silenciada" : "🔊 Voz"}
+            {voiceMuted ? "🔇" : "🔊"}
           </button>
           {speech.isSpeaking && (
             <button
+              className="icon-btn"
               onClick={speech.stopSpeaking}
               title="Cortar lo que está diciendo ahora"
             >
-              ⏹ Detener
+              ⏹
             </button>
           )}
           <button
-            className={speechRecognition.listening ? "active" : ""}
+            className={`icon-btn ${speechRecognition.listening ? "active" : ""}`}
             onClick={speechRecognition.toggleListening}
             disabled={!isVoiceReady}
             title={
-              !isVoiceReady ? "Esperando al servidor de voz..." : undefined
+              !isVoiceReady
+                ? "Esperando al servidor de voz..."
+                : speechRecognition.listening
+                  ? "Escuchando... (clic para terminar)"
+                  : "Hablarle a Miku (micrófono)"
             }
           >
-            {speechRecognition.listening ? "Escuchando..." : "Mic"}
+            🎤
           </button>
           <button
             className={showTextInput ? "active" : ""}
@@ -1260,11 +1302,15 @@ function App() {
             Memoria
           </button>
           <button
-            className={hideResponseText ? "active" : ""}
+            className={`icon-btn ${hideResponseText ? "active" : ""}`}
             onClick={() => setHideResponseText((v) => !v)}
-            title="Ocultar el texto de respuesta (para sacar capturas limpias)"
+            title={
+              hideResponseText
+                ? "El texto de respuesta está oculto (clic para mostrarlo)"
+                : "Ocultar el texto de respuesta (para sacar capturas limpias)"
+            }
           >
-            {hideResponseText ? "Texto oculto" : "Ocultar texto"}
+            🙈
           </button>
           <button className="close-btn" onClick={handleCloseApp}>
             Cerrar
