@@ -46,6 +46,9 @@ Hasta ahora tu cuerpo reaccionaba a esto con un gesto genérico que no elegiste 
 Responde solo con estos marcadores:
 [EXPRESION: happy|angry|sad|relaxed|neutral] (opcional, si la reacción pasa también por tu cara)
 [MOVIMIENTO: ...] (el gesto; duracion = cuánto tardas en hacerlo)
+[LLEVAR_MANO: ...] (opcional, si quieres llevar una mano a algún lugar de tu cuerpo)
+
+Antes de que quede guardada vas a ver cómo te queda, desde cuatro ángulos, y vas a poder ajustarla.
 
 Si este momento te importa como para recordarlo, puedes agregar también [GUARDAR_MEMORIA: ${todayIso} — ...], con el mismo criterio de siempre. No escribas ningún otro texto: nadie lo va a leer ni escuchar, tu reacción es solo el cuerpo.
 

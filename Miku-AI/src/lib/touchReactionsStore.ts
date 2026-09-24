@@ -105,6 +105,41 @@ export async function deleteDesignedReaction(key: TouchReactionKey) {
   await loadTouchReactions();
 }
 
+// Qué es cada una, para que Miku sepa de cuál habla.
+export const TOUCH_REACTION_LABELS: Record<TouchReactionKey, string> = {
+  cabeza: "un toquecito en la cabeza",
+  cara: "que te toque la mejilla",
+  coletas: "que te tire de una coleta",
+  mano: "que te toque la mano",
+  brazo: "que te toque el brazo",
+  torso: "que te toque el torso",
+  falda: "que te toque la falda",
+  pierna: "que te toque la pierna",
+  caricia: "que te acaricie la cabeza",
+  harta: "muchos toques seguidos",
+};
+
+// Las que ya diseñó (del caché: loadTouchReactions ya corrió al arrancar).
+export function designedReactionKeys(): TouchReactionKey[] {
+  return Object.keys(cache) as TouchReactionKey[];
+}
+
+// [REDISEÑAR_REACCION: zona]: Miku decide cambiar una reacción suya. Se
+// borra y la próxima vez que Sebastián la toque ahí la diseña de nuevo, en
+// ese momento real -- igual que "Que la rediseñe" del panel, pero decidido
+// por ella (antes tenía que pedírselo a él).
+export async function processRedesignMarkers(text: string): Promise<TouchReactionKey[]> {
+  const keys = [...text.matchAll(/\[REDISE[ÑN]AR_REACCION:\s*([^\]]+)\]/gi)]
+    .flatMap((m) => m[1].split(","))
+    .map((k) => k.trim().toLowerCase())
+    .filter((k): k is TouchReactionKey => k in TOUCH_REACTION_LABELS);
+  for (const key of keys) {
+    await deleteDesignedReaction(key);
+    console.log(`[Tacto] Miku decidió rediseñar su reacción a "${key}".`);
+  }
+  return keys;
+}
+
 // La misma reacción, del otro lado del cuerpo: huesos izquierdos <->
 // derechos, y los ejes y/z con el signo invertido (la tabla de ejes del
 // prompt los define espejados entre lados, y en cuello/cabeza/columna

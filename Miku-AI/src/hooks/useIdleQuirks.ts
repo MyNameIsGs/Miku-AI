@@ -25,6 +25,7 @@ import {
   QuirksStore,
 } from "../lib/quirks";
 import { BoneTransition, MovementOrigin, ParsedMovement } from "../types";
+import { processRedesignMarkers } from "../lib/touchReactionsStore";
 
 type UseIdleQuirksParams = {
   boneTransitionsRef: RefObject<Record<string, BoneTransition>>;
@@ -305,6 +306,8 @@ export function useIdleQuirks({
       }
 
       await processQuirkMarkers(quirks, parsed.createQuirk, parsed.quirkReady);
+      // Re-evaluando en silencio, puede decidir cambiar una reacción al tacto.
+      await processRedesignMarkers(reply);
 
       if (parsed.cleanText && duePendientes.length > 0) {
         queueAnnouncement(parsed.cleanText);

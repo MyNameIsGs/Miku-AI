@@ -42,6 +42,7 @@ import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
 import { registerReachResolver, registerSelfViewCapturer } from "./lib/selfViewStore";
 import { parseReachMarker, solveReach } from "./lib/reach";
+import { processRedesignMarkers } from "./lib/touchReactionsStore";
 import { BONE_RANGES_DEG } from "./config/boneRanges";
 import { intensityToDegrees } from "./hooks/useMovement";
 import { useAudioDevices } from "./hooks/useAudioDevices";
@@ -974,6 +975,9 @@ function App() {
         parsedHandGesture,
       );
 
+      // Decidió cambiar alguna de sus reacciones al tacto.
+      await processRedesignMarkers(reply);
+
       reply = stripMarkers(reply);
 
       // El turno completo -- incluyendo cualquier vuelta de tool calling
@@ -1170,13 +1174,23 @@ function App() {
   // la ventana ni se entera.
   useEffect(() => {
     if (!isVrmLoaded) return;
-    registerSelfViewCapturer((angle, framing, preview) => {
+    registerSelfViewCapturer((angle, framing, preview, fromRest) => {
       const vrm = vrmRef.current;
       const renderer = rendererRef.current;
       const scene = sceneRef.current;
       if (!vrm || !renderer || !scene) throw new Error("La escena todavía no está lista");
 
       const saved: [THREE.Object3D, "x" | "y" | "z", number][] = [];
+      if (fromRest) {
+        for (const [bone, node] of Object.entries(movementBonesRef.current)) {
+          const rest = boneRestRotationRef.current[bone];
+          if (!node || !rest) continue;
+          for (const axis of ["x", "y", "z"] as const) {
+            saved.push([node, axis, node.rotation[axis]]);
+            node.rotation[axis] = rest[axis];
+          }
+        }
+      }
       for (const { bone, axis, intensity } of preview?.entries ?? []) {
         const node = movementBonesRef.current[bone];
         const range = BONE_RANGES_DEG[bone]?.[axis];

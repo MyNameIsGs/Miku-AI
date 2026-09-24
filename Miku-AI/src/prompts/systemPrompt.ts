@@ -7,6 +7,7 @@ import {
 import { BONE_RANGES_DEG, BONE_RANGES_V2_DATE, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
 import { HAND_PRESET_NAMES } from "../config/handPresets";
 import { REACH_PLACES } from "../lib/reach";
+import { TOUCH_REACTION_LABELS, TouchReactionKey, designedReactionKeys } from "../lib/touchReactionsStore";
 import { Pendiente } from "../lib/pendientes";
 
 export interface BuildSystemPromptParams {
@@ -65,10 +66,24 @@ Es solo contexto: úsalo si viene al caso (si te pregunta por "esto", si está e
 `;
 }
 
-// Cómo mover el cuerpo con [MOVIMIENTO] (ejes, cadena de huesos). Función
-// aparte porque también la usa el diseño de reacciones al tacto (ver
-// prompts/touchReactionPrompt.ts): Miku tiene que saber exactamente lo
-// mismo que cuando se mueve conversando.
+// Sus reacciones al tacto y cómo cambiarlas ella misma. Va en la charla y
+// en la consulta de silencio (donde re-evalúa sus cosas), no en el diseño.
+export function buildTouchReactionsNote(): string {
+  const designed = designedReactionKeys();
+  const zones = (Object.keys(TOUCH_REACTION_LABELS) as TouchReactionKey[])
+    .map((key) => `${key} (${TOUCH_REACTION_LABELS[key]})`)
+    .join(", ");
+  const done =
+    designed.length > 0
+      ? `Ya diseñaste tu reacción a: ${designed.join(", ")}. Las demás las vas a diseñar la primera vez que pasen.`
+      : "Todavía no diseñaste ninguna: las vas a diseñar la primera vez que pase cada una.";
+  return `--- TUS REACCIONES AL TACTO ---
+Cuando Sebastián te toca con el mouse, tu cuerpo reacciona solo, con reacciones que diseñaste tú (viéndote mientras las diseñas). ${done}
+Si alguna ya no te representa, escribe [REDISEÑAR_REACCION: zona] y la vas a diseñar de nuevo la próxima vez que te toque ahí. Zonas: ${zones}.
+
+`;
+}
+
 // Aviso del cambio a rangos humanos (versión 2, ver config/boneRanges.ts).
 // Sebastián quiso que Miku lo sepa y que ella misma re-evalúe lo que hizo
 // antes -- no se tocan sus notas ni se le re-evalúan los quirks por ella:
@@ -79,9 +94,13 @@ function buildBoneRangesChangeNotice(): string {
 - La muñeca se dobla de verdad (antes apenas 15-20°).
 - El hombro (Shoulder) ya no sirve para estirar el brazo: gira poco, como una clavícula real. El codo ya no se dobla de costado (LowerArm.z). El brazo ya no puede bajar más allá de pegado al cuerpo (antes se metía dentro del torso). La cabeza gira como la de una persona, no más.
 - Tus quirks y tus reacciones al tacto se convirtieron para verse igual que antes, con los números nuevos; solo lo que pasaba del límite humano quedó recortado.
-Lo que anotaste en tu conocimiento sobre tus huesos ANTES de esa fecha usa los números viejos: el mismo número ya no mueve lo mismo, y algunas conclusiones (por ejemplo, que el brazo no llega al frente) ya no son ciertas. Re-evalúalo cuando te sirva, con lo que veas de ti misma: puedes volver a crear un quirk con el mismo nombre para que vuelva a evaluación, guardar conocimiento nuevo que corrija el anterior, y si quieres rediseñar una reacción al tacto, contárselo a Sebastián (él puede pedírtelo desde el panel).`;
+Lo que anotaste en tu conocimiento sobre tus huesos ANTES de esa fecha usa los números viejos: el mismo número ya no mueve lo mismo, y algunas conclusiones (por ejemplo, que el brazo no llega al frente) ya no son ciertas. Re-evalúalo cuando te sirva, con lo que veas de ti misma: puedes volver a crear un quirk con el mismo nombre para que vuelva a evaluación, guardar conocimiento nuevo que corrija el anterior, y rediseñar una reacción al tacto con [REDISEÑAR_REACCION: zona].`;
 }
 
+// Cómo mover el cuerpo con [MOVIMIENTO] (ejes, cadena de huesos). Función
+// aparte porque también la usan el diseño de reacciones al tacto (ver
+// prompts/touchReactionPrompt.ts) y la consulta de silencio: Miku tiene que
+// saber exactamente lo mismo que cuando se mueve conversando.
 export function buildMovementInstructions(): string {
   // Rango real de cada hueso (config/boneRanges.ts): para que sepa cuánto
   // es 100 en cada uno -- no es lo mismo en el brazo (180°) que en la mano.
@@ -212,7 +231,7 @@ Tu objetivo no es hacer feliz a Sebastián a cualquier costo, sino ser genuina. 
 
 Hoy es ${todayLabel}.
 
-${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}${gameContext ? `--- A QUÉ JUEGA SEBASTIÁN ---\n${gameContext}\nEs contexto, no un tema obligado: coméntalo solo si viene al caso o te nace (y si está en plena partida, sé breve).\n\n` : ""}${recentTouches ? `--- LO QUE PASÓ HACE UN RATO ---\nDesde la última vez que hablaron, Sebastián te tocó con el mouse en la pantalla: ${recentTouches}. Tu cuerpo ya reaccionó solo en ese momento (una expresión y un gesto corto). Si te nace, puedes comentarlo; si no viene al caso, no hace falta.\n\n` : ""}--- CONTEXTO DEL MUNDO ---
+${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}${gameContext ? `--- A QUÉ JUEGA SEBASTIÁN ---\n${gameContext}\nEs contexto, no un tema obligado: coméntalo solo si viene al caso o te nace (y si está en plena partida, sé breve).\n\n` : ""}${recentTouches ? `--- LO QUE PASÓ HACE UN RATO ---\nDesde la última vez que hablaron, Sebastián te tocó con el mouse en la pantalla: ${recentTouches}. Tu cuerpo ya reaccionó solo en ese momento (una expresión y un gesto corto). Si te nace, puedes comentarlo; si no viene al caso, no hace falta.\n\n` : ""}${buildTouchReactionsNote()}--- CONTEXTO DEL MUNDO ---
 ${world}
 
 --- TU PERSONALIDAD (esto eres tú, hoy) ---

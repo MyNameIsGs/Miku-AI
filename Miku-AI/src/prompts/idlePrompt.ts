@@ -6,7 +6,7 @@ import { QuirksStore } from "../lib/quirks";
 // Esta consulta es una llamada aparte: sin esto creaba y re-evaluaba sus
 // quirks sin la explicación de ejes y rangos (antes decía "la misma
 // convención que ya conoces", pero acá no la tenía).
-import { buildMovementInstructions } from "./systemPrompt";
+import { buildMovementInstructions, buildTouchReactionsNote } from "./systemPrompt";
 
 export interface BuildIdlePromptParams {
   world: string;
@@ -127,6 +127,7 @@ Huesos disponibles: ${movementBoneList}. Presets de mano disponibles: ${handPres
 
 ${buildMovementInstructions()}
 ${quirksSection}
+${buildTouchReactionsNote()}
 Fuera de los casos de abajo sobre pendientes, no escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
 ${heldPoseNote}${pendientesNote}`;
 }

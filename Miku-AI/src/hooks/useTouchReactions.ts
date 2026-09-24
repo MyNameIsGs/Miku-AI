@@ -14,7 +14,7 @@ import {
 import { loadMemoryContext } from "../lib/memory";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { parseMovementMarker } from "../lib/markers";
-import { getReachResolver } from "../lib/selfViewStore";
+import { getReachResolver, getSelfViewCapturer } from "../lib/selfViewStore";
 import { OPENROUTER_MODEL } from "../config/constants";
 import { buildTouchReactionPrompt } from "../prompts/touchReactionPrompt";
 
@@ -177,6 +177,24 @@ function describeForDesign(key: TouchReactionKey, side: "left" | "right" | null)
   }
 }
 
+// Lo que propuso Miku para una reacción: [EXPRESION], [MOVIMIENTO] y
+// [LLEVAR_MANO] (este último ya resuelto en ángulos, se guarda junto con el
+// resto). Nada de eso = no propuso nada.
+function interpretDesign(reply: string): { movement: ParsedMovement | null; expression: string | null } {
+  const explicitMovement = parseMovementMarker(reply);
+  const reachMovement = getReachResolver()?.(reply, explicitMovement) ?? null;
+  const movement =
+    explicitMovement || reachMovement
+      ? {
+          entries: [...(reachMovement?.entries ?? []), ...(explicitMovement?.entries ?? [])],
+          durationMs: explicitMovement?.durationMs ?? reachMovement!.durationMs,
+          animated: explicitMovement?.animated ?? false,
+        }
+      : null;
+  const expressionMatch = reply.match(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/i);
+  return { movement, expression: expressionMatch ? expressionMatch[1].toLowerCase() : null };
+}
+
 // Zonas con lado: la reacción se diseña de un lado y del otro se espeja.
 const SIDED_KEYS: TouchReactionKey[] = ["cara", "coletas", "mano", "brazo", "pierna"];
 
@@ -299,40 +317,58 @@ export function useTouchReactions({
           what: describeForDesign(key, side),
           sustained: key === "caricia",
         });
-        const response = await fetchOpenRouterWithRetry({
-          model: OPENROUTER_MODEL,
-          messages: [{ role: "system", content: prompt }],
-        });
-        const data = await response.json();
-        const reply: string = data.choices?.[0]?.message?.content ?? "";
-
-        const explicitMovement = parseMovementMarker(reply);
-        // [LLEVAR_MANO] se guarda ya resuelto en ángulos, junto con el resto.
-        const reachMovement = getReachResolver()?.(reply, explicitMovement) ?? null;
-        const movement =
-          explicitMovement || reachMovement
-            ? {
-                entries: [...(reachMovement?.entries ?? []), ...(explicitMovement?.entries ?? [])],
-                durationMs: explicitMovement?.durationMs ?? reachMovement!.durationMs,
-                animated: explicitMovement?.animated ?? false,
-              }
-            : null;
-        const expressionMatch = reply.match(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/i);
-        if (!movement && !expressionMatch) {
-          throw new Error(`respuesta sin [MOVIMIENTO] ni [EXPRESION]: ${reply.slice(0, 200)}`);
+        const ask = async (messages: object[]) => {
+          const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages });
+          const data = await response.json();
+          return String(data.choices?.[0]?.message?.content ?? "");
+        };
+        const firstReply = await ask([{ role: "system", content: prompt }]);
+        let design = interpretDesign(firstReply);
+        if (!design.movement && !design.expression) {
+          throw new Error(`respuesta sin [MOVIMIENTO] ni [EXPRESION]: ${firstReply.slice(0, 200)}`);
         }
+
+        // Antes diseñaba a ciegas (así salió la de la falda con las manos
+        // por detrás). Ahora ve cómo le queda, desde el reposo y en cuatro
+        // vistas, y puede corregirla una vez antes de que se guarde. Si la
+        // foto o la segunda consulta fallan, queda la primera versión.
+        let revisedReply: string | null = null;
+        const capture = getSelfViewCapturer();
+        if (capture && design.movement) {
+          try {
+            const image = capture("cuatro", "cuerpo", { ...design.movement, animated: false }, true);
+            const reviewText = `Así se vería tu cuerpo con esa reacción, ya terminada, desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha${design.movement.animated ? " (es animada: esto es el extremo del vaivén)" : ""}. Si te convence tal cual, responde solo [LISTO]. Si quieres ajustarla, responde otra vez con la reacción completa ([EXPRESION], [MOVIMIENTO] y/o [LLEVAR_MANO]): reemplaza a la anterior. No repitas [GUARDAR_MEMORIA].`;
+            const secondReply = await ask([
+              { role: "system", content: prompt },
+              { role: "assistant", content: firstReply },
+              { role: "user", content: [{ type: "text", text: reviewText }, { type: "image_url", image_url: { url: image } }] },
+            ]);
+            const revised = interpretDesign(secondReply);
+            if (revised.movement || revised.expression) {
+              design = { movement: revised.movement, expression: revised.expression ?? design.expression };
+              revisedReply = secondReply;
+            }
+          } catch (err) {
+            console.warn(`[Tacto] No se pudo mostrarle la reacción "${key}"; queda la primera versión:`, err);
+          }
+        }
+
         const [minMs, maxMs] =
           key === "caricia" ? DESIGN_PET_DURATION_RANGE_MS : DESIGN_DURATION_RANGE_MS;
         await saveDesignedReaction(key, {
-          expression: expressionMatch ? expressionMatch[1].toLowerCase() : null,
-          entries: movement?.entries ?? [],
-          durationMs: Math.min(maxMs, Math.max(minMs, movement?.durationMs ?? 400)),
-          animated: movement?.animated ?? false,
+          expression: design.expression,
+          entries: design.movement?.entries ?? [],
+          durationMs: Math.min(maxMs, Math.max(minMs, design.movement?.durationMs ?? 400)),
+          animated: design.movement?.animated ?? false,
           side: SIDED_KEYS.includes(key) ? side : null,
           createdAt: new Date().toISOString(),
         });
-        console.log(`[Tacto] Miku diseñó su reacción para "${key}":`, reply);
-        await processMemoryMarkers(reply);
+        console.log(
+          `[Tacto] Miku diseñó su reacción para "${key}"${revisedReply ? " (y la ajustó al verse)" : ""}:`,
+          revisedReply ?? firstReply,
+        );
+        await processMemoryMarkers(firstReply);
+        if (revisedReply) await processMemoryMarkers(revisedReply);
       } catch (err) {
         console.warn(`[Tacto] No se pudo diseñar la reacción para "${key}"; se reintenta más tarde:`, err);
         designRetryAfterRef.current[key] = Date.now() + DESIGN_RETRY_AFTER_MS;

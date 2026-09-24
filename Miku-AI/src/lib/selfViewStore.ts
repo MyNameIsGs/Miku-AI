@@ -11,6 +11,10 @@ export type SelfViewCapturer = (
   // Pose de prueba: se aplica solo para la foto y después todo vuelve a
   // como estaba (ver mirarme.ts).
   previewMovement: ParsedMovement | null,
+  // true: la pose de prueba se aplica sobre el reposo, no sobre la pose
+  // actual (para ver un gesto "limpio", como al diseñar una reacción al
+  // tacto mientras todavía se está reproduciendo la de respaldo).
+  fromRest?: boolean,
 ) => string;
 
 let capturer: SelfViewCapturer | null = null;
