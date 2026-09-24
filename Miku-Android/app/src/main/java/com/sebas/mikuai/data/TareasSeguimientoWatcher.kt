@@ -13,6 +13,8 @@ package com.sebas.mikuai.data
 //
 // Mismo valor que TASK_WATCH_INTERVAL_MS en config/constants.ts.
 private const val TASK_WATCH_INTERVAL_MS = 6 * 60 * 60 * 1000L // 6 horas
+// Si la revisión falla a mitad de camino (sin red, OpenRouter caído).
+private const val RETRY_AFTER_ERROR_MS = 15 * 60 * 1000L // 15 minutos
 
 class TareasSeguimientoWatcher(
     private val pendientesRepo: PendientesRepository,
@@ -36,12 +38,26 @@ class TareasSeguimientoWatcher(
         if (isChecking || now - lastCheckAt < TASK_WATCH_INTERVAL_MS) return null
         lastCheckAt = now
         isChecking = true
+        var succeeded = false
         try {
-            val tarea = pendientesRepo.loadTareasSeguimiento().firstOrNull() ?: return null
-            val condicion = tarea.condicion ?: return null
+            val tarea = pendientesRepo.loadTareasSeguimiento().firstOrNull()
+            val condicion = tarea?.condicion
+            if (tarea == null || condicion == null) {
+                // Nada que revisar: eso también cuenta como revisión hecha
+                // (no reintentar cada RETRY_AFTER_ERROR_MS por nada).
+                succeeded = true
+                return null
+            }
 
             val consulta = "${tarea.descripcion}. $condicion"
             val searchResult = BuscarEnWeb.execute(orApi, consulta)
+            // BuscarEnWeb no lanza: ante un fallo devuelve un texto de
+            // error (para que la tool se lo muestre a Miku). Acá eso NO es
+            // un resultado a evaluar -- se evaluaría como "no hay datos",
+            // quedaría marcada como revisada y no se reintentaría en 6 horas.
+            if (searchResult.startsWith("Error")) {
+                throw java.io.IOException(searchResult)
+            }
 
             val prompt = Prompts.buildTaskEvalPrompt(tarea.descripcion, condicion, searchResult)
             // Desktop manda solo el mensaje de sistema; chat() de acá
@@ -49,6 +65,7 @@ class TareasSeguimientoWatcher(
             val reply = orApi.chat(prompt, emptyList(), "Revisa la tarea y decide.").trim()
 
             pendientesRepo.marcarCondicionRevisada(listOf(tarea.id))
+            succeeded = true
 
             if (!reply.uppercase().startsWith("CUMPLIDA")) return null
 
@@ -57,6 +74,10 @@ class TareasSeguimientoWatcher(
             return message.ifEmpty { "Se cumplió lo que estabas esperando: \"${tarea.descripcion}\"." }
         } finally {
             isChecking = false
+            // Error de red o de OpenRouter antes de terminar la revisión:
+            // no esperar las 6 horas enteras para reintentar (la tarea
+            // tampoco quedó marcada como revisada), sino RETRY_AFTER_ERROR_MS.
+            if (!succeeded) lastCheckAt = now - TASK_WATCH_INTERVAL_MS + RETRY_AFTER_ERROR_MS
         }
     }
 }
