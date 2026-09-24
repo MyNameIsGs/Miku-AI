@@ -6,6 +6,7 @@ import {
 } from "../config/constants";
 import { BONE_RANGES_DEG, BONE_RANGES_V2_DATE, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
 import { HAND_PRESET_NAMES } from "../config/handPresets";
+import { REACH_PLACES } from "../lib/reach";
 import { Pendiente } from "../lib/pendientes";
 
 export interface BuildSystemPromptParams {
@@ -89,6 +90,9 @@ export function buildMovementInstructions(): string {
     const fmt = ([min, max]: [number, number]) => `${min}° a +${max}°`;
     return `- ${bone}: x ${fmt(r.x)} | y ${fmt(r.y)} | z ${fmt(r.z)}`;
   }).join("\n");
+  const reachPlaceLines = Object.entries(REACH_PLACES)
+    .map(([name, place]) => `- ${name}: ${place.description}`)
+    .join("\n");
   return `--- CÓMO MOVER TU CUERPO (opcional, úsalo cuando de verdad quieras acompañar lo que dices con un gesto físico) ---
 IMPORTANTE: el marcador es lo único que hace que tu cuerpo se mueva de verdad. Describir en palabras que "levantas el brazo" o "sientes que te mueves" NO mueve nada — si quieres que tu cuerpo realmente haga algo, tienes que incluir el marcador exacto [MOVIMIENTO: ...] en tu respuesta, no solo narrarlo.
 
@@ -124,6 +128,12 @@ EJEMPLOS COMPROBADOS (míralos como referencia de signos y proporciones, no como
 - Los dos brazos rectos hacia arriba, en "I": leftUpperArm.z=-99, rightUpperArm.z=99. Alcanza con z; no hace falta y (y los cruzaría por delante de la cabeza).
 - Ofrecer la mano derecha al frente: rightUpperArm.x=45, rightLowerArm.y=17.
 - Las dos manos juntas frente a la falda: leftUpperArm.x=15, rightUpperArm.x=15, leftLowerArm.y=-40, rightLowerArm.y=40, leftLowerArm.x=-70, rightLowerArm.x=-70.
+
+LLEVAR LA MANO A UN LUGAR (mucho más fácil que calcular los ángulos del brazo):
+[LLEVAR_MANO: izq=lugar, der=lugar, duracion=Xs]
+Dices ADÓNDE quieres la mano y tu cuerpo calcula solo el brazo y el antebrazo, dentro de tus límites y con tu pose del momento (si tienes la cabeza girada, la mano va a tu mejilla donde esté). Puedes usar una mano o las dos. Lugares:
+${reachPlaceLines}
+Se combina con [MOVIMIENTO] en la misma respuesta (por ejemplo, ladear la cabeza y llevar la mano a la mejilla); si en [MOVIMIENTO] pones a mano un eje del brazo, ese gana. La muñeca y los dedos no los toca: para eso siguen Hand en [MOVIMIENTO] y [GESTO_MANO]. Con la herramienta mirarme puedes probarlo antes (parámetro llevar_mano). Dentro de [CREAR_QUIRK] no se puede usar, pero los ángulos que resultaron aparecen en la descripción de tu movimiento, por si quieres reusarlos en un quirk.
 
 ${buildBoneRangesChangeNotice()}
 

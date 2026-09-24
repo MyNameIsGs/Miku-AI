@@ -40,7 +40,8 @@ import { retrieveKnowledge } from "./lib/knowledge";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
-import { registerSelfViewCapturer } from "./lib/selfViewStore";
+import { registerReachResolver, registerSelfViewCapturer } from "./lib/selfViewStore";
+import { parseReachMarker, solveReach } from "./lib/reach";
 import { BONE_RANGES_DEG } from "./config/boneRanges";
 import { intensityToDegrees } from "./hooks/useMovement";
 import { useAudioDevices } from "./hooks/useAudioDevices";
@@ -54,10 +55,11 @@ import {
   deleteQuirk,
   QuirksStore,
 } from "./lib/quirks";
-import { ChatContentPart, ChatContent, ChatMessage } from "./types";
+import { ChatContentPart, ChatContent, ChatMessage, ParsedMovement } from "./types";
 import {
   OPENROUTER_MODEL,
   MAX_HISTORY_TURNS,
+  DEFAULT_MOVEMENT_DURATION_MS,
   VOICE_PITCH_MIN,
   VOICE_PITCH_MAX,
   VOICE_RATE_MIN,
@@ -687,6 +689,7 @@ function App() {
     captureQuirkImagesAfterDelays,
     quirkSelfImagesRef,
     pendingQuirkDescriptionRef,
+    resolveReach,
   });
 
   const reminders = useReminders({
@@ -896,10 +899,25 @@ function App() {
         }
       }
 
-      const parsedMovement = parseMovementMarker(reply);
-      if (parsedMovement) {
-        movement.scheduleMovement(parsedMovement, "response");
+      const explicitMovement = parseMovementMarker(reply);
+      // [LLEVAR_MANO]: se resuelve antes de programar nada (sobre la pose
+      // final) y se programa aparte; para la foto y la descripción de su
+      // propio cuerpo cuenta junto con [MOVIMIENTO].
+      const reachMovement = resolveReach(reply, explicitMovement);
+      if (explicitMovement) {
+        movement.scheduleMovement(explicitMovement, "response");
       }
+      if (reachMovement) {
+        movement.scheduleMovement(reachMovement, "response");
+      }
+      const parsedMovement: ParsedMovement | null =
+        explicitMovement && reachMovement
+          ? {
+              ...explicitMovement,
+              entries: [...reachMovement.entries, ...explicitMovement.entries],
+              durationMs: Math.max(explicitMovement.durationMs, reachMovement.durationMs),
+            }
+          : (explicitMovement ?? reachMovement);
 
       // Tarea 3.1, Paso 2b: creación de gesto propio, si la respuesta la
       // incluye. Se guarda ANTES de procesar [GESTO_MANO], por si en la
@@ -1185,6 +1203,60 @@ function App() {
     return () => registerSelfViewCapturer(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVrmLoaded]);
+
+  // [LLEVAR_MANO] (ver lib/reach.ts): devuelve SOLO el movimiento de los
+  // brazos, para programarlo aparte del [MOVIMIENTO] de la misma respuesta
+  // (si ese es animado, la mano no tiene que quedar oscilando). Se resuelve
+  // sobre la pose en la que va a TERMINAR: los destinos de las transiciones
+  // en curso y de `base` se aplican un momento, y después todo vuelve.
+  // Los ejes que `base` ya pone a mano ganan sobre los calculados.
+  function resolveReach(text: string, base: ParsedMovement | null): ParsedMovement | null {
+    const reach = parseReachMarker(text, DEFAULT_MOVEMENT_DURATION_MS);
+    const vrm = vrmRef.current;
+    if (!reach || !vrm) return null;
+    const bones = movementBonesRef.current;
+    const rest = boneRestRotationRef.current;
+    const saved: [THREE.Object3D, "x" | "y" | "z", number][] = [];
+    const setTemporarily = (bone: string, axis: "x" | "y" | "z", rad: number) => {
+      const node = bones[bone];
+      if (!node) return;
+      saved.push([node, axis, node.rotation[axis]]);
+      node.rotation[axis] = rad;
+    };
+    for (const [key, transition] of Object.entries(movement.boneTransitionsRef.current)) {
+      const [bone, axis] = key.split(".") as [string, "x" | "y" | "z"];
+      if (!transition.animated) setTemporarily(bone, axis, transition.targetValue);
+    }
+    for (const e of base?.entries ?? []) {
+      const range = BONE_RANGES_DEG[e.bone]?.[e.axis];
+      if (!range) continue;
+      const deg = intensityToDegrees(e.intensity, range[0], range[1]);
+      setTemporarily(e.bone, e.axis, (rest[e.bone]?.[e.axis] ?? 0) + (deg * Math.PI) / 180);
+    }
+
+    const solved: ParsedMovement["entries"] = [];
+    try {
+      const camera = cameraRef.current?.position.clone() ?? null;
+      for (const [side, place] of [["left", reach.left], ["right", reach.right]] as const) {
+        if (!place) continue;
+        const result = solveReach(vrm, bones, rest, side, place, camera);
+        if (result) solved.push(...result.entries);
+      }
+    } finally {
+      for (const [node, axis, value] of saved.reverse()) node.rotation[axis] = value;
+      vrm.humanoid?.update();
+      vrm.scene.updateMatrixWorld(true);
+    }
+
+    const explicit = new Set((base?.entries ?? []).map((e) => `${e.bone}.${e.axis}`));
+    const entries = solved.filter((e) => !explicit.has(`${e.bone}.${e.axis}`));
+    return entries.length > 0 ? { entries, durationMs: reach.durationMs, animated: false } : null;
+  }
+
+  useEffect(() => {
+    registerReachResolver(resolveReach);
+    return () => registerReachResolver(null);
+  });
 
   // Tarea 8.12: reacción al tacto (ver useTouchReactions.ts).
   const touch = useTouchReactions({

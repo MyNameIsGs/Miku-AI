@@ -257,6 +257,7 @@ export function stripMarkers(text: string): string {
     .replace(/\[VOZ_PITCH:\s*-?\d+(?:\.\d+)?\]/gi, "")
     .replace(/\[VOZ_RATE:\s*-?\d+(?:\.\d+)?\]/gi, "")
     .replace(/\[MOVIMIENTO:[\s\S]*?\]/gi, "")
+    .replace(/\[LLEVAR_MANO:[\s\S]*?\]/gi, "")
     .replace(/\[GESTO_MANO:[\s\S]*?\]/gi, "")
     .replace(/\[CREAR_GESTO_MANO:[\s\S]*?\]/gi, "")
     .replace(/\[CREAR_QUIRK:[\s\S]*?\]/gi, "")

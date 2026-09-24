@@ -14,6 +14,7 @@ import {
 import { loadMemoryContext } from "../lib/memory";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { parseMovementMarker } from "../lib/markers";
+import { getReachResolver } from "../lib/selfViewStore";
 import { OPENROUTER_MODEL } from "../config/constants";
 import { buildTouchReactionPrompt } from "../prompts/touchReactionPrompt";
 
@@ -305,7 +306,17 @@ export function useTouchReactions({
         const data = await response.json();
         const reply: string = data.choices?.[0]?.message?.content ?? "";
 
-        const movement = parseMovementMarker(reply);
+        const explicitMovement = parseMovementMarker(reply);
+        // [LLEVAR_MANO] se guarda ya resuelto en ángulos, junto con el resto.
+        const reachMovement = getReachResolver()?.(reply, explicitMovement) ?? null;
+        const movement =
+          explicitMovement || reachMovement
+            ? {
+                entries: [...(reachMovement?.entries ?? []), ...(explicitMovement?.entries ?? [])],
+                durationMs: explicitMovement?.durationMs ?? reachMovement!.durationMs,
+                animated: explicitMovement?.animated ?? false,
+              }
+            : null;
         const expressionMatch = reply.match(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/i);
         if (!movement && !expressionMatch) {
           throw new Error(`respuesta sin [MOVIMIENTO] ni [EXPRESION]: ${reply.slice(0, 200)}`);

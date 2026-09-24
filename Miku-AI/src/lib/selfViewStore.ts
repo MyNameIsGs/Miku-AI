@@ -22,3 +22,19 @@ export function registerSelfViewCapturer(fn: SelfViewCapturer | null) {
 export function getSelfViewCapturer(): SelfViewCapturer | null {
   return capturer;
 }
+
+// [LLEVAR_MANO] (ver lib/reach.ts) también necesita el cuerpo: App.tsx
+// registra cómo resolverlo, para que `mirarme` pueda probar un lugar.
+// Recibe el texto con el marcador y la pose de prueba (si hay), y devuelve
+// los ángulos de brazo resueltos (o null si no había marcador).
+export type ReachResolver = (text: string, base: ParsedMovement | null) => ParsedMovement | null;
+
+let reachResolver: ReachResolver | null = null;
+
+export function registerReachResolver(fn: ReachResolver | null) {
+  reachResolver = fn;
+}
+
+export function getReachResolver(): ReachResolver | null {
+  return reachResolver;
+}

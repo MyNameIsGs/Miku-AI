@@ -68,6 +68,9 @@ type UseIdleQuirksParams = {
   captureQuirkImagesAfterDelays: (delaysMs: number[]) => void;
   quirkSelfImagesRef: RefObject<string[]>;
   pendingQuirkDescriptionRef: RefObject<string | null>;
+  // [LLEVAR_MANO] en un gesto espontáneo (ver resolveReach en App.tsx):
+  // devuelve el movimiento de los brazos ya resuelto, o null.
+  resolveReach: (text: string, base: ParsedMovement | null) => ParsedMovement | null;
 };
 
 export function useIdleQuirks({
@@ -82,6 +85,7 @@ export function useIdleQuirks({
   captureQuirkImagesAfterDelays,
   quirkSelfImagesRef,
   pendingQuirkDescriptionRef,
+  resolveReach,
 }: UseIdleQuirksParams) {
   // Tarea 3.1, Paso 3: silencio se mide desde lo último de estas dos cosas
   // que haya pasado -- una interacción real, o el último quirk (para que
@@ -280,15 +284,24 @@ export function useIdleQuirks({
         voiceRateRef.current,
       );
 
-      if (parsed.movement) {
+      // Se resuelve antes de mover nada, sobre la pose final (ver App.tsx).
+      const reachMovement = resolveReach(reply, parsed.movement);
+      if (parsed.movement || reachMovement) {
         // Mismo motivo que en runStoredQuirk: limpia cualquier oscilación
         // animada colgada de un quirk directo anterior que este movimiento
         // no vaya a tocar.
         revertAnimatedBonesExcept(
-          parsed.movement.entries.map((e) => `${e.bone}.${e.axis}`),
+          [...(parsed.movement?.entries ?? []), ...(reachMovement?.entries ?? [])].map(
+            (e) => `${e.bone}.${e.axis}`,
+          ),
         );
-        // El doble de su propia duración de entrada antes de volver sola.
+      }
+      // El doble de su propia duración de entrada antes de volver sola.
+      if (parsed.movement) {
         scheduleMovement(parsed.movement, "idle", parsed.movement.durationMs);
+      }
+      if (reachMovement) {
+        scheduleMovement(reachMovement, "idle", reachMovement.durationMs);
       }
 
       await processQuirkMarkers(quirks, parsed.createQuirk, parsed.quirkReady);

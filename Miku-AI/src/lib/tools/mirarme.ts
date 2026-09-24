@@ -1,7 +1,8 @@
 import { ToolDefinition } from "./types";
 import { parseMovementMarker } from "../markers";
 import { SELF_VIEW_ANGLES, SELF_VIEW_FRAMINGS, SelfViewAngle, SelfViewFraming } from "../selfView";
-import { getSelfViewCapturer } from "../selfViewStore";
+import { getReachResolver, getSelfViewCapturer } from "../selfViewStore";
+import { REACH_PLACES } from "../reach";
 
 // Miku se mira a sí misma desde cualquier ángulo (ver lib/selfView.ts).
 // Con `movimiento`, además puede PROBAR una pose antes de hacerla: se
@@ -35,6 +36,11 @@ export const mirarme: ToolDefinition = {
             description:
               "Opcional: una pose para probar, con la misma sintaxis de adentro de [MOVIMIENTO] (ej. 'rightUpperArm.z=60, rightUpperArm.y=30'). Se ve la pose ya terminada, sin duración ni animación.",
           },
+          llevar_mano: {
+            type: "string",
+            description:
+              "Opcional: probar adónde llevar las manos, con la misma sintaxis de adentro de [LLEVAR_MANO] (ej. 'der=mejilla' o 'izq=cintura, der=cintura'). Se combina con 'movimiento' si pones los dos.",
+          },
         },
         required: ["angulo", "encuadre"],
       },
@@ -47,14 +53,24 @@ export const mirarme: ToolDefinition = {
     const angle = (SELF_VIEW_ANGLES.includes(args.angulo as SelfViewAngle) ? args.angulo : "cuatro") as SelfViewAngle;
     const framing = (SELF_VIEW_FRAMINGS.includes(args.encuadre as SelfViewFraming) ? args.encuadre : "cuerpo") as SelfViewFraming;
     const rawMovement = String(args.movimiento ?? "").trim();
-    const preview = rawMovement ? parseMovementMarker(`[MOVIMIENTO: ${rawMovement}]`) : null;
-    if (rawMovement && !preview) {
+    const movementPreview = rawMovement ? parseMovementMarker(`[MOVIMIENTO: ${rawMovement}]`) : null;
+    if (rawMovement && !movementPreview) {
       return `No entendí la pose "${rawMovement}": usa el formato hueso.eje=intensidad separados por comas (ej. 'rightUpperArm.z=60, head.y=20').`;
+    }
+    const rawReach = String(args.llevar_mano ?? "").trim();
+    let preview = movementPreview;
+    if (rawReach) {
+      const reach = getReachResolver()?.(`[LLEVAR_MANO: ${rawReach}]`, movementPreview) ?? null;
+      if (!reach) {
+        return `No entendí "${rawReach}": usa izq=lugar y/o der=lugar (lugares: ${Object.keys(REACH_PLACES).join(", ")}).`;
+      }
+      preview = { ...reach, entries: [...reach.entries, ...(movementPreview?.entries ?? [])] };
     }
 
     try {
       const dataUrl = capture(angle, framing, preview);
-      const what = preview ? `probando la pose "${rawMovement}" (solo para esta imagen)` : "tu pose actual";
+      const tried = [rawMovement && `la pose "${rawMovement}"`, rawReach && `las manos "${rawReach}"`].filter(Boolean).join(" y ");
+      const what = preview ? `probando ${tried} (solo para esta imagen)` : "tu pose actual";
       return [
         { type: "text", text: `Así te ves: ${framing}, desde ${angle === "cuatro" ? "cuatro ángulos" : angle}, ${what}.` },
         { type: "image_url", image_url: { url: dataUrl } },
