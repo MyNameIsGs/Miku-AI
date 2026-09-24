@@ -42,6 +42,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from nanowakeword import NanoInterpreter
 from tts_with_rvc import TTS_RVC
+import asyncio
+import wave
+import edge_tts
+from lipsync_text import visemes_from_words
 from faster_whisper import WhisperModel
 from waitress import serve
 
@@ -353,10 +357,15 @@ print(f"[INFO] Directorio de trabajo establecido en: {os.getcwd()}")
 print(f"[INFO] Rhubarb resuelto en: {RHUBARB_PATH} (Existe: {os.path.isfile(RHUBARB_PATH)})")
 print("[INFO] Inicializando servidor de voz e instanciando RVC...")
 
+# La voz base de Edge TTS (antes de RVC). La usa TTS_RVC y también
+# tts_with_text_lipsync, que llama a Edge directo para tener los tiempos
+# de cada palabra.
+TTS_VOICE = "es-MX-DaliaNeural"
+
 try:
     tts = TTS_RVC(
         model_path="C:/Users/sebas/MikuAI-Project/Miku-RVC/model.pth",
-        voice="es-MX-DaliaNeural",
+        voice=TTS_VOICE,
     )
     print("[OK] Modelo de voz RVC cargado correctamente.")
 except Exception as e:
@@ -408,6 +417,53 @@ def get_visemes(wav_path, dialog_text):
 
     return data.get("mouthCues", [])
 
+async def _edge_tts_with_words(text, tts_rate, out_path):
+    # Mismos parámetros que usa TTS_RVC por dentro (tts_communicate), más
+    # boundary="WordBoundary": en la MISMA llamada llegan los tiempos de
+    # cada palabra, sin costo extra.
+    communicate = edge_tts.Communicate(
+        text,
+        TTS_VOICE,
+        rate=f'{"+" if tts_rate >= 0 else ""}{tts_rate}%',
+        boundary="WordBoundary",
+    )
+    words = []
+    with open(out_path, "wb") as f:
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                f.write(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                words.append((chunk["offset"] / 1e7, chunk["duration"] / 1e7, chunk["text"]))
+    return words
+
+
+def tts_with_text_lipsync(text, pitch, tts_rate):
+    """Voz + boca desde el texto (ver lipsync_text.py). None si no se pudo.
+
+    RVC no cambia los tiempos del audio (solo el timbre), así que los
+    tiempos de palabra de Edge valen igual para la voz final de Miku.
+    """
+    mp3_path = os.path.join(tempfile.gettempdir(), f"miku_tts_{time_module.time_ns()}.mp3")
+    try:
+        words = asyncio.run(_edge_tts_with_words(text, tts_rate, mp3_path))
+        # voiceover_file devuelve None si RVC está ocupado con otro pedido.
+        wav_path = tts.voiceover_file(mp3_path, pitch=pitch, index_rate=0.75)
+        if not wav_path:
+            return None
+        with wave.open(wav_path, "rb") as w:
+            duration = w.getnframes() / w.getframerate()
+        return wav_path, visemes_from_words(words, duration)
+    except Exception:
+        print("[WARN] Voz con boca desde el texto falló, se usa el camino con Rhubarb:")
+        traceback.print_exc()
+        return None
+    finally:
+        try:
+            os.remove(mp3_path)
+        except OSError:
+            pass
+
+
 @app.route("/speak", methods=["POST"])
 def speak():
     try:
@@ -415,25 +471,32 @@ def speak():
         text = data.get("text", "")
         pitch = data.get("pitch", 10)
         tts_rate = data.get("tts_rate", 15)
+        # "texto" (boca desde el texto, ~1 s más rápido) o "rhubarb" (el de
+        # siempre). Interruptor en Config del frontend para compararlos.
+        lipsync = data.get("lipsync", "rhubarb")
 
         if not text:
             return {"error": "No se proporcionó texto"}, 400
 
         text_for_speech = text.replace(". ", ", ").replace(".", ",")
 
-        generated_wav = tts(
-            text=text_for_speech,
-            pitch=pitch,
-            index_rate=0.75,
-            tts_rate=tts_rate,
-        )
+        result = tts_with_text_lipsync(text_for_speech, pitch, tts_rate) if lipsync == "texto" else None
+        if result:
+            generated_wav, visemes = result
+        else:
+            generated_wav = tts(
+                text=text_for_speech,
+                pitch=pitch,
+                index_rate=0.75,
+                tts_rate=tts_rate,
+            )
 
-        try:
-            visemes = get_visemes(generated_wav, text_for_speech)
-        except Exception:
-            print("[WARN] Rhubarb falló, continuando sin visemas:")
-            traceback.print_exc()
-            visemes = []
+            try:
+                visemes = get_visemes(generated_wav, text_for_speech)
+            except Exception:
+                print("[WARN] Rhubarb falló, continuando sin visemas:")
+                traceback.print_exc()
+                visemes = []
 
         with open(generated_wav, "rb") as f:
             audio_base64 = base64.b64encode(f.read()).decode("utf-8")

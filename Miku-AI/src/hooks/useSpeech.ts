@@ -22,6 +22,10 @@ type UseSpeechParams = {
   // sin importar cuándo se haya creado la closure que lo llama (mismo
   // motivo que voicePitchRef/voiceRateRef).
   mutedRef: RefObject<boolean>;
+  // Cómo se arma la boca en el servidor de voz: "texto" (desde el texto
+  // con los tiempos de palabra de Edge TTS, ~1 s más rápido) o "rhubarb"
+  // (analizando el audio, el de siempre). Interruptor en Config.
+  lipsyncModeRef: RefObject<"texto" | "rhubarb">;
 };
 
 export function useSpeech({
@@ -30,6 +34,7 @@ export function useSpeech({
   resetVisemes,
   isSpeakingRef,
   mutedRef,
+  lipsyncModeRef,
 }: UseSpeechParams) {
   // Antes de los recordatorios (poner_recordatorio) speak() solo se llamaba
   // desde dos lugares que nunca coincidían en el tiempo por construcción
@@ -65,7 +70,7 @@ export function useSpeech({
       const response = await fetch("http://127.0.0.1:8899/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, pitch, tts_rate: rate }),
+        body: JSON.stringify({ text, pitch, tts_rate: rate, lipsync: lipsyncModeRef.current }),
       });
 
       if (!response.ok) {

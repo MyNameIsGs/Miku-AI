@@ -105,6 +105,8 @@ function App() {
   const voiceRateRef = useRef(voiceRate);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const voiceMutedRef = useRef(voiceMuted);
+  const [lipsyncMode, setLipsyncMode] = useState<"texto" | "rhubarb">("texto");
+  const lipsyncModeRef = useRef(lipsyncMode);
   const [showConfig, setShowConfig] = useState(false);
   const [showAppLauncher, setShowAppLauncher] = useState(false);
   const [showQuirksPanel, setShowQuirksPanel] = useState(false);
@@ -187,12 +189,15 @@ function App() {
         const savedPitch = await store.get<number>("voicePitch");
         const savedRate = await store.get<number>("voiceRate");
         const savedMuted = await store.get<boolean>("voiceMuted");
+        const savedLipsync = await store.get<"texto" | "rhubarb">("lipsyncMode");
         if (savedPitch !== null && savedPitch !== undefined)
           setVoicePitch(savedPitch);
         if (savedRate !== null && savedRate !== undefined)
           setVoiceRate(savedRate);
         if (savedMuted !== null && savedMuted !== undefined)
           setVoiceMuted(savedMuted);
+        if (savedLipsync === "texto" || savedLipsync === "rhubarb")
+          setLipsyncMode(savedLipsync);
         isVoiceSettingsLoaded.current = true;
       } catch (err) {
         console.error("Error cargando configuración de voz guardada:", err);
@@ -227,6 +232,20 @@ function App() {
       }
     })();
   }, [voiceRate]);
+
+  useEffect(() => {
+    lipsyncModeRef.current = lipsyncMode;
+    if (!isVoiceSettingsLoaded.current) return;
+    (async () => {
+      try {
+        const store = await load(".settings.dat", { autoSave: false });
+        await store.set("lipsyncMode", lipsyncMode);
+        await store.save();
+      } catch (err) {
+        console.error("Error guardando el modo de la boca:", err);
+      }
+    })();
+  }, [lipsyncMode]);
 
   useEffect(() => {
     voiceMutedRef.current = voiceMuted;
@@ -537,6 +556,7 @@ function App() {
     resetVisemes: face.resetVisemes,
     isSpeakingRef: face.isSpeakingRef,
     mutedRef: voiceMutedRef,
+    lipsyncModeRef,
   });
 
   // Tarea 8.1: silencio sostenido mientras se graba corta sola, sin
@@ -1355,6 +1375,16 @@ function App() {
               value={voiceRate}
               onChange={(e) => setVoiceRate(Number(e.target.value))}
             />
+          </label>
+          <label title="Desde el texto: la boca forma las vocales del español y Miku responde ~1 s antes. Rhubarb: analiza el audio (el de antes).">
+            Boca:{" "}
+            <select
+              value={lipsyncMode}
+              onChange={(e) => setLipsyncMode(e.target.value as "texto" | "rhubarb")}
+            >
+              <option value="texto">Vocales del texto (más rápida)</option>
+              <option value="rhubarb">Rhubarb (la de antes)</option>
+            </select>
           </label>
           <div className="oauth-connect-row">
             <button
