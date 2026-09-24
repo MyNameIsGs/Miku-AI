@@ -1,9 +1,21 @@
-import { RefObject, useRef } from "react";
+import { RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { VRM } from "@pixiv/three-vrm";
 import { MovementOrigin, ParsedMovement } from "../types";
 import { detectTouchZone, TouchHit, TouchZone } from "../lib/touch";
 import { recordTouch } from "../lib/touchLog";
+import {
+  TouchReactionKey,
+  getDesignedReaction,
+  loadTouchReactions,
+  mirrorEntries,
+  saveDesignedReaction,
+} from "../lib/touchReactionsStore";
+import { loadMemoryContext } from "../lib/memory";
+import { fetchOpenRouterWithRetry } from "../lib/openrouter";
+import { parseMovementMarker } from "../lib/markers";
+import { OPENROUTER_MODEL } from "../config/constants";
+import { buildTouchReactionPrompt } from "../prompts/touchReactionPrompt";
 
 type UseTouchReactionsParams = {
   vrmRef: RefObject<VRM | null>;
@@ -20,17 +32,26 @@ type UseTouchReactionsParams = {
   isSpeakingRef: RefObject<boolean>;
   // Tocarla cuenta como interacción: reinicia el contador de los quirks idle.
   onInteraction: () => void;
+  // Cuando Miku diseña una reacción puede querer recordar el momento
+  // ([GUARDAR_MEMORIA]) -- se procesa igual que en una respuesta normal.
+  processMemoryMarkers: (reply: string) => Promise<void>;
 };
 
 type Reaction = {
-  expression: string;
+  // null = la reacción no cambia la expresión.
+  expression: string | null;
   entries: ParsedMovement["entries"];
   durationMs: number;
+  animated?: boolean;
   // Cuánto se sostiene la pose antes de volver sola (y la expresión).
   holdMs: number;
   description: string;
 };
 
+// Reacciones de RESPALDO, escritas a mano: se usan solo mientras Miku no
+// diseñó la suya para esa zona (ver requestDesign más abajo y
+// touchReactionsStore.ts) -- la primera vez que la tocan en cada zona.
+//
 // Signos: los mismos de la tabla de ejes que ya usa Miku en su prompt
 // (systemPrompt.ts, calibrada con renders reales) -- x > 0 mira arriba /
 // se echa hacia atrás, y > 0 gira hacia SU izquierda, z > 0 ladea hacia
@@ -125,6 +146,47 @@ function reactionFor(zone: TouchZone, side: "left" | "right"): Reaction {
   }
 }
 
+// Qué pasó, en segunda persona, para pedirle a Miku que diseñe su reacción.
+// "Izquierda/derecha" son las de ella, no las de la pantalla.
+function describeForDesign(key: TouchReactionKey, side: "left" | "right" | null): string {
+  const lado = side === "left" ? "izquierda" : "derecha";
+  const ladoM = side === "left" ? "izquierdo" : "derecho";
+  switch (key) {
+    case "cabeza":
+      return "te dio un toquecito en la cabeza";
+    case "cara":
+      return `te tocó la mejilla ${lado}`;
+    case "coletas":
+      return `te tiró de la coleta ${lado}`;
+    case "mano":
+      return `te tocó la mano ${lado}`;
+    case "brazo":
+      return `te tocó el brazo ${ladoM}`;
+    case "torso":
+      return "te tocó el torso";
+    case "falda":
+      return "te tocó la falda";
+    case "pierna":
+      return `te tocó la pierna ${lado}`;
+    case "caricia":
+      return "te está acariciando la cabeza, de un lado a otro, y sigue haciéndolo";
+    case "harta":
+      return "te tocó muchas veces seguidas, un toque detrás de otro";
+  }
+}
+
+// Zonas con lado: la reacción se diseña de un lado y del otro se espeja.
+const SIDED_KEYS: TouchReactionKey[] = ["cara", "coletas", "mano", "brazo", "pierna"];
+
+// Si el diseño falla (sin conexión, respuesta sin marcadores), no se
+// reintenta en cada toque: se espera este tiempo.
+const DESIGN_RETRY_AFTER_MS = 5 * 60 * 1000;
+
+// Duraciones aceptadas para lo que diseñe Miku (la de la caricia puede ser
+// más larga: si es animada, es el período del vaivén).
+const DESIGN_DURATION_RANGE_MS: [number, number] = [150, 1500];
+const DESIGN_PET_DURATION_RANGE_MS: [number, number] = [150, 3000];
+
 // Muchos toques seguidos, en cualquier lado: se harta y mira para otro lado.
 const ANNOYED_TAP_COUNT = 5;
 const ANNOYED_WINDOW_MS = 6000;
@@ -153,7 +215,6 @@ const PET_REACTION: Reaction = {
   holdMs: 0, // no se usa: la pose dura lo que dure la caricia
   description: "te acarició la cabeza",
 };
-const PET_KEYS = PET_REACTION.entries.map((e) => `${e.bone}.${e.axis}`);
 // "Para siempre" a efectos prácticos: la vuelta real la dispara
 // endPetting con releaseQuirkRevertsNow.
 const PET_HOLD_UNTIL_RELEASED_MS = 60 * 60 * 1000;
@@ -177,7 +238,15 @@ export function useTouchReactions({
   setExpression,
   isSpeakingRef,
   onInteraction,
+  processMemoryMarkers,
 }: UseTouchReactionsParams) {
+  useEffect(() => {
+    loadTouchReactions();
+  }, []);
+
+  const designInFlightRef = useRef(new Set<TouchReactionKey>());
+  const designRetryAfterRef = useRef<Partial<Record<TouchReactionKey, number>>>({});
+
   // Mientras una reacción está en curso (ida + pose + vuelta) no se
   // programa otra: scheduleMovement guarda "a dónde volver" con el valor
   // actual del hueso, y a mitad de reacción ese valor ya es la pose -- se
@@ -193,8 +262,96 @@ export function useTouchReactions({
   const lastHoverHitRef = useRef<TouchHit | null>(null);
   const isPettingRef = useRef(false);
   const petEndTimerRef = useRef<number | null>(null);
-  // Si la pose de caricia está puesta (y hay que soltarla al terminar).
-  const petPoseAppliedRef = useRef(false);
+  // Huesos de la pose de caricia puesta (para soltarla al terminar), o
+  // null si no hay ninguna puesta.
+  const petPoseKeysRef = useRef<string[] | null>(null);
+  const petDurationRef = useRef(PET_REACTION.durationMs);
+  // La reacción de esta caricia (la de Miku o el respaldo), decidida una
+  // sola vez al empezar.
+  const petReactionRef = useRef<Reaction | null>(null);
+
+  // Primera vez en esta zona (o situación): se le pide a Miku que diseñe su
+  // reacción, en segundo plano. Mientras, se usa el respaldo -- desde el
+  // próximo toque, la suya.
+  function requestDesign(key: TouchReactionKey, side: "left" | "right" | null) {
+    if (designInFlightRef.current.has(key)) return;
+    if (Date.now() < (designRetryAfterRef.current[key] ?? 0)) return;
+    designInFlightRef.current.add(key);
+
+    (async () => {
+      try {
+        // Al arrancar, la memoria se baja de GitHub en paralelo con la
+        // primera carga de este archivo: si la reacción llegó recién ahora
+        // (diseñada en otra sesión), se usa esa y no se pide otra.
+        await loadTouchReactions();
+        if (getDesignedReaction(key)) return;
+
+        const { world, personality, memories } = await loadMemoryContext();
+        const today = new Date();
+        const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const prompt = buildTouchReactionPrompt({
+          world,
+          personality,
+          memories,
+          todayIso,
+          what: describeForDesign(key, side),
+          sustained: key === "caricia",
+        });
+        const response = await fetchOpenRouterWithRetry({
+          model: OPENROUTER_MODEL,
+          messages: [{ role: "system", content: prompt }],
+        });
+        const data = await response.json();
+        const reply: string = data.choices?.[0]?.message?.content ?? "";
+
+        const movement = parseMovementMarker(reply);
+        const expressionMatch = reply.match(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/i);
+        if (!movement && !expressionMatch) {
+          throw new Error(`respuesta sin [MOVIMIENTO] ni [EXPRESION]: ${reply.slice(0, 200)}`);
+        }
+        const [minMs, maxMs] =
+          key === "caricia" ? DESIGN_PET_DURATION_RANGE_MS : DESIGN_DURATION_RANGE_MS;
+        await saveDesignedReaction(key, {
+          expression: expressionMatch ? expressionMatch[1].toLowerCase() : null,
+          entries: movement?.entries ?? [],
+          durationMs: Math.min(maxMs, Math.max(minMs, movement?.durationMs ?? 400)),
+          animated: movement?.animated ?? false,
+          side: SIDED_KEYS.includes(key) ? side : null,
+          createdAt: new Date().toISOString(),
+        });
+        console.log(`[Tacto] Miku diseñó su reacción para "${key}":`, reply);
+        await processMemoryMarkers(reply);
+      } catch (err) {
+        console.warn(`[Tacto] No se pudo diseñar la reacción para "${key}"; se reintenta más tarde:`, err);
+        designRetryAfterRef.current[key] = Date.now() + DESIGN_RETRY_AFTER_MS;
+      } finally {
+        designInFlightRef.current.delete(key);
+      }
+    })();
+  }
+
+  // La reacción de Miku para esa zona si ya la diseñó (espejada si la
+  // diseñó del otro lado); si no, el respaldo, y se le pide que la diseñe.
+  function resolveReaction(
+    key: TouchReactionKey,
+    side: "left" | "right" | null,
+    fallback: Reaction,
+  ): Reaction {
+    const designed = getDesignedReaction(key);
+    if (!designed) {
+      requestDesign(key, side);
+      return fallback;
+    }
+    const needsMirror = designed.side !== null && side !== null && designed.side !== side;
+    return {
+      expression: designed.expression,
+      entries: needsMirror ? mirrorEntries(designed.entries) : designed.entries,
+      durationMs: designed.durationMs,
+      animated: designed.animated,
+      holdMs: fallback.holdMs,
+      description: fallback.description,
+    };
+  }
 
   function detect(clientX: number, clientY: number): TouchHit | null {
     const vrm = vrmRef.current;
@@ -224,10 +381,16 @@ export function useTouchReactions({
 
   function play(reaction: Reaction) {
     const now = performance.now();
-    showExpression(reaction.expression, reaction.durationMs + reaction.holdMs);
-    if (now < movementBusyUntilRef.current) return;
+    if (reaction.expression) {
+      showExpression(reaction.expression, reaction.durationMs + reaction.holdMs);
+    }
+    if (now < movementBusyUntilRef.current || reaction.entries.length === 0) return;
     scheduleMovement(
-      { entries: reaction.entries, durationMs: reaction.durationMs, animated: false },
+      {
+        entries: reaction.entries,
+        durationMs: reaction.durationMs,
+        animated: reaction.animated ?? false,
+      },
       "idle",
       reaction.holdMs,
     );
@@ -251,11 +414,16 @@ export function useTouchReactions({
       recordTouch(ANNOYED_REACTION.description);
       // Hartazgo: gana aunque haya otra reacción en curso.
       movementBusyUntilRef.current = 0;
-      play(ANNOYED_REACTION);
+      play(resolveReaction("harta", null, ANNOYED_REACTION));
       return true;
     }
 
-    const reaction = reactionFor(hit.zone, hit.side);
+    const key: TouchReactionKey = hit.zone;
+    const reaction = resolveReaction(
+      key,
+      SIDED_KEYS.includes(key) ? hit.side : null,
+      reactionFor(hit.zone, hit.side),
+    );
     recordTouch(reaction.description);
     play(reaction);
     return true;
@@ -265,10 +433,11 @@ export function useTouchReactions({
     petEndTimerRef.current = null;
     isPettingRef.current = false;
     hoverSamplesRef.current = [];
-    if (petPoseAppliedRef.current) {
-      petPoseAppliedRef.current = false;
-      releaseQuirkRevertsNow(PET_KEYS);
-      movementBusyUntilRef.current = performance.now() + PET_REACTION.durationMs;
+    const poseKeys = petPoseKeysRef.current;
+    if (poseKeys) {
+      petPoseKeysRef.current = null;
+      releaseQuirkRevertsNow(poseKeys);
+      movementBusyUntilRef.current = performance.now() + petDurationRef.current;
     }
   }
 
@@ -303,6 +472,7 @@ export function useTouchReactions({
       }
       if (distance < PET_MIN_DISTANCE_PX || reversals < PET_MIN_REVERSALS) return;
       isPettingRef.current = true;
+      petReactionRef.current = resolveReaction("caricia", null, PET_REACTION);
       onInteraction();
       // Una por caricia, no por cada ciclo de reacción.
       recordTouch(PET_REACTION.description);
@@ -311,14 +481,18 @@ export function useTouchReactions({
     // Mientras dure: la expresión se sostiene (cada movimiento del mouse
     // la renueva) y la pose se pone una sola vez, sin vuelta automática.
     // Si justo había otra reacción en curso, se pone apenas termine.
-    showExpression(PET_REACTION.expression, PET_END_MS + PET_REACTION.durationMs);
-    if (!petPoseAppliedRef.current && now >= movementBusyUntilRef.current) {
+    const pet = petReactionRef.current ?? PET_REACTION;
+    if (pet.expression) {
+      showExpression(pet.expression, PET_END_MS + pet.durationMs);
+    }
+    if (!petPoseKeysRef.current && pet.entries.length > 0 && now >= movementBusyUntilRef.current) {
       scheduleMovement(
-        { entries: PET_REACTION.entries, durationMs: PET_REACTION.durationMs, animated: false },
+        { entries: pet.entries, durationMs: pet.durationMs, animated: pet.animated ?? false },
         "idle",
         PET_HOLD_UNTIL_RELEASED_MS,
       );
-      petPoseAppliedRef.current = true;
+      petPoseKeysRef.current = pet.entries.map((e) => `${e.bone}.${e.axis}`);
+      petDurationRef.current = pet.durationMs;
       movementBusyUntilRef.current = Infinity;
     }
   }

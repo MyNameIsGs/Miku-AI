@@ -1064,6 +1064,7 @@ function App() {
     onInteraction: () => {
       idleQuirks.lastInteractionTimeRef.current = performance.now();
     },
+    processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
 
   const handleMouseDown = (e: React.MouseEvent) => {
