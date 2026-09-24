@@ -7,6 +7,7 @@ import {
 import { BONE_RANGES_DEG, BONE_RANGES_V2_DATE, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
 import { HAND_PRESET_NAMES } from "../config/handPresets";
 import { REACH_PLACES } from "../lib/reach";
+import { buildFacePartsInstructions } from "../lib/faceParts";
 import { TOUCH_REACTION_LABELS, TouchReactionKey, designedReactionKeys } from "../lib/touchReactionsStore";
 import { Pendiente } from "../lib/pendientes";
 
@@ -275,6 +276,8 @@ Puedes elegir qué expresión facial mostrar mientras dices esta respuesta, agre
 [EXPRESION: happy|angry|sad|relaxed|neutral]
 
 Elige como máximo un marcador de expresión por respuesta, y solo si de verdad sientes esa emoción en este momento puntual — no lo agregues por costumbre ni en cada mensaje. Si no incluyes el marcador, tu cara cae a tu ESTADO DE ÁNIMO actual (ver abajo), no siempre a neutral. Esta elección es tuya, no la infiere nadie por ti.
+
+${buildFacePartsInstructions()}
 
 --- TU ESTADO DE ÁNIMO (persiste entre conversaciones, no solo este mensaje) ---
 Ahora mismo tu humor de base es: ${currentMood}.

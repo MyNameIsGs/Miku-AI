@@ -15,6 +15,7 @@ import { loadMemoryContext } from "../lib/memory";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { parseMovementMarker } from "../lib/markers";
 import { getReachResolver, getSelfViewCapturer } from "../lib/selfViewStore";
+import { parseFaceMarker } from "../lib/faceParts";
 import { OPENROUTER_MODEL } from "../config/constants";
 import { buildTouchReactionPrompt } from "../prompts/touchReactionPrompt";
 
@@ -192,7 +193,8 @@ function interpretDesign(reply: string): { movement: ParsedMovement | null; expr
         }
       : null;
   const expressionMatch = reply.match(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/i);
-  return { movement, expression: expressionMatch ? expressionMatch[1].toLowerCase() : null };
+  const face = parseFaceMarker(reply);
+  return { movement, expression: face ?? (expressionMatch ? expressionMatch[1].toLowerCase() : null) };
 }
 
 // Zonas con lado: la reacción se diseña de un lado y del otro se espeja.

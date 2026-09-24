@@ -44,6 +44,7 @@ import { captureSelfView } from "./lib/selfView";
 import { registerReachResolver, registerSelfViewCapturer } from "./lib/selfViewStore";
 import { parseReachMarker, solveReach } from "./lib/reach";
 import { processRedesignMarkers } from "./lib/touchReactionsStore";
+import { parseFaceMarker } from "./lib/faceParts";
 import { BONE_RANGES_DEG } from "./config/boneRanges";
 import { intensityToDegrees } from "./hooks/useMovement";
 import { useAudioDevices } from "./hooks/useAudioDevices";
@@ -870,10 +871,12 @@ function App() {
           /\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/gi,
         ),
       ];
+      // [CARA] (partes sueltas, ver lib/faceParts.ts) gana sobre [EXPRESION].
       const expression =
-        expressionMatches.length > 0
+        parseFaceMarker(reply) ??
+        (expressionMatches.length > 0
           ? expressionMatches[expressionMatches.length - 1][1].toLowerCase()
-          : currentMood;
+          : currentMood);
 
       // Tarea 8.10: si esta respuesta cambió su humor de base, se
       // persiste para las próximas conversaciones -- fire-and-forget, no

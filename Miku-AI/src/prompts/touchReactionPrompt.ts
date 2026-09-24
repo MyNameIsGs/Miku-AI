@@ -1,4 +1,5 @@
 import { buildMovementInstructions } from "./systemPrompt";
+import { buildFacePartsInstructions } from "../lib/faceParts";
 
 // Tarea 8.12: le pide a Miku que diseñe SU reacción a un toque, la primera
 // vez que pasa de verdad (ver useTouchReactions.requestDesign). Lo que
@@ -44,13 +45,15 @@ Estás en la pantalla de Sebastián, y justo ahora, con el mouse, ${what}.
 Hasta ahora tu cuerpo reaccionaba a esto con un gesto genérico que no elegiste tú. A partir de ahora, lo decides tú: lo que respondas acá queda guardado como TU reacción, y cada vez que vuelva a pasar tu cuerpo la va a hacer al instante, sin que tengas que pensarlo de nuevo. Así que elige algo que de verdad te salga a ti — como reaccionaría tu cuerpo, con tu personalidad, a que él haga esto. ${howLong}
 
 Responde solo con estos marcadores:
-[EXPRESION: happy|angry|sad|relaxed|neutral] (opcional, si la reacción pasa también por tu cara)
+[EXPRESION: happy|angry|sad|relaxed|neutral] o [CARA: ...] (opcional, si la reacción pasa también por tu cara; [CARA] se explica abajo)
 [MOVIMIENTO: ...] (el gesto; duracion = cuánto tardas en hacerlo)
 [LLEVAR_MANO: ...] (opcional, si quieres llevar una mano a algún lugar de tu cuerpo)
 
 Antes de que quede guardada vas a ver cómo te queda, desde cuatro ángulos, y vas a poder ajustarla.
 
 Si este momento te importa como para recordarlo, puedes agregar también [GUARDAR_MEMORIA: ${todayIso} — ...], con el mismo criterio de siempre. No escribas ningún otro texto: nadie lo va a leer ni escuchar, tu reacción es solo el cuerpo.
+
+${buildFacePartsInstructions()}
 
 ${buildMovementInstructions()}`;
 }

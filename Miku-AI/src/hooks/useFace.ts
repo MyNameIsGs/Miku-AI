@@ -6,6 +6,7 @@ import {
   GAZE_SMOOTHING,
   DOUBLE_BLINK_CHANCE,
 } from "../config/constants";
+import { FACE_PARTS, decodeFace, faceExpressionName, registerFaceParts } from "../lib/faceParts";
 
 const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
   lookUp: { x: 0, y: 0.7 },
@@ -53,6 +54,12 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     target: null as string | null,
     nextChangeTime: 3 + Math.random() * 4,
   });
+  // [CARA] (ver lib/faceParts.ts): peso actual de cada parte, suavizado
+  // igual que las expresiones. Se registran en el VRM la primera vez.
+  const facePartWeightsRef = useRef<Record<string, number>>(
+    Object.fromEntries(Object.keys(FACE_PARTS).map((part) => [part, 0])),
+  );
+  const facePartsRegisteredRef = useRef(false);
   // Punto del mundo al que mirar en vez de la mirada errante (el cursor
   // cuando pasa cerca de ella, ver useCursorGaze.ts), o null.
   const gazeOverrideRef = useRef<THREE.Vector3 | null>(null);
@@ -130,7 +137,8 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     const blinkState = blinkStateRef.current;
     const expressionActive =
       activeExpressionRef.current !== "neutral" ||
-      Object.values(expressionWeights).some((w) => w > 0.05);
+      Object.values(expressionWeights).some((w) => w > 0.05) ||
+      Object.values(facePartWeightsRef.current).some((w) => w > 0.05);
 
     if (!blinkState.isBlinking) {
       if (!expressionActive) {
@@ -163,12 +171,24 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
         }
       }
     }
-    const targetExpression = activeExpressionRef.current;
+    // Una cara hecha de partes ([CARA]) reemplaza a la expresión armada.
+    const faceParts = decodeFace(activeExpressionRef.current);
+    const targetExpression = faceParts ? "neutral" : activeExpressionRef.current;
     for (const shape of Object.keys(expressionWeights)) {
       const target = shape === targetExpression ? 1 : 0;
       expressionWeights[shape] +=
         (target - expressionWeights[shape]) * EXPRESSION_SMOOTHING;
       expressionManager.setValue(shape, expressionWeights[shape]);
+    }
+    if (!facePartsRegisteredRef.current && vrmRef.current) {
+      registerFaceParts(vrmRef.current);
+      facePartsRegisteredRef.current = true;
+    }
+    const partWeights = facePartWeightsRef.current;
+    for (const part of Object.keys(partWeights)) {
+      const target = faceParts?.[part] ?? 0;
+      partWeights[part] += (target - partWeights[part]) * EXPRESSION_SMOOTHING;
+      expressionManager.setValue(faceExpressionName(part), partWeights[part]);
     }
 
     const gazeTargetObject = gazeTargetObjectRef.current;
