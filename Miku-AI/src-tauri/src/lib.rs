@@ -10,6 +10,7 @@ mod file_search;
 mod mcp_client;
 mod active_window;
 mod obs_status;
+mod click_through;
 mod audio_device;
 mod screen_capture;
 mod oauth_loopback;
@@ -256,6 +257,7 @@ pub fn run() {
             mcp_client::mcp_is_connected,
             active_window::ventana_activa,
             obs_status::obs_estado,
+            click_through::set_click_through,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,

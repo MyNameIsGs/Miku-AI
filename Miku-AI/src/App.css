@@ -194,6 +194,17 @@ button {
     opacity: 1;
   }
 }
+/* Agarre para arrastrar la ventana -- a la izquierda de la barra, el
+   resto de los botones siguen a la derecha. */
+.toolbar-grip {
+  margin-right: auto;
+  padding: 0 6px;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: grab;
+  user-select: none;
+}
+
 .toolbar button {
   background: rgba(255, 255, 255, 0.1);
   border: none;
@@ -546,6 +557,8 @@ button {
 }
 
 .miku-canvas {
+  /* Debajo de la franja de la barra (TOOLBAR_STRIP_HEIGHT en App.tsx). */
+  margin-top: 40px;
   width: 100%;
   height: 100%;
   opacity: 0;

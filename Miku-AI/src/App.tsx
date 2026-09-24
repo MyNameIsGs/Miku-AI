@@ -4,6 +4,7 @@ import { VRM } from "@pixiv/three-vrm";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { load } from "@tauri-apps/plugin-store";
 import "./App.css";
@@ -77,6 +78,12 @@ import {
   disconnectCalendarAccount,
   listConnectedCalendarEmails,
 } from "./lib/calendar/auth";
+
+// Franja de la barra, POR ENCIMA de Miku (la ventana es así de más alta
+// que el canvas, ver tauri.conf.json y .miku-canvas en App.css): no le
+// tapa la cabeza, y con Miku bloqueada sigue siendo usable (ver
+// click_through.rs). También es de donde se arrastra la ventana.
+const TOOLBAR_STRIP_HEIGHT = 40;
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -372,9 +379,47 @@ function App() {
     }
   }, [freeCamera]);
 
+  // Click-through por zonas (ver click_through.rs): con Miku bloqueada,
+  // la ventana deja pasar los clics salvo sobre la franja de la barra (por
+  // encima de Miku) y los paneles abiertos, que siguen usables. Las zonas
+  // se recalculan cada medio segundo por si un panel cambia de tamaño, y
+  // solo se mandan si cambiaron.
+  const clickThroughRef = useRef(clickThrough);
   useEffect(() => {
-    appWindow.setIgnoreCursorEvents(clickThrough);
+    clickThroughRef.current = clickThrough;
+    if (!clickThrough) {
+      invoke("set_click_through", { enabled: false, regions: [] }).catch(console.error);
+      return;
+    }
+    let lastSent = "";
+    const sendRegions = () => {
+      const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
+      document
+        .querySelectorAll(".config-panel, .app-launcher-panel, .transcript-box")
+        .forEach((el) => {
+          const r = el.getBoundingClientRect();
+          regions.push({ x: r.left, y: r.top, width: r.width, height: r.height });
+        });
+      const serialized = JSON.stringify(regions);
+      if (serialized === lastSent) return;
+      lastSent = serialized;
+      invoke("set_click_through", { enabled: true, regions }).catch(console.error);
+    };
+    sendRegions();
+    const id = setInterval(sendRegions, 500);
+    return () => clearInterval(id);
   }, [clickThrough]);
+
+  // Con la ventana ignorando el mouse no llegan eventos de hover: Rust
+  // avisa cuándo el cursor entra o sale de una zona interactiva.
+  useEffect(() => {
+    const unlistenPromise = listen<boolean>("click-through-hover", (event) => {
+      if (clickThroughRef.current) setShowToolbar(event.payload);
+    });
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, []);
 
   useEffect(() => {
     let isPressed = false;
@@ -1026,10 +1071,11 @@ function App() {
     }
   };
 
-  // Tarea 8.12: sobre el canvas, apretar ya no arrastra la ventana al
-  // instante -- recién cuando el mouse se mueve más de unos píxeles con
-  // el botón apretado. Si se suelta sin moverse, fue un toque a Miku.
-  const DRAG_THRESHOLD_PX = 4;
+  // Tarea 8.12: sobre Miku, el clic es para tocarla -- la ventana se
+  // arrastra desde la barra de arriba (ver handleToolbarMouseDown). Un
+  // clic que se movió más de unos píxeles antes de soltar no cuenta como
+  // toque.
+  const TAP_MAX_MOVE_PX = 4;
   const pressStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
@@ -1039,22 +1085,27 @@ function App() {
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (freeCamera) return;
-    const start = pressStartRef.current;
-    if (start && e.buttons & 1) {
-      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > DRAG_THRESHOLD_PX) {
-        pressStartRef.current = null;
-        appWindow.startDragging();
-      }
-    } else if (e.buttons === 0) {
+    if (!freeCamera && e.buttons === 0) {
       touch.handleHover(e.clientX, e.clientY);
     }
   };
 
   const handleCanvasMouseUp = (e: React.MouseEvent) => {
-    if (e.button !== 0 || !pressStartRef.current) return;
+    const start = pressStartRef.current;
     pressStartRef.current = null;
+    if (e.button !== 0 || !start) return;
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_MAX_MOVE_PX) return;
     touch.handleTap(e.clientX, e.clientY);
+  };
+
+  // Arrastrar la ventana: desde el agarre o cualquier parte vacía de la
+  // barra (no desde sus botones).
+  const handleToolbarMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target === e.currentTarget || target.classList.contains("toolbar-grip")) {
+      appWindow.startDragging();
+    }
   };
 
   const handleSaveCamera = async () => {
@@ -1082,7 +1133,10 @@ function App() {
       onMouseLeave={() => setShowToolbar(false)}
     >
       {showToolbar && (
-        <div className="toolbar">
+        <div className="toolbar" onMouseDown={handleToolbarMouseDown}>
+          <span className="toolbar-grip" title="Arrastrar para mover a Miku">
+            ⠿
+          </span>
           <button
             className={freeCamera ? "active" : ""}
             onClick={() => setFreeCamera((v) => !v)}
