@@ -743,27 +743,112 @@ def shutdown():
     return jsonify({"status": "shutting down"})
 
 
+def _parent_pid_of(pid):
+    """Devuelve el PID del padre de `pid` usando Toolhelp32 (solo Windows), o None."""
+    import ctypes
+    from ctypes import wintypes
+
+    TH32CS_SNAPPROCESS = 0x00000002
+    INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+
+    class PROCESSENTRY32W(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", wintypes.WCHAR * 260),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+    kernel32.Process32FirstW.restype = wintypes.BOOL
+    kernel32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+    kernel32.Process32NextW.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if not snapshot or snapshot == INVALID_HANDLE_VALUE:
+        return None
+    try:
+        entry = PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        ok = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+        while ok:
+            if entry.th32ProcessID == pid:
+                return entry.th32ParentProcessID or None
+            ok = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+    finally:
+        kernel32.CloseHandle(snapshot)
+    return None
+
+
+def _pid_a_vigilar():
+    """Elige qué proceso vigilar para no quedar huérfano.
+
+    1. MIKU_APP_PID, si la app de Tauri lo pasa al lanzarnos (lo más robusto).
+    2. Si corremos como exe de PyInstaller onefile, nuestro padre directo es el
+       bootloader (el mismo exe), que nunca muere solo: vigilamos a su padre (la app).
+    3. En desarrollo (python voice_server.py), el padre directo.
+    """
+    env_pid = os.environ.get("MIKU_APP_PID", "").strip()
+    if env_pid.isdigit() and int(env_pid) > 1:
+        return int(env_pid), "MIKU_APP_PID"
+
+    parent_pid = os.getppid()
+    if getattr(sys, "frozen", False) and parent_pid and parent_pid > 1:
+        abuelo = _parent_pid_of(parent_pid)
+        if abuelo and abuelo > 1:
+            return abuelo, f"padre del bootloader (PID {parent_pid})"
+    return parent_pid, "proceso padre"
+
+
 def start_parent_watchdog():
-    """Vigila si el proceso padre finaliza para no quedar huérfano."""
+    """Vigila si la app que nos lanzó finaliza para no quedar huérfano."""
     def watchdog():
         try:
-            parent_pid = os.getppid()
-            if not parent_pid or parent_pid <= 1:
+            if sys.platform != "win32":
                 return
-
             import ctypes
+            from ctypes import wintypes
+
             SYNCHRONIZE = 0x00100000
             INFINITE = 0xFFFFFFFF
-            handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, parent_pid)
-            if handle:
-                ctypes.windll.kernel32.WaitForSingleObject(handle, INFINITE)
-                ctypes.windll.kernel32.CloseHandle(handle)
-                print(f"[WATCHDOG] Proceso padre (PID {parent_pid}) finalizó. Terminando voice_server...")
-                os._exit(0)
-        except Exception:
-            pass
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+            kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+            kernel32.WaitForSingleObject.restype = wintypes.DWORD
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            kernel32.CloseHandle.restype = wintypes.BOOL
 
-    import threading
+            target_pid, origen = _pid_a_vigilar()
+            handle = kernel32.OpenProcess(SYNCHRONIZE, False, target_pid) if target_pid and target_pid > 1 else None
+            if not handle and origen == "MIKU_APP_PID":
+                # El PID recibido ya no existe o no se puede abrir: prueba con la detección automática.
+                os.environ.pop("MIKU_APP_PID", None)
+                target_pid, origen = _pid_a_vigilar()
+                handle = kernel32.OpenProcess(SYNCHRONIZE, False, target_pid) if target_pid and target_pid > 1 else None
+            if not handle:
+                print(f"[WATCHDOG] No se pudo vigilar el PID {target_pid} ({origen}); el watchdog queda inactivo.")
+                return
+
+            print(f"[WATCHDOG] Vigilando PID {target_pid} ({origen}).")
+            kernel32.WaitForSingleObject(handle, INFINITE)
+            kernel32.CloseHandle(handle)
+            print(f"[WATCHDOG] El proceso vigilado (PID {target_pid}) finalizó. Terminando voice_server...")
+            os._exit(0)
+        except Exception:
+            traceback.print_exc()
+
     t = threading.Thread(target=watchdog, daemon=True)
     t.start()
 

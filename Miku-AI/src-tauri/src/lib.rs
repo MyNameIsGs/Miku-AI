@@ -142,6 +142,9 @@ async fn launch_voice_server(app: tauri::AppHandle) -> Result<(), String> {
             .env("SYSTEMROOT", "C:\\Windows")
             .env("PATH", "C:\\Windows\\System32;C:\\Windows;C:\\ffmpeg\\bin")
             .env("PYTHONUNBUFFERED", "1")
+            // El watchdog del servidor vigila este PID y se cierra si la app muere
+            // (el padre directo del proceso Python es el bootloader de PyInstaller).
+            .env("MIKU_APP_PID", std::process::id().to_string())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW)
