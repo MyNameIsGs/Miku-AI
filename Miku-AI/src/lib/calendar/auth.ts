@@ -142,7 +142,7 @@ export async function connectCalendar(): Promise<string> {
 
   if (!result.refresh_token) {
     throw new Error(
-      "Google no mandó ningún refresh token -- probá revocar el acceso desde myaccount.google.com/permissions y conectar de nuevo.",
+      "Google no mandó ningún refresh token -- prueba revocar el acceso desde myaccount.google.com/permissions y conectar de nuevo.",
     );
   }
 

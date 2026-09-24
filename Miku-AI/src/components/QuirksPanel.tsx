@@ -33,7 +33,7 @@ export function QuirksPanel({
       </div>
       <p className="app-launcher-hint">
         Movimientos que Miku inventó por su cuenta en los momentos de
-        silencio. Solo ella los crea -- acá podés confirmarlos, devolverlos
+        silencio. Solo ella los crea -- acá puedes confirmarlos, devolverlos
         a evaluación, o borrarlos, pero no crear uno nuevo.
       </p>
       <div className="app-launcher-section">

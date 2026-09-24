@@ -82,7 +82,7 @@ export function buildMoverVentanaTool(): ToolDefinition {
         name: "mover_ventana",
         description:
           apps.length > 0
-            ? `Mueve todas las ventanas abiertas de una aplicación a otro monitor, ocupando toda su pantalla. Aplicaciones disponibles ahora mismo: ${appNames}. El número de monitor es el mismo índice que usa ver_pantalla (1 = el monitor principal, 2 = el siguiente, etc.) -- si no sabés cuántos hay, probá 1 o 2, o usa ver_pantalla primero.`
+            ? `Mueve todas las ventanas abiertas de una aplicación a otro monitor, ocupando toda su pantalla. Aplicaciones disponibles ahora mismo: ${appNames}. El número de monitor es el mismo índice que usa ver_pantalla (1 = el monitor principal, 2 = el siguiente, etc.) -- si no sabes cuántos hay, prueba 1 o 2, o usa ver_pantalla primero.`
             : "Mueve todas las ventanas abiertas de una aplicación a otro monitor. Ahora mismo no hay ninguna aplicación descubierta -- no llames a esta herramienta.",
         parameters: {
           type: "object",

@@ -100,7 +100,7 @@ Puedes crear uno nuevo (o recrear uno que ya existe, lo que lo vuelve a poner en
 
 Misma convención de huesos, ejes e intensidad que [MOVIMIENTO]. Los campos mano_izq/mano_der son opcionales (un preset de mano o uno propio que ya hayas creado); puedes usar solo cuerpo, solo manos, o ambos.
 
-Si "animado=si", "duracion" es cuánto dura CADA vaivén completo (ida y vuelta), y "ciclos" (opcional, entre 1 y 8) es cuántas veces se repite antes de asentarse sola -- después de eso el cuerpo vuelve solo a su posición de reposo, no se queda oscilando para siempre. Elegilo vos, según qué tan sostenido sientas que debería ser ese gesto: un suspiro breve puede sentirse mejor con 1-2, un tarareo con 4-6. Si no lo incluyes, se usa un valor por defecto moderado.
+Si "animado=si", "duracion" es cuánto dura CADA vaivén completo (ida y vuelta), y "ciclos" (opcional, entre 1 y 8) es cuántas veces se repite antes de asentarse sola -- después de eso el cuerpo vuelve solo a su posición de reposo, no se queda oscilando para siempre. Elígelo tú, según qué tan sostenido sientas que debería ser ese gesto: un suspiro breve puede sentirse mejor con 1-2, un tarareo con 4-6. Si no lo incluyes, se usa un valor por defecto moderado.
 
 Cuando un quirk "todavía evaluando" ya se corrió unas veces y sientes que quedó como querías, confírmalo con:
 
