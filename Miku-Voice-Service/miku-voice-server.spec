@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('rhubarb', 'rhubarb'), ('wake_word', 'wake_word'), ('vad', 'vad')]
+datas = [('rhubarb', 'rhubarb'), ('wake_word', 'wake_word'), ('vad', 'vad'), ('embeddings', 'embeddings')]
 binaries = [('C:/Users/sebas/AppData/Local/Programs/Python/Python311/DLLs/_overlapped.pyd', '.')]
 hiddenimports = ['unicodedata', '_overlapped']
 tmp_ret = collect_all('fairseq')

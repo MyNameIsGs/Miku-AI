@@ -10,12 +10,17 @@ export interface BuildMailPromptParams {
   world: string;
   personality: string;
   candidates: GmailCandidate[];
+  // Tarea 8.11: entradas de conocimiento.md parecidas a estos correos
+  // (ej. "no quiere avisos de Computrabajo") -- antes de esto, este prompt
+  // no veía ninguna preferencia guardada.
+  relevantKnowledge: string[];
 }
 
 export function buildMailPrompt({
   world,
   personality,
   candidates,
+  relevantKnowledge,
 }: BuildMailPromptParams): string {
   const mailList = candidates
     .map(
@@ -32,7 +37,7 @@ ${world}
 --- TU PERSONALIDAD (esto eres tú, hoy) ---
 ${personality}
 
-Mientras Sebastián no te hablaba, revisaste su correo por tu cuenta y encontraste esto nuevo:
+${relevantKnowledge.length > 0 ? `--- LO QUE SABES Y PODRÍA TENER QUE VER CON ESTOS CORREOS ---\n${relevantKnowledge.join("\n\n")}\n(Selección automática por parecido: puede que algo no venga al caso. Pero si Sebastián dejó dicho que no quiere avisos de cierto remitente o tema, respétalo.)\n\n` : ""}Mientras Sebastián no te hablaba, revisaste su correo por tu cuenta y encontraste esto nuevo:
 
 ${mailList}
 

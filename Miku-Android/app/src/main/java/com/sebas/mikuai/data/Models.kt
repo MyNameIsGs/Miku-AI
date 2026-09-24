@@ -14,11 +14,16 @@ data class GitHubFile(
 data class MikuMemory(
     val world: GitHubFile,
     val personality: GitHubFile,
-    val memories: GitHubFile
+    val memories: GitHubFile,
+    // Tarea 8.11: memorias "de agente" (saber práctico). En desktop se
+    // buscan por similitud; acá el archivo se carga completo (es chico, y
+    // el teléfono no tiene el modelo de embeddings).
+    val knowledge: GitHubFile
 )
 
 data class ParsedResponse(
     val cleanText: String,
     val savePersonality: List<String>,
-    val saveMemories: List<String>
+    val saveMemories: List<String>,
+    val saveKnowledge: List<String> = emptyList()
 )

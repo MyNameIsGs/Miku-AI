@@ -553,6 +553,95 @@ def vad_set_enabled_route():
     return jsonify({"enabled": vad_enabled})
 
 
+# Tarea 8.11: embeddings para la memoria semántica -- solo se buscan por
+# similitud las memorias "de agente" (conocimiento.md); las memorias de
+# Miku (memories.md) se siguen cargando completas, ver lib/knowledge.ts en
+# el frontend.
+#
+# Modelo: intfloat/multilingual-e5-small (MIT), versión cuantizada ONNX de
+# su repo oficial en Hugging Face (onnx/model_qint8_avx512_vnni.onnx +
+# onnx/tokenizer.json), guardada en embeddings/ -- no está en git (118 MB,
+# GitHub no acepta archivos de más de 100 MB); viaja dentro del .exe como
+# rhubarb/. Corre en CPU con onnxruntime + tokenizers, que ya estaban por
+# faster-whisper: sin torch ni paquetes nuevos (ver lo que pasó con el pip
+# de silero-vad en la Tarea 8.1). ~20 ms por lote de textos cortos.
+#
+# e5 exige prefijos: "query: " para la búsqueda y "passage: " para lo que
+# se indexa -- sin eso la calidad cae.
+def resolve_embeddings_dir():
+    candidates = []
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(os.path.join(sys._MEIPASS, "embeddings"))
+    if getattr(sys, "frozen", False):
+        candidates.append(os.path.join(os.path.dirname(sys.executable), "embeddings"))
+    candidates.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "embeddings"))
+
+    for p in candidates:
+        if os.path.isfile(os.path.join(p, "tokenizer.json")):
+            return p
+    return candidates[0]
+
+
+EMBEDDINGS_DIR = resolve_embeddings_dir()
+_embedder_lock = threading.Lock()
+_embedder = None
+
+
+def _get_embedder():
+    # Carga perezosa (~0.6 s) en el primer uso, no al arrancar: no suma
+    # nada al tiempo de arranque del servidor de voz.
+    global _embedder
+    with _embedder_lock:
+        if _embedder is None:
+            from tokenizers import Tokenizer
+
+            session = ort.InferenceSession(
+                os.path.join(EMBEDDINGS_DIR, "multilingual-e5-small-qint8.onnx"),
+                providers=["CPUExecutionProvider"],
+            )
+            tokenizer = Tokenizer.from_file(os.path.join(EMBEDDINGS_DIR, "tokenizer.json"))
+            tokenizer.enable_truncation(512)
+            tokenizer.enable_padding()
+            _embedder = (session, tokenizer)
+        return _embedder
+
+
+def _embed(texts):
+    session, tokenizer = _get_embedder()
+    encodings = tokenizer.encode_batch(texts)
+    ids = np.array([e.ids for e in encodings], dtype=np.int64)
+    mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
+    hidden = session.run(
+        None,
+        {"input_ids": ids, "attention_mask": mask, "token_type_ids": np.zeros_like(ids)},
+    )[0]
+    # Mean pooling con la máscara de atención + normalización L2 (así lo
+    # define e5), para que la similitud sea un simple producto punto.
+    mask_f = mask[..., None].astype(np.float32)
+    vectors = (hidden * mask_f).sum(axis=1) / np.maximum(mask_f.sum(axis=1), 1e-9)
+    vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
+    return vectors
+
+
+@app.route("/embed", methods=["POST"])
+def embed_route():
+    data = request.get_json() or {}
+    texts = data.get("texts") or []
+    kind = data.get("kind", "passage")
+    if not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
+        return jsonify({"error": "texts debe ser una lista de strings"}), 400
+    if kind not in ("query", "passage"):
+        return jsonify({"error": "kind debe ser 'query' o 'passage'"}), 400
+    if not texts:
+        return jsonify({"vectors": []})
+    try:
+        vectors = _embed([f"{kind}: {t}" for t in texts])
+        return jsonify({"vectors": np.round(vectors, 5).tolist()})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"Error generando embeddings: {e}"}), 500
+
+
 @app.route("/shutdown", methods=["POST", "GET"])
 def shutdown():
     def do_exit():

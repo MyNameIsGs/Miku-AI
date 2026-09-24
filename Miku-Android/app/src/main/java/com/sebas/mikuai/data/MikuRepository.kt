@@ -1,6 +1,8 @@
 package com.sebas.mikuai.data
 
 import android.content.Context
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
 
 class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: SecurePrefs) {
@@ -16,11 +18,22 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     private val calendarAuth = CalendarAuth(context, prefs)
     private val calendarApi = CalendarApi(calendarAuth)
 
-    suspend fun loadMemory(): MikuMemory {
-        return MikuMemory(
-            world       = ghApi.getFile("Miku-AI/memory/world.md"),
-            personality = ghApi.getFile("Miku-AI/memory/personality.md"),
-            memories    = ghApi.getFile("Miku-AI/memory/memories.md")
+    suspend fun loadMemory(): MikuMemory = coroutineScope {
+        // En paralelo: con conocimiento.md (Tarea 8.11) son 4 pedidos a
+        // GitHub, y uno detrás del otro sumaban latencia a cada "Hey Miku".
+        val world       = async { ghApi.getFile("Miku-AI/memory/world.md") }
+        val personality = async { ghApi.getFile("Miku-AI/memory/personality.md") }
+        val memories    = async { ghApi.getFile("Miku-AI/memory/memories.md") }
+        // Si todavía no existe (nunca se guardó conocimiento), vacío -- sha
+        // vacío = appendToFile lo crea en vez de sobreescribirlo.
+        val knowledge   = async {
+            try { ghApi.getFile("Miku-AI/memory/conocimiento.md") } catch (e: Exception) { GitHubFile("", "") }
+        }
+        MikuMemory(
+            world       = world.await(),
+            personality = personality.await(),
+            memories    = memories.await(),
+            knowledge   = knowledge.await()
         )
     }
 
@@ -34,18 +47,23 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
         val current = when (key) {
             "personality" -> memory.personality
             "memories"    -> memory.memories
+            "conocimiento" -> memory.knowledge
             else          -> throw IllegalArgumentException("Archivo desconocido: $key")
         }
-        val newContent = current.content.trimEnd() + "\n" + text.trim() + "\n"
+        // conocimiento.md separa cada entrada con una línea en blanco: así
+        // el desktop (lib/knowledge.ts) la indexa como una entrada propia.
+        val separator = if (key == "conocimiento") "\n\n" else "\n"
+        val newContent = current.content.trimEnd() + separator + text.trim() + "\n"
 
         return try {
-            val newSha = ghApi.putFile(path, newContent, current.sha, "memory: append $key.md [$date]")
+            // sha vacío = el archivo todavía no existe (ver loadMemory): se crea.
+            val newSha = ghApi.putFile(path, newContent, current.sha.ifEmpty { null }, "memory: append $key.md [$date]")
             GitHubFile(content = newContent, sha = newSha)
         } catch (e: Exception) {
             // SHA obsoleto: re-fetch y reintentar
             if (e.message?.contains("409") == true || e.message?.contains("422") == true) {
                 val fresh      = ghApi.getFile(path)
-                val retryContent = fresh.content.trimEnd() + "\n" + text.trim() + "\n"
+                val retryContent = fresh.content.trimEnd() + separator + text.trim() + "\n"
                 val newSha     = ghApi.putFile(path, retryContent, fresh.sha, "memory: append $key.md [$date] (retry)")
                 GitHubFile(content = retryContent, sha = newSha)
             } else throw e

@@ -31,6 +31,7 @@ import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useStreamMode } from "./hooks/useStreamMode";
 import { isStreamModeActive } from "./lib/streamMode";
+import { retrieveKnowledge } from "./lib/knowledge";
 import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
@@ -641,6 +642,17 @@ function App() {
         processName: string;
         secondsAgo: number;
       } | null>("ventana_activa").catch(() => null);
+      // Tarea 8.11: se busca con lo que dijo ahora Y la última respuesta de
+      // Miku -- un "sí, hazlo" solo no dice de qué se está hablando.
+      const lastAssistantText =
+        conversationHistoryRef.current
+          .flat()
+          .filter((m) => m.role === "assistant" && typeof m.content === "string")
+          .map((m) => m.content as string)
+          .pop() ?? "";
+      const relevantKnowledge = await retrieveKnowledge(
+        `${lastAssistantText.slice(-600)}\n${userMessage}`,
+      );
 
       const systemPrompt = buildSystemPrompt({
         world,
@@ -654,6 +666,7 @@ function App() {
         currentMood,
         activeWindow,
         streamModeActive: isStreamModeActive(),
+        relevantKnowledge,
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,

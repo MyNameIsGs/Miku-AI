@@ -12,6 +12,7 @@ import {
   appendToMemoryFile,
   backupAndOverwriteMemoryFile,
 } from "../lib/memory";
+import { appendKnowledge } from "../lib/knowledge";
 
 export function useMemoryFiles() {
   const memoryWriteCountRef = useRef(0);
@@ -156,6 +157,17 @@ export function useMemoryFiles() {
     ];
     for (const match of memoryMatches) {
       await appendToMemoryFile("memories", match[1].trim());
+    }
+
+    // Tarea 8.11: memorias "de agente" (saber práctico) -- van aparte, a
+    // conocimiento.md, que se consulta por similitud en vez de cargarse
+    // entero. No cuentan para la consolidación: ese archivo puede crecer a
+    // propósito, es justamente lo que permite la búsqueda semántica.
+    const knowledgeMatches = [
+      ...reply.matchAll(/\[GUARDAR_CONOCIMIENTO:\s*([\s\S]*?)\]/g),
+    ];
+    for (const match of knowledgeMatches) {
+      await appendKnowledge(match[1].trim());
     }
 
     await recordMemoryWrites(personalityMatches.length + memoryMatches.length);

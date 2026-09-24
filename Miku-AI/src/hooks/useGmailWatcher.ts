@@ -5,6 +5,7 @@ import { buildMailPrompt } from "../prompts/mailPrompt";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { parseMarkers } from "../lib/markers";
 import { loadMemoryContext } from "../lib/memory";
+import { retrieveKnowledge } from "../lib/knowledge";
 
 type UseGmailWatcherParams = {
   // Ya no habla directo -- correo nuevo no es urgente, se acumula en el
@@ -40,7 +41,13 @@ export function useGmailWatcher({ queueAnnouncement }: UseGmailWatcherParams) {
         if (!candidates || candidates.length === 0) return;
 
         const { personality, world } = await loadMemoryContext();
-        const prompt = buildMailPrompt({ world, personality, candidates });
+        // Tarea 8.11: los propios correos son la búsqueda -- así aparece,
+        // por ejemplo, que Sebastián no quiere avisos de cierto remitente.
+        const relevantKnowledge = await retrieveKnowledge(
+          candidates.map((c) => `${c.from} ${c.subject} ${c.snippet}`).join("\n"),
+          3,
+        );
+        const prompt = buildMailPrompt({ world, personality, candidates, relevantKnowledge });
         const response = await fetchOpenRouterWithRetry({
           model: OPENROUTER_MODEL,
           messages: [{ role: "system", content: prompt }],

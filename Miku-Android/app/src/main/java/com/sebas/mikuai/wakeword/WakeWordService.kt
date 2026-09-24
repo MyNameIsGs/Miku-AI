@@ -432,6 +432,10 @@ class WakeWordService : Service() {
                 parsed.saveMemories.forEach { t ->
                     try { repo.appendToFile(memory, "memories", t) } catch (e: Exception) {}
                 }
+                // Tarea 8.11: saber práctico, a conocimiento.md.
+                parsed.saveKnowledge.forEach { t ->
+                    try { repo.appendToFile(memory, "conocimiento", t) } catch (e: Exception) {}
+                }
 
                 // Idea #10: guardar el intercambio para que ChatScreen lo
                 // muestre la próxima vez que se abra la app -- fire-and-forget,

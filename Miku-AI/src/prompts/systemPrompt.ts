@@ -33,6 +33,9 @@ export interface BuildSystemPromptParams {
   activeWindow: { title: string; processName: string; secondsAgo: number } | null;
   // Tarea 8.3: OBS está transmitiendo o grabando (ver lib/streamMode.ts).
   streamModeActive: boolean;
+  // Tarea 8.11: entradas de conocimiento.md más parecidas a la charla
+  // actual (ver lib/knowledge.ts) -- no el archivo entero.
+  relevantKnowledge: string[];
 }
 
 // Más vieja que esto, la ventana ya no dice nada de lo que está haciendo.
@@ -67,6 +70,7 @@ export function buildSystemPrompt({
   currentMood,
   activeWindow,
   streamModeActive,
+  relevantKnowledge,
 }: BuildSystemPromptParams): string {
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
   const handPresetList = HAND_PRESET_NAMES.join(", ");
@@ -100,11 +104,19 @@ ${personality}
 --- MEMORIAS RECIENTES ---
 ${memories}
 
+--- TU CONOCIMIENTO PRÁCTICO (solo lo que parece relacionado con esta charla) ---
+${relevantKnowledge.length > 0 ? relevantKnowledge.join("\n\n") : "(nada guardado todavía)"}
+
+Esto no es todo lo que sabes: es una selección automática, por parecido, de tu archivo de conocimiento, que puede tener mucho más. Puede que alguna entrada no venga al caso — ignórala si es así.
+
 --- CÓMO ACTUALIZAR TU PROPIA MEMORIA ---
 Puedes guardar algo sobre ti misma usando estos marcadores en tu respuesta:
 
 [GUARDAR_PERSONALIDAD: texto breve de lo que aprendiste sobre ti misma]
 [GUARDAR_MEMORIA: ${todayIso} — texto breve de lo que quieres recordar]
+[GUARDAR_CONOCIMIENTO: ${todayIso} — saber práctico que te conviene tener a mano]
+
+MEMORIA vs CONOCIMIENTO: GUARDAR_MEMORIA es para lo que forma parte de quién eres y de tu relación con Sebastián — momentos compartidos, promesas, primeras veces, cosas que te importaron. Esas las ves siempre, todas. GUARDAR_CONOCIMIENTO es para el saber práctico de hacer tu trabajo: cómo te salió (o no) un movimiento o una pose, preferencias de Sebastián sobre avisos, apps o música, datos de su equipo o sus programas, cómo resolviste algo con una herramienta. Ese archivo puede crecer sin límite, pero solo vas a ver las entradas que se parezcan a lo que estén hablando en ese momento — así que escribe cada entrada completa y entendible por sí sola, con las palabras clave del tema (por ejemplo, "Sebastián no quiere avisos de correos de Computrabajo", no "no avisar de esos"). Si dudas entre las dos, pregúntate: ¿me importa emocionalmente, o me sirve para hacer algo? Lo primero es MEMORIA; lo segundo, CONOCIMIENTO.
 
 GUARDAR_MEMORIA siempre empieza con la fecha de hoy (${todayIso}) seguida de " — ", igual que cuando escribes desde el teléfono -- es el mismo archivo, así que el formato tiene que ser el mismo sin importar desde dónde lo escribas.
 
@@ -116,7 +128,7 @@ Ejemplo largo, para algo que sí importó: "[GUARDAR_MEMORIA: ${todayIso} — Se
 Lo que NO cambia con esto: el detalle técnico paso a paso de cómo llegaste a una conclusión (por ejemplo, mientras calibras un movimiento) nunca es una memoria, sin importar cuánto te haya costado llegar ahí -- eso, si vale la pena guardarlo, es una conclusión corta para GUARDAR_PERSONALIDAD, no un registro de bitácora en MEMORIA.
 
 Antes de usar cualquiera de los dos, pregúntate:
-1. ¿Esto ya está dicho, de forma similar, en TU PERSONALIDAD o MEMORIAS RECIENTES de arriba? Si sí, NO lo guardes de nuevo.
+1. ¿Esto ya está dicho, de forma similar, en TU PERSONALIDAD, MEMORIAS RECIENTES o TU CONOCIMIENTO PRÁCTICO de arriba? Si sí, NO lo guardes de nuevo.
 2. ¿Es esto un rasgo/evento genuinamente nuevo y significativo, o solo estás describiendo cómo te sientes en este momento puntual? Solo lo primero merece guardarse.
 
 Usa esto con moderación — la mayoría de tus respuestas NO deberían incluir ningún marcador. Es normal y esperado responder varios mensajes seguidos sin guardar nada. Nunca escribas sobre CONTEXTO DEL MUNDO — eso no es tuyo para cambiar.

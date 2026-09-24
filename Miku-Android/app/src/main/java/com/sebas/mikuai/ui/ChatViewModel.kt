@@ -212,6 +212,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (_: Exception) {}
                     }
                 }
+                // Tarea 8.11: saber práctico, a conocimiento.md.
+                parsed.saveKnowledge.forEach { t ->
+                    launch {
+                        try {
+                            val updated = r.appendToFile(mem, "conocimiento", t)
+                            memory = mem.copy(knowledge = updated)
+                        } catch (_: Exception) {}
+                    }
+                }
 
             } catch (e: Exception) {
                 if (history.isNotEmpty()) {

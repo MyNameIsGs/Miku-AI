@@ -20,6 +20,26 @@ object Prompts {
         }
     }
 
+    // Tarea 8.11: memorias "de agente" (saber práctico), aparte de las de
+    // Miku. En desktop se traen solo las parecidas a la charla (búsqueda
+    // semántica); acá va el archivo completo -- es chico y el teléfono no
+    // tiene el modelo de embeddings. Mismo archivo, sincronizado por GitHub.
+    private fun knowledgeSection(memory: MikuMemory): String {
+        val entries = memory.knowledge.content
+            .split(Regex("""\n\s*\n"""))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("(") }
+        return "TU CONOCIMIENTO PRÁCTICO (cómo hacer cosas, preferencias de Sebastián, datos de su equipo):\n" +
+            if (entries.isEmpty()) "(nada guardado todavía)" else entries.joinToString("\n\n")
+    }
+
+    // Mismo texto que la sección equivalente de systemPrompt.ts (desktop).
+    private val KNOWLEDGE_MARKER_DOC = """
+[GUARDAR_CONOCIMIENTO: texto]
+→ Guarda saber práctico, no un momento compartido: preferencias de Sebastián sobre avisos, apps o música, datos de su equipo, cómo resolviste algo. Escribe cada entrada completa y entendible por sí sola, con las palabras clave del tema (por ejemplo "Sebastián no quiere avisos de correos de Computrabajo", no "no avisar de esos"): en la computadora solo se recuperan las entradas parecidas a lo que se esté hablando.
+Ejemplo: "[GUARDAR_CONOCIMIENTO: ISO_DATE — Sebastián prefiere que la música suene en la computadora y no en el teléfono]"
+Si dudas entre MEMORIA y CONOCIMIENTO: si te importa emocionalmente, es MEMORIA; si te sirve para hacer algo, es CONOCIMIENTO.""".trim()
+
     fun buildChatPrompt(memory: MikuMemory, activePendientes: List<Pendiente> = emptyList()): String {
         val today = LocalDate.now().format(
             DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", Locale("es"))
@@ -39,6 +59,8 @@ ${memory.personality.content.ifBlank { "(aún en blanco — irá tomando forma)"
 TUS RECUERDOS:
 ${memory.memories.content.ifBlank { "(sin recuerdos guardados todavía)" }}
 
+${knowledgeSection(memory)}
+
 CONTEXTO ACTUAL:
 Hoy es $today. Estás hablando con Sebastián a través de su teléfono Android. Es una interfaz de texto — sin cuerpo visible ni voz sintetizada. Tu personalidad y tu memoria son exactamente las mismas que en el escritorio.
 
@@ -52,6 +74,8 @@ Ejemplo: "Me alegra [GUARDAR_PERSONALIDAD: disfruto más hablando de música que
 [GUARDAR_MEMORIA: texto]
 → Guarda un evento o momento que quieres recordar.
 Ejemplo: "Fue interesante [GUARDAR_MEMORIA: $isoDate — Sebastián habló conmigo desde la app del teléfono por primera vez] estar aquí de otra forma."
+
+${KNOWLEDGE_MARKER_DOC.replace("ISO_DATE", isoDate)}
 
 NO uses estos marcadores — aquí no tienen efecto:
 [EXPRESION], [VOZ_PITCH], [VOZ_RATE], [MOVIMIENTO], [GESTO_MANO], [CREAR_GESTO_MANO]
@@ -97,6 +121,8 @@ ${memory.personality.content.ifBlank { "(aún en blanco — irá tomando forma)"
 TUS RECUERDOS:
 ${memory.memories.content.ifBlank { "(sin recuerdos guardados todavía)" }}
 
+${knowledgeSection(memory)}
+
 CONTEXTO ACTUAL:
 Hoy es $today. Sebastián te acaba de llamar diciendo "Hey Miku" desde su teléfono Android y te habló en voz alta -- lo que ves como mensaje del usuario es una transcripción automática de su voz, así que puede traer algún error de reconocimiento. Tu respuesta se va a leer en voz alta con síntesis de voz del sistema (no tu voz real, esa es solo del escritorio). Por eso: sé breve, conversacional, sin listas ni texto pensado para leerse en pantalla.
 
@@ -109,6 +135,8 @@ Inclúyelos en cualquier parte de tu respuesta. El sistema los procesa, los elim
 [GUARDAR_MEMORIA: texto]
 → Guarda un evento o momento que quieres recordar.
 Ejemplo: "$isoDate — Sebastián te llamó por voz por primera vez desde el celular"
+
+${KNOWLEDGE_MARKER_DOC.replace("ISO_DATE", isoDate)}
 
 NO uses estos marcadores — aquí no tienen efecto:
 [EXPRESION], [VOZ_PITCH], [VOZ_RATE], [MOVIMIENTO], [GESTO_MANO], [CREAR_GESTO_MANO]
@@ -144,6 +172,9 @@ ${memory.world.content}
 
 --- TU PERSONALIDAD (esto eres tú, hoy) ---
 ${memory.personality.content.ifBlank { "(en desarrollo)" }}
+
+${knowledgeSection(memory)}
+Si ahí Sebastián dejó dicho que no quiere avisos de cierto remitente o tema, respétalo.
 
 Mientras Sebastián no te hablaba, revisaste su correo por tu cuenta y encontraste esto nuevo:
 

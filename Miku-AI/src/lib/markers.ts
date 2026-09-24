@@ -251,6 +251,7 @@ export function stripMarkers(text: string): string {
   return text
     .replace(/\[GUARDAR_PERSONALIDAD:[\s\S]*?\]/g, "")
     .replace(/\[GUARDAR_MEMORIA:[\s\S]*?\]/g, "")
+    .replace(/\[GUARDAR_CONOCIMIENTO:[\s\S]*?\]/g, "")
     .replace(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/gi, "")
     .replace(/\[ESTADO_ANIMO:\s*(happy|angry|sad|relaxed|neutral)\]/gi, "")
     .replace(/\[VOZ_PITCH:\s*-?\d+(?:\.\d+)?\]/gi, "")
