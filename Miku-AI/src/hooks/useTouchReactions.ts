@@ -14,6 +14,7 @@ type UseTouchReactionsParams = {
     origin: MovementOrigin,
     autoRevertDelayMs?: number,
   ) => void;
+  releaseQuirkRevertsNow: (keys: string[]) => void;
   getExpression: () => string;
   setExpression: (name: string) => void;
   isSpeakingRef: RefObject<boolean>;
@@ -138,8 +139,10 @@ const ANNOYED_REACTION: Reaction = {
   description: "te tocó muchas veces seguidas hasta hartarte",
 };
 
-// Caricia: se apoya en la mano y cierra un poco los ojos. Se repite en
-// ciclos mientras sigan acariciando.
+// Caricia: se apoya en la mano y cierra un poco los ojos, y se queda así
+// MIENTRAS dure la caricia -- vuelve recién cuando se suelta (antes se
+// repetía en ciclos de ~2 s y en una caricia larga volvía a la posición
+// inicial a mitad de camino; lo notó Sebastián).
 const PET_REACTION: Reaction = {
   expression: "relaxed",
   entries: [
@@ -147,9 +150,13 @@ const PET_REACTION: Reaction = {
     { bone: "neck", axis: "x", intensity: -35 },
   ],
   durationMs: 500,
-  holdMs: 1400,
+  holdMs: 0, // no se usa: la pose dura lo que dure la caricia
   description: "te acarició la cabeza",
 };
+const PET_KEYS = PET_REACTION.entries.map((e) => `${e.bone}.${e.axis}`);
+// "Para siempre" a efectos prácticos: la vuelta real la dispara
+// endPetting con releaseQuirkRevertsNow.
+const PET_HOLD_UNTIL_RELEASED_MS = 60 * 60 * 1000;
 
 // Detección de caricia: mouse moviéndose de lado a lado sobre la cabeza,
 // sin clic (el clic sostenido mueve la ventana).
@@ -165,6 +172,7 @@ export function useTouchReactions({
   cameraRef,
   canvasRef,
   scheduleMovement,
+  releaseQuirkRevertsNow,
   getExpression,
   setExpression,
   isSpeakingRef,
@@ -185,6 +193,8 @@ export function useTouchReactions({
   const lastHoverHitRef = useRef<TouchHit | null>(null);
   const isPettingRef = useRef(false);
   const petEndTimerRef = useRef<number | null>(null);
+  // Si la pose de caricia está puesta (y hay que soltarla al terminar).
+  const petPoseAppliedRef = useRef(false);
 
   function detect(clientX: number, clientY: number): TouchHit | null {
     const vrm = vrmRef.current;
@@ -255,6 +265,11 @@ export function useTouchReactions({
     petEndTimerRef.current = null;
     isPettingRef.current = false;
     hoverSamplesRef.current = [];
+    if (petPoseAppliedRef.current) {
+      petPoseAppliedRef.current = false;
+      releaseQuirkRevertsNow(PET_KEYS);
+      movementBusyUntilRef.current = performance.now() + PET_REACTION.durationMs;
+    }
   }
 
   // Movimiento del mouse sin botón apretado sobre el canvas.
@@ -293,9 +308,19 @@ export function useTouchReactions({
       recordTouch(PET_REACTION.description);
     }
 
-    // Mientras dure: la expresión se sostiene, y la pose se repite en
-    // ciclos (se apoya en la mano, se relaja, se vuelve a apoyar).
-    play(PET_REACTION);
+    // Mientras dure: la expresión se sostiene (cada movimiento del mouse
+    // la renueva) y la pose se pone una sola vez, sin vuelta automática.
+    // Si justo había otra reacción en curso, se pone apenas termine.
+    showExpression(PET_REACTION.expression, PET_END_MS + PET_REACTION.durationMs);
+    if (!petPoseAppliedRef.current && now >= movementBusyUntilRef.current) {
+      scheduleMovement(
+        { entries: PET_REACTION.entries, durationMs: PET_REACTION.durationMs, animated: false },
+        "idle",
+        PET_HOLD_UNTIL_RELEASED_MS,
+      );
+      petPoseAppliedRef.current = true;
+      movementBusyUntilRef.current = Infinity;
+    }
   }
 
   return { handleTap, handleHover };

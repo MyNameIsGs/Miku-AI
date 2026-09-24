@@ -1057,6 +1057,7 @@ function App() {
     cameraRef,
     canvasRef,
     scheduleMovement: movement.scheduleMovement,
+    releaseQuirkRevertsNow: movement.releaseQuirkRevertsNow,
     getExpression: face.getExpression,
     setExpression: face.setExpression,
     isSpeakingRef: face.isSpeakingRef,

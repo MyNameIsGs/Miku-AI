@@ -171,6 +171,17 @@ export function useMovement({
     }
   }
 
+  // Tarea 8.12: una pose que dura "lo que dure algo" (la caricia): se
+  // programa con una vuelta automática muy lejana -- así igual queda
+  // anotado a dónde volver -- y cuando termina, esto la adelanta a ahora.
+  function releaseQuirkRevertsNow(keys: string[]) {
+    const now = performance.now();
+    for (const key of keys) {
+      const pending = pendingQuirkRevertsRef.current[key];
+      if (pending) pending.revertAt = now;
+    }
+  }
+
   // --- Tarea 3.1, Paso 2b: busca un gesto por nombre, primero entre los
   // presets semilla y después entre los personalizados que Miku creó.
   function getHandGestureDefinition(
@@ -410,6 +421,7 @@ export function useMovement({
     animatedHandSidesRef,
     customHandGesturesRef,
     scheduleMovement,
+    releaseQuirkRevertsNow,
     revertAnimatedBonesExcept,
     scheduleHandGesture,
     saveCustomHandGesture,
