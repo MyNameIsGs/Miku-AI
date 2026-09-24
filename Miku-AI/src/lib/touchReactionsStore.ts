@@ -1,6 +1,8 @@
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { ParsedMovement } from "../types";
+import { BONE_RANGES_VERSION } from "../config/boneRanges";
+import { migrateEntriesV1toV2 } from "./boneRangesMigration";
 
 // Tarea 8.12, segunda parte: las reacciones al tacto las decide Miku, no
 // una tabla escrita a mano. La primera vez que Sebastián la toca en una
@@ -36,6 +38,9 @@ export type DesignedTouchReaction = {
   // otro lado se usa la misma reacción espejada.
   side: "left" | "right" | null;
   createdAt: string;
+  // Versión de los rangos de huesos con que están escritas las
+  // intensidades (sin el campo = versión 1). Ver lib/boneRangesMigration.ts.
+  rangos?: number;
 };
 
 type Store = Partial<Record<TouchReactionKey, DesignedTouchReaction>>;
@@ -50,7 +55,22 @@ export async function loadTouchReactions() {
   try {
     const path = await storePath();
     if (await exists(path)) {
-      cache = JSON.parse(await readTextFile(path)) as Store;
+      const loaded = JSON.parse(await readTextFile(path)) as Store;
+      // Las diseñadas con los rangos de huesos viejos se convierten una vez
+      // para verse igual (el archivo se sincroniza: queda anotado en cada una).
+      let migrated = 0;
+      for (const reaction of Object.values(loaded)) {
+        if (reaction && (reaction.rangos ?? 1) < BONE_RANGES_VERSION) {
+          reaction.entries = migrateEntriesV1toV2(reaction.entries);
+          reaction.rangos = BONE_RANGES_VERSION;
+          migrated++;
+        }
+      }
+      if (migrated > 0) {
+        await writeTextFile(path, JSON.stringify(loaded, null, 2));
+        console.log(`[Tacto] ${migrated} reacciones convertidas a los rangos de huesos v${BONE_RANGES_VERSION}.`);
+      }
+      cache = loaded;
     }
   } catch (err) {
     console.error("[Tacto] No se pudieron cargar las reacciones de Miku:", err);
@@ -62,7 +82,7 @@ export function getDesignedReaction(key: TouchReactionKey): DesignedTouchReactio
 }
 
 export async function saveDesignedReaction(key: TouchReactionKey, reaction: DesignedTouchReaction) {
-  cache = { ...cache, [key]: reaction };
+  cache = { ...cache, [key]: { ...reaction, rangos: BONE_RANGES_VERSION } };
   await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
 }
 

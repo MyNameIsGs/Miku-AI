@@ -58,9 +58,10 @@ type Reaction = {
 // SU izquierda. (Los huesos normalizados de un VRM0 miran hacia -z en su
 // propio espacio; la escena entera está girada 180° para que mire a la
 // cámara.)
-// Se usan cuello y columna, no "head": la cabeza tiene su propio balanceo
-// ambiente (useMovement.updateMovement) y una transición sobre ella lo
-// apagaría para siempre.
+// Se usan cuello y columna, no "head" (antes una transición sobre la cabeza
+// le apagaba el vaivén ambiente; ya no, pero así quedaron). Intensidades en
+// los rangos de la versión 2 (config/boneRanges.ts), con los mismos grados
+// que tenían en la versión 1.
 function reactionFor(zone: TouchZone, side: "left" | "right"): Reaction {
   const s = side === "left" ? 1 : -1;
   switch (zone) {
@@ -77,7 +78,7 @@ function reactionFor(zone: TouchZone, side: "left" | "right"): Reaction {
       return {
         expression: "angry",
         entries: [
-          { bone: "neck", axis: "y", intensity: -40 * s },
+          { bone: "neck", axis: "y", intensity: -67 * s },
           { bone: "neck", axis: "z", intensity: -25 * s },
         ],
         durationMs: 250,
@@ -98,7 +99,7 @@ function reactionFor(zone: TouchZone, side: "left" | "right"): Reaction {
       return {
         expression: "happy",
         entries: [
-          { bone: "neck", axis: "y", intensity: 45 * s },
+          { bone: "neck", axis: "y", intensity: 75 * s },
           { bone: "neck", axis: "x", intensity: -30 },
         ],
         durationMs: 400,
@@ -108,7 +109,7 @@ function reactionFor(zone: TouchZone, side: "left" | "right"): Reaction {
     case "brazo":
       return {
         expression: "happy",
-        entries: [{ bone: "neck", axis: "y", intensity: 35 * s }],
+        entries: [{ bone: "neck", axis: "y", intensity: 58 * s }],
         durationMs: 400,
         holdMs: 800,
         description: "te tocó el brazo",
@@ -193,8 +194,8 @@ const ANNOYED_WINDOW_MS = 6000;
 const ANNOYED_REACTION: Reaction = {
   expression: "angry",
   entries: [
-    { bone: "neck", axis: "y", intensity: -60 },
-    { bone: "spine", axis: "y", intensity: -40 },
+    { bone: "neck", axis: "y", intensity: -100 },
+    { bone: "spine", axis: "y", intensity: -96 },
   ],
   durationMs: 400,
   holdMs: 1500,

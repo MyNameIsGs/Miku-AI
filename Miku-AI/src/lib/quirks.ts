@@ -1,5 +1,7 @@
 import { load } from "@tauri-apps/plugin-store";
 import { ParsedMovement } from "../types";
+import { BONE_RANGES_VERSION } from "../config/boneRanges";
+import { migrateEntriesV1toV2 } from "./boneRangesMigration";
 
 // Fase 7: quirks propios que Miku inventa y nombra en momentos de silencio,
 // distinto de un movimiento espontáneo que hace una sola vez. Persisten en
@@ -25,13 +27,43 @@ export type StoredQuirk = {
 export type QuirksStore = Record<string, StoredQuirk>;
 
 const STORE_KEY = "quirks";
+// Con qué versión de los rangos de huesos están escritas las intensidades
+// guardadas (sin la clave = versión 1). Ver lib/boneRangesMigration.ts.
+const RANGES_VERSION_KEY = "quirksBoneRangesVersion";
+
+// Una sola conversión por sesión aunque loadQuirks se llame dos veces a la
+// vez al arrancar (panel + loop idle): si no, la segunda podría leer los
+// quirks ya convertidos con la versión vieja todavía anotada y convertirlos
+// de nuevo.
+let rangesMigration: Promise<void> | null = null;
+
+async function migrateQuirkRanges() {
+  const store = await load(".settings.dat", { autoSave: false });
+  const version = (await store.get<number>(RANGES_VERSION_KEY)) ?? 1;
+  if (version >= BONE_RANGES_VERSION) return;
+  // Se ven igual que antes, con los números de los rangos nuevos.
+  const saved = (await store.get<QuirksStore>(STORE_KEY)) ?? {};
+  for (const quirk of Object.values(saved)) {
+    if (quirk.movement) {
+      quirk.movement = { ...quirk.movement, entries: migrateEntriesV1toV2(quirk.movement.entries) };
+    }
+  }
+  await store.set(STORE_KEY, saved);
+  await store.set(RANGES_VERSION_KEY, BONE_RANGES_VERSION);
+  await store.save();
+  console.log(`[Quirks] ${Object.keys(saved).length} quirks convertidos a los rangos de huesos v${BONE_RANGES_VERSION}.`);
+}
 
 export async function loadQuirks(): Promise<QuirksStore> {
   try {
+    rangesMigration ??= migrateQuirkRanges();
+    await rangesMigration;
     const store = await load(".settings.dat", { autoSave: false });
     const saved = await store.get<QuirksStore>(STORE_KEY);
     return saved ?? {};
   } catch (err) {
+    // Si falló la conversión, se reintenta en la próxima carga.
+    rangesMigration = null;
     console.error("Error cargando quirks guardados:", err);
     return {};
   }

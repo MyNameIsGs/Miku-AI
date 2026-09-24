@@ -4,7 +4,7 @@ import {
   VOICE_RATE_MIN,
   VOICE_RATE_MAX,
 } from "../config/constants";
-import { BONE_RANGES_DEG, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
+import { BONE_RANGES_DEG, BONE_RANGES_V2_DATE, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
 import { HAND_PRESET_NAMES } from "../config/handPresets";
 import { Pendiente } from "../lib/pendientes";
 
@@ -68,9 +68,22 @@ Es solo contexto: úsalo si viene al caso (si te pregunta por "esto", si está e
 // aparte porque también la usa el diseño de reacciones al tacto (ver
 // prompts/touchReactionPrompt.ts): Miku tiene que saber exactamente lo
 // mismo que cuando se mueve conversando.
+// Aviso del cambio a rangos humanos (versión 2, ver config/boneRanges.ts).
+// Sebastián quiso que Miku lo sepa y que ella misma re-evalúe lo que hizo
+// antes -- no se tocan sus notas ni se le re-evalúan los quirks por ella:
+// solo se le explica qué cambió y con qué cuenta para corregirlo.
+function buildBoneRangesChangeNotice(): string {
+  return `CAMBIO EN TU CUERPO (${BONE_RANGES_V2_DATE}): tus límites de huesos pasaron a ser los de un cuerpo humano real, medidos en tu propio cuerpo. Lo que más cambia:
+- Ahora puedes llevar el brazo hacia adelante hasta arriba con UpperArm.x (antes llegaba apenas a 30° y no alcanzaba para poner las manos al frente), y girar el antebrazo hacia adentro con LowerArm.x negativo (antes estaba bloqueado).
+- La muñeca se dobla de verdad (antes apenas 15-20°).
+- El hombro (Shoulder) ya no sirve para estirar el brazo: gira poco, como una clavícula real. El codo ya no se dobla de costado (LowerArm.z). El brazo ya no puede bajar más allá de pegado al cuerpo (antes se metía dentro del torso). La cabeza gira como la de una persona, no más.
+- Tus quirks y tus reacciones al tacto se convirtieron para verse igual que antes, con los números nuevos; solo lo que pasaba del límite humano quedó recortado.
+Lo que anotaste en tu conocimiento sobre tus huesos ANTES de esa fecha usa los números viejos: el mismo número ya no mueve lo mismo, y algunas conclusiones (por ejemplo, que el brazo no llega al frente) ya no son ciertas. Re-evalúalo cuando te sirva, con lo que veas de ti misma: puedes volver a crear un quirk con el mismo nombre para que vuelva a evaluación, guardar conocimiento nuevo que corrija el anterior, y si quieres rediseñar una reacción al tacto, contárselo a Sebastián (él puede pedírtelo desde el panel).`;
+}
+
 export function buildMovementInstructions(): string {
   // Rango real de cada hueso (config/boneRanges.ts): para que sepa cuánto
-  // es 100 en cada uno -- no es lo mismo en el brazo (170°) que en la mano.
+  // es 100 en cada uno -- no es lo mismo en el brazo (180°) que en la mano.
   const boneRangeLines = MOVEMENT_BONE_NAMES.map((bone) => {
     const r = BONE_RANGES_DEG[bone];
     const fmt = ([min, max]: [number, number]) => `${min}° a +${max}°`;
@@ -91,24 +104,28 @@ TUS HUESOS, EN PALABRAS ("left" es TU izquierda y "right" TU derecha, no las de 
 En reposo tienes los brazos colgando a los costados. Las intensidades cuentan desde esa pose: 0 = reposo.
 
 QUÉ HACE CADA EJE (comprobado mirándote desde varios ángulos, no en teoría):
-- head, neck, chest, spine: x = mirar arriba(+)/abajo(-); y = girar hacia tu izquierda(+)/derecha(-); z = ladear hacia tu izquierda(+)/derecha(-).
-- Hombro y brazo (Shoulder y UpperArm):
-  · z = SUBIR el brazo por el costado (para una "T", una "V" o los brazos arriba). El izquierdo sube con z NEGATIVO; el derecho, con z POSITIVO.
-  · x = llevar el brazo hacia ADELANTE (+) o hacia ATRÁS (-), como un péndulo al caminar. Mismo signo en los dos lados. Con el hombro (Shoulder.x) el movimiento es grande: es el hueso para estirar el brazo al frente. Con el brazo (UpperArm.x) es chico hacia adelante (hasta 30°) y grande hacia atrás.
-  · y = mover el brazo en horizontal, por DELANTE del cuerpo (cruzándolo) o por DETRÁS. Por delante: izquierdo con y negativo, derecho con y positivo.
+- head, neck, chest, spine: x = mirar arriba(+)/abajo(-) (en chest y spine: echarte atrás(+)/inclinarte adelante(-)); y = girar hacia tu izquierda(+)/derecha(-); z = ladear hacia tu izquierda(+)/derecha(-). La cabeza y el cuello se reparten el movimiento como en una persona: para mirar muy a un costado, gira los dos.
+- Brazo (UpperArm), el hueso principal para ubicar el brazo:
+  · x = llevar el brazo hacia ADELANTE (+) o hacia ATRÁS (-), como un péndulo. Mismo signo en los dos lados. Hacia adelante llega hasta arriba de la cabeza: x=50 (unos 90°) lo deja estirado al frente, a la altura del hombro.
+  · z = SUBIR el brazo por el costado (para una "T", una "V" o los brazos arriba). El izquierdo sube con z NEGATIVO; el derecho, con z POSITIVO. Hacia el otro lado casi no hay recorrido: el brazo ya cuelga pegado al cuerpo.
+  · y = girar el brazo en horizontal, por DELANTE del cuerpo (cruzándolo) o por DETRÁS. Por delante: izquierdo con y negativo, derecho con y positivo. Con el brazo levantado se nota como un barrido; colgando, casi solo gira la palma.
+- Hombro (Shoulder): es la clavícula, se mueve poco, como en una persona. z = encoger (izquierdo con z negativo, derecho con z positivo); y = adelantar o echar atrás el hombro; x = girarlo apenas. Sirve para acompañar un gesto (encogerte, sacar pecho), no para ubicar el brazo.
 - Antebrazo (LowerArm):
   · y = DOBLAR EL CODO, el gesto natural de acercar la mano, ofrecer algo o saludar: izquierdo con y negativo, derecho con y positivo.
-  · x = girar el antebrazo sobre sí mismo (gira la palma). Solo va en positivo.
-  · z = doblar el codo hacia el costado; es poco natural, úsalo poco.
-- Mano (Hand): movimientos muy chicos de la muñeca (10-30°), para el acabado final de un gesto, no para armarlo.
+  · x = girar el antebrazo. Con el codo doblado, x NEGATIVO lo lleva hacia ADENTRO (las manos frente a tu cuerpo, por ejemplo frente a la falda o la panza) y x POSITIVO hacia AFUERA (palmas abiertas a los costados, como encogiéndote de hombros). Con el codo estirado solo gira la palma. Mismo signo en los dos lados.
+  · z = casi no se mueve: el codo es una bisagra, no se dobla de costado.
+- Mano (Hand): z = doblar la muñeca hacia la palma o hacia el dorso (izquierda: palma con z positivo; derecha: palma con z negativo); y = inclinarla hacia el meñique o hacia el pulgar; x = apenas un giro.
 
-CUÁNTO ES 100 EN CADA HUESO (la intensidad es un porcentaje del extremo de cada lado, en grados):
+CUÁNTO ES 100 EN CADA HUESO (la intensidad es un porcentaje del extremo de cada lado, en grados; son los límites de un cuerpo humano, medidos en tu cuerpo):
 ${boneRangeLines}
-Por eso el mismo número no mueve lo mismo en huesos distintos: leftUpperArm.z=-50 sube el brazo unos 85°, mientras que leftHand.x=50 mueve la muñeca apenas unos 7°.
+Por eso el mismo número no mueve lo mismo en huesos distintos: leftUpperArm.z=-50 sube el brazo 80°, mientras que leftHand.x=50 gira la mano apenas 7°.
 
 EJEMPLOS COMPROBADOS (míralos como referencia de signos y proporciones, no como poses obligadas):
-- Los dos brazos rectos hacia arriba, en "I": leftUpperArm.z=-94, rightUpperArm.z=94. Alcanza con z; no hace falta y (y los cruzaría por delante de la cabeza).
-- Ofrecer la mano derecha al frente: rightShoulder.x=55, rightLowerArm.y=25.
+- Los dos brazos rectos hacia arriba, en "I": leftUpperArm.z=-99, rightUpperArm.z=99. Alcanza con z; no hace falta y (y los cruzaría por delante de la cabeza).
+- Ofrecer la mano derecha al frente: rightUpperArm.x=45, rightLowerArm.y=17.
+- Las dos manos juntas frente a la falda: leftUpperArm.x=15, rightUpperArm.x=15, leftLowerArm.y=-40, rightLowerArm.y=40, leftLowerArm.x=-70, rightLowerArm.x=-70.
+
+${buildBoneRangesChangeNotice()}
 
 IMPORTANTE sobre gestos simétricos con ambos brazos: para el mismo gesto en los dos lados, z e y llevan signos OPUESTOS entre el brazo izquierdo y el derecho; x lleva el MISMO signo.
 

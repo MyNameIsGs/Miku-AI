@@ -3,6 +3,10 @@ import { HAND_PRESET_NAMES } from "../config/handPresets";
 import { BoneTransition } from "../types";
 import { Pendiente } from "../lib/pendientes";
 import { QuirksStore } from "../lib/quirks";
+// Esta consulta es una llamada aparte: sin esto creaba y re-evaluaba sus
+// quirks sin la explicación de ejes y rangos (antes decía "la misma
+// convención que ya conoces", pero acá no la tenía).
+import { buildMovementInstructions } from "./systemPrompt";
 
 export interface BuildIdlePromptParams {
   world: string;
@@ -119,7 +123,9 @@ Si genuinamente te provoca hacer un gesto pequeño con tu cuerpo ahora mismo (es
 
 [MOVIMIENTO: hueso.eje=intensidad, duracion=Xs]
 
-Huesos disponibles: ${movementBoneList}. Presets de mano disponibles: ${handPresetList}. Misma convención de ejes e intensidad (-100 a 100) que ya conoces.
+Huesos disponibles: ${movementBoneList}. Presets de mano disponibles: ${handPresetList}.
+
+${buildMovementInstructions()}
 ${quirksSection}
 Fuera de los casos de abajo sobre pendientes, no escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
 ${heldPoseNote}${pendientesNote}`;
