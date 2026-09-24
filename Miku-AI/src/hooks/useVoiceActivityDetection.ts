@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isGameModeActive } from "../lib/gameMode";
 
 const VAD_POLL_URL = "http://127.0.0.1:8899/vad/poll";
 const VAD_ENABLED_URL = "http://127.0.0.1:8899/vad/enabled";
@@ -48,9 +49,15 @@ export function useVoiceActivityDetection({
   const lastSilenceIdRef = useRef<number | null>(null);
   const lastSpeechStartIdRef = useRef<number | null>(null);
 
+  // En modo juego no se escucha "voz" mientras habla ni en la ventana de
+  // seguimiento: el VAD no distingue la voz de Sebastián de una frase del
+  // juego por los parlantes (en vivo, una del cliente de LoL calló a Miku a
+  // mitad de respuesta y la puso a escuchar). Ahí, a Miku se le habla con
+  // "Hey Miku", que tiene su propio modelo. isGameModeActive() se lee en
+  // cada render: App se vuelve a dibujar cuando cambia el modo juego.
   const mode: "off" | "recording" | "speech_onset" = listening
     ? "recording"
-    : isSpeaking || followUpActive
+    : (isSpeaking || followUpActive) && !isGameModeActive()
       ? "speech_onset"
       : "off";
 

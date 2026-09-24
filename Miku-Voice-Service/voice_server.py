@@ -154,6 +154,16 @@ VAD_THRESHOLD = 0.5
 # Sebastián en la primera prueba en vivo).
 VAD_NEG_THRESHOLD = 0.35
 VAD_SPEECH_CONFIRM_WINDOWS = 3  # ~96ms de voz sostenida antes de contar "empezó a hablar" -- mismo criterio que confirmation_frames del wake-word de Android (§6.41 del contexto), evita que un ruido corto dispare algo
+# Interrupción (barge-in) mientras Miku habla: mucho más exigente que el
+# "arrancó a hablar" de la grabación. Con 3 ventanas (~96 ms) sobre 0.5
+# saltaba con cualquier sonido parecido a voz -- en vivo, una frase del
+# cliente de LoL por los parlantes calló a Miku a mitad de respuesta. Ahora
+# pide ~0.45 s de voz clara: un contador que suma con cada ventana sobre
+# VAD_BARGE_IN_THRESHOLD, tolera las pausas normales entre sílabas (no
+# resta con probabilidad intermedia) y se vacía rápido con silencio real.
+VAD_BARGE_IN_THRESHOLD = 0.7
+VAD_BARGE_IN_CONFIRM_WINDOWS = 14  # ~450 ms de voz clara
+VAD_BARGE_IN_DECAY_PER_SILENT_WINDOW = 3
 VAD_SILENCE_MS = 1200  # silencio sostenido tras haber hablado para contar "terminó de hablar" -- subido de 900 a 1200 (más margen para pausas normales), a recalibrar con más uso
 
 vad_state_lock = threading.Lock()
@@ -222,11 +232,14 @@ _vad_consec_speech = 0
 _vad_consec_silence = 0
 _vad_speech_confirmed = False
 _vad_last_speech_at = 0.0
+_vad_barge_in_score = 0
+_vad_barge_in_fired = False
 
 
 def _process_vad_frame(frame_int16):
     global vad_speech_started_id, vad_silence_id
     global _vad_consec_speech, _vad_consec_silence, _vad_speech_confirmed, _vad_last_speech_at
+    global _vad_barge_in_score, _vad_barge_in_fired
 
     if _vad is None:
         return
@@ -241,14 +254,25 @@ def _process_vad_frame(frame_int16):
         threshold_now = VAD_NEG_THRESHOLD if _vad_speech_confirmed else VAD_THRESHOLD
         is_speech = prob >= threshold_now
 
+        # Interrupción: contador aparte, más exigente (ver
+        # VAD_BARGE_IN_THRESHOLD). Dispara una sola vez por tramo de voz.
+        if prob >= VAD_BARGE_IN_THRESHOLD:
+            _vad_barge_in_score += 1
+        elif prob < VAD_NEG_THRESHOLD:
+            _vad_barge_in_score = max(0, _vad_barge_in_score - VAD_BARGE_IN_DECAY_PER_SILENT_WINDOW)
+            if _vad_barge_in_score == 0:
+                _vad_barge_in_fired = False
+        if not _vad_barge_in_fired and _vad_barge_in_score >= VAD_BARGE_IN_CONFIRM_WINDOWS:
+            _vad_barge_in_fired = True
+            with vad_state_lock:
+                vad_speech_started_id += 1
+
         if is_speech:
             _vad_consec_speech += 1
             _vad_consec_silence = 0
             _vad_last_speech_at = now
             if not _vad_speech_confirmed and _vad_consec_speech >= VAD_SPEECH_CONFIRM_WINDOWS:
                 _vad_speech_confirmed = True
-                with vad_state_lock:
-                    vad_speech_started_id += 1
         else:
             _vad_consec_silence += 1
             _vad_consec_speech = 0
@@ -266,11 +290,14 @@ def _vad_set_enabled(enabled: bool):
     sesión nueva (grabar de nuevo, o que Miku vuelva a hablar) no arrastre
     nada de la sesión anterior."""
     global vad_enabled, _vad_consec_speech, _vad_consec_silence, _vad_speech_confirmed
+    global _vad_barge_in_score, _vad_barge_in_fired
     vad_enabled = enabled
     if enabled:
         _vad_consec_speech = 0
         _vad_consec_silence = 0
         _vad_speech_confirmed = False
+        _vad_barge_in_score = 0
+        _vad_barge_in_fired = False
         if _vad is not None:
             _vad.reset()
 
