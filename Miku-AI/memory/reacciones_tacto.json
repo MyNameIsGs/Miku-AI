@@ -446,5 +446,64 @@
     "animated": false,
     "side": null,
     "createdAt": "2026-09-24T08:11:47.004Z"
+  },
+  "torso": {
+    "expression": "relaxed",
+    "entries": [
+      {
+        "bone": "chest",
+        "axis": "x",
+        "intensity": -9
+      },
+      {
+        "bone": "spine",
+        "axis": "x",
+        "intensity": -6
+      },
+      {
+        "bone": "head",
+        "axis": "x",
+        "intensity": -14
+      },
+      {
+        "bone": "head",
+        "axis": "y",
+        "intensity": 10
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "z",
+        "intensity": -8
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "z",
+        "intensity": 8
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "x",
+        "intensity": 18
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "x",
+        "intensity": 10
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "y",
+        "intensity": -42
+      },
+      {
+        "bone": "leftHand",
+        "axis": "y",
+        "intensity": 12
+      }
+    ],
+    "durationMs": 1400,
+    "animated": false,
+    "side": null,
+    "createdAt": "2026-09-24T18:37:45.498Z"
   }
 }
