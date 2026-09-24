@@ -33,6 +33,7 @@ import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useStreamMode } from "./hooks/useStreamMode";
 import { useGameMode } from "./hooks/useGameMode";
 import { useGameBreaks } from "./hooks/useGameBreaks";
+import { usePerfMonitor } from "./hooks/usePerfMonitor";
 import { describeGameContext } from "./lib/gameSessions";
 import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge } from "./lib/knowledge";
@@ -1025,6 +1026,8 @@ function App() {
   // pasa "elapsed" (segundos, THREE.Clock) además de "now"
   // (performance.now(), igual que espera selfImageCaptureAtRef) porque
   // este código usa ambas fuentes de tiempo tal como estaban.
+  const perfMonitor = usePerfMonitor();
+
   function onBeforeRender(now: number, delta: number, elapsed: number) {
     // Etapa 6: el balanceo de respiración de pecho/cabeza, los reverts
     // automáticos de quirks y las transiciones de huesos en curso ahora
@@ -1069,6 +1072,7 @@ function App() {
   }
 
   function onAfterRender(renderer: THREE.WebGLRenderer, now: number) {
+    perfMonitor.onFrame(renderer, now);
     if (
       selfImageCaptureAtRef.current !== null &&
       now >= selfImageCaptureAtRef.current

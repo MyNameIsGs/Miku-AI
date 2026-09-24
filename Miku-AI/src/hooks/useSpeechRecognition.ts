@@ -58,6 +58,16 @@ export function useSpeechRecognition({
   // siempre.
   const pendingAutoStopResolveRef = useRef<((text: string) => void) | null>(null);
   const partialIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Una sola grabación a la vez. startListening es async (pide el micrófono
+  // antes de marcar "escuchando"), y dos llamadas casi juntas arrancaban dos
+  // grabaciones: pasa al decir "Hey Miku" dentro de la ventana de
+  // seguimiento, donde el VAD y el wake-word disparan a la vez. La segunda
+  // pisaba la referencia a la primera, que ya nunca se frenaba: micrófono
+  // abierto, grabadora sumando audio al búfer compartido para siempre, y su
+  // intervalo mandando ese búfer cada vez más largo a Whisper aun sin estar
+  // escuchando -- GPU cada vez más cargada con cada conversación, lo que
+  // Sebastián notó como "va a menos cuadros después de hablar un rato".
+  const startingRef = useRef(false);
   const partialInFlightRef = useRef(false);
   // Palabras del último resultado parcial (crudas, para comparar contra la
   // próxima pasada) y palabras ya "confirmadas" (las que se muestran, solo
@@ -76,6 +86,8 @@ export function useSpeechRecognition({
   // versión poco suave). Se salta el tick si el anterior todavía no
   // volvió, para no amontonar pedidos si la GPU se atrasa.
   const startPartialTranscription = (mimeType: string) => {
+    // Por las dudas: nunca dos intervalos vivos a la vez.
+    stopPartialTranscription();
     previousWordsRef.current = [];
     confirmedWordsRef.current = [];
 
@@ -130,6 +142,8 @@ export function useSpeechRecognition({
   };
 
   const startListening = async () => {
+    if (startingRef.current || mediaRecorderRef.current) return;
+    startingRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = pickMimeType();
@@ -193,6 +207,8 @@ export function useSpeechRecognition({
       setShowTextInput(true);
     } catch (err) {
       console.error("No se pudo acceder al micrófono:", err);
+    } finally {
+      startingRef.current = false;
     }
   };
 
