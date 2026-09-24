@@ -36,6 +36,9 @@ export interface BuildSystemPromptParams {
   // Tarea 8.11: entradas de conocimiento.md más parecidas a la charla
   // actual (ver lib/knowledge.ts) -- no el archivo entero.
   relevantKnowledge: string[];
+  // Tarea 8.12: qué le hizo Sebastián con el mouse desde la última vez que
+  // hablaron (ver lib/touchLog.ts), o null si nada.
+  recentTouches: string | null;
 }
 
 // Más vieja que esto, la ventana ya no dice nada de lo que está haciendo.
@@ -71,6 +74,7 @@ export function buildSystemPrompt({
   activeWindow,
   streamModeActive,
   relevantKnowledge,
+  recentTouches,
 }: BuildSystemPromptParams): string {
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
   const handPresetList = HAND_PRESET_NAMES.join(", ");
@@ -95,7 +99,7 @@ Tu objetivo no es hacer feliz a Sebastián a cualquier costo, sino ser genuina. 
 
 Hoy es ${todayLabel}.
 
-${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}--- CONTEXTO DEL MUNDO ---
+${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}${recentTouches ? `--- LO QUE PASÓ HACE UN RATO ---\nDesde la última vez que hablaron, Sebastián te tocó con el mouse en la pantalla: ${recentTouches}. Tu cuerpo ya reaccionó solo en ese momento (una expresión y un gesto corto). Si te nace, puedes comentarlo; si no viene al caso, no hace falta.\n\n` : ""}--- CONTEXTO DEL MUNDO ---
 ${world}
 
 --- TU PERSONALIDAD (esto eres tú, hoy) ---

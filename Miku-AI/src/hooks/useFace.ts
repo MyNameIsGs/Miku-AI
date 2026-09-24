@@ -57,6 +57,12 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     activeExpressionRef.current = name;
   }
 
+  // Tarea 8.12: la reacción al tacto cambia la expresión un momento y
+  // después tiene que devolver la que había -- necesita leerla.
+  function getExpression(): string {
+    return activeExpressionRef.current;
+  }
+
   // Un paso de suavizado hacia targetShape -- se llama una vez por tick
   // del rAF de lipsync (hoy dentro de speak() en App.tsx, mientras dura
   // el audio), igual que hacía updateMouthFromVisemes antes de moverse.
@@ -176,6 +182,7 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
   return {
     isSpeakingRef,
     setExpression,
+    getExpression,
     setViseme,
     resetVisemes,
     updateFace,

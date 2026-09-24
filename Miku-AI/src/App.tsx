@@ -32,6 +32,8 @@ import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useStreamMode } from "./hooks/useStreamMode";
 import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge } from "./lib/knowledge";
+import { useTouchReactions } from "./hooks/useTouchReactions";
+import { consumeTouchSummary } from "./lib/touchLog";
 import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
@@ -667,6 +669,7 @@ function App() {
         activeWindow,
         streamModeActive: isStreamModeActive(),
         relevantKnowledge,
+        recentTouches: consumeTouchSummary(),
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,
@@ -1003,10 +1006,55 @@ function App() {
   });
   const isMikuReady = isVoiceReady && isVrmLoaded;
 
+  // Tarea 8.12: reacción al tacto (ver useTouchReactions.ts).
+  const touch = useTouchReactions({
+    vrmRef,
+    cameraRef,
+    canvasRef,
+    scheduleMovement: movement.scheduleMovement,
+    getExpression: face.getExpression,
+    setExpression: face.setExpression,
+    isSpeakingRef: face.isSpeakingRef,
+    onInteraction: () => {
+      idleQuirks.lastInteractionTimeRef.current = performance.now();
+    },
+  });
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0 && !freeCamera) {
       appWindow.startDragging();
     }
+  };
+
+  // Tarea 8.12: sobre el canvas, apretar ya no arrastra la ventana al
+  // instante -- recién cuando el mouse se mueve más de unos píxeles con
+  // el botón apretado. Si se suelta sin moverse, fue un toque a Miku.
+  const DRAG_THRESHOLD_PX = 4;
+  const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 0 && !freeCamera) {
+      pressStartRef.current = { x: e.clientX, y: e.clientY };
+    }
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (freeCamera) return;
+    const start = pressStartRef.current;
+    if (start && e.buttons & 1) {
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > DRAG_THRESHOLD_PX) {
+        pressStartRef.current = null;
+        appWindow.startDragging();
+      }
+    } else if (e.buttons === 0) {
+      touch.handleHover(e.clientX, e.clientY);
+    }
+  };
+
+  const handleCanvasMouseUp = (e: React.MouseEvent) => {
+    if (e.button !== 0 || !pressStartRef.current) return;
+    pressStartRef.current = null;
+    touch.handleTap(e.clientX, e.clientY);
   };
 
   const handleSaveCamera = async () => {
@@ -1421,7 +1469,12 @@ function App() {
         ref={canvasRef}
         className={`miku-canvas ${isMikuReady ? "ready" : ""}`}
         style={{ display: "block" }}
-        onMouseDown={handleMouseDown}
+        onMouseDown={handleCanvasMouseDown}
+        onMouseMove={handleCanvasMouseMove}
+        onMouseUp={handleCanvasMouseUp}
+        onMouseLeave={() => {
+          pressStartRef.current = null;
+        }}
       />
     </div>
   );
