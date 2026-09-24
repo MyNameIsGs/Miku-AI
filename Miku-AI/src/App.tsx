@@ -39,6 +39,7 @@ import { consumeTouchSummary } from "./lib/touchLog";
 import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
+import { MemoryPanel } from "./components/MemoryPanel";
 import {
   loadQuirks,
   confirmQuirk,
@@ -110,6 +111,7 @@ function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [showAppLauncher, setShowAppLauncher] = useState(false);
   const [showQuirksPanel, setShowQuirksPanel] = useState(false);
+  const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const [quirksState, setQuirksState] = useState<QuirksStore>({});
   const [hideResponseText, setHideResponseText] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
@@ -1235,6 +1237,12 @@ function App() {
             Quirks
           </button>
           <button
+            className={showMemoryPanel ? "active" : ""}
+            onClick={() => setShowMemoryPanel((v) => !v)}
+          >
+            Memoria
+          </button>
+          <button
             className={hideResponseText ? "active" : ""}
             onClick={() => setHideResponseText((v) => !v)}
             title="Ocultar el texto de respuesta (para sacar capturas limpias)"
@@ -1353,6 +1361,8 @@ function App() {
           onClose={() => setShowQuirksPanel(false)}
         />
       )}
+
+      {showMemoryPanel && <MemoryPanel onClose={() => setShowMemoryPanel(false)} />}
 
       {showConfig && (
         <div className="config-panel">

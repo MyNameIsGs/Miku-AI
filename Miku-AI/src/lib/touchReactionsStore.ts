@@ -66,6 +66,25 @@ export async function saveDesignedReaction(key: TouchReactionKey, reaction: Desi
   await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
 }
 
+// Para el panel de memoria: se lee del archivo (no del caché) para mostrar
+// exactamente lo que quedó guardado.
+export async function listDesignedReactions(): Promise<Store> {
+  const path = await storePath();
+  if (!(await exists(path))) return {};
+  return JSON.parse(await readTextFile(path)) as Store;
+}
+
+// "Que la rediseñe": sin reacción guardada, el próximo toque en esa zona usa
+// el respaldo y le pide a Miku que la diseñe de nuevo (ver resolveReaction
+// en useTouchReactions). Se recarga el caché para que eso pase ya, sin
+// reiniciar la app.
+export async function deleteDesignedReaction(key: TouchReactionKey) {
+  const store = await listDesignedReactions();
+  delete store[key];
+  await writeTextFile(await storePath(), JSON.stringify(store, null, 2));
+  await loadTouchReactions();
+}
+
 // La misma reacción, del otro lado del cuerpo: huesos izquierdos <->
 // derechos, y los ejes y/z con el signo invertido (la tabla de ejes del
 // prompt los define espejados entre lados, y en cuello/cabeza/columna
