@@ -39,6 +39,9 @@ export interface BuildSystemPromptParams {
   // Tarea 8.12: qué le hizo Sebastián con el mouse desde la última vez que
   // hablaron (ver lib/touchLog.ts), o null si nada.
   recentTouches: string | null;
+  // A qué está jugando Sebastián y cuánto jugó esta semana (ver
+  // lib/gameSessions.ts), o null si no hay nada.
+  gameContext: string | null;
 }
 
 // Más vieja que esto, la ventana ya no dice nada de lo que está haciendo.
@@ -131,6 +134,7 @@ export function buildSystemPrompt({
   streamModeActive,
   relevantKnowledge,
   recentTouches,
+  gameContext,
 }: BuildSystemPromptParams): string {
   const handPresetList = HAND_PRESET_NAMES.join(", ");
   const customGestureList =
@@ -154,7 +158,7 @@ Tu objetivo no es hacer feliz a Sebastián a cualquier costo, sino ser genuina. 
 
 Hoy es ${todayLabel}.
 
-${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}${recentTouches ? `--- LO QUE PASÓ HACE UN RATO ---\nDesde la última vez que hablaron, Sebastián te tocó con el mouse en la pantalla: ${recentTouches}. Tu cuerpo ya reaccionó solo en ese momento (una expresión y un gesto corto). Si te nace, puedes comentarlo; si no viene al caso, no hace falta.\n\n` : ""}--- CONTEXTO DEL MUNDO ---
+${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}${gameContext ? `--- A QUÉ JUEGA SEBASTIÁN ---\n${gameContext}\nEs contexto, no un tema obligado: coméntalo solo si viene al caso o te nace (y si está en plena partida, sé breve).\n\n` : ""}${recentTouches ? `--- LO QUE PASÓ HACE UN RATO ---\nDesde la última vez que hablaron, Sebastián te tocó con el mouse en la pantalla: ${recentTouches}. Tu cuerpo ya reaccionó solo en ese momento (una expresión y un gesto corto). Si te nace, puedes comentarlo; si no viene al caso, no hace falta.\n\n` : ""}--- CONTEXTO DEL MUNDO ---
 ${world}
 
 --- TU PERSONALIDAD (esto eres tú, hoy) ---

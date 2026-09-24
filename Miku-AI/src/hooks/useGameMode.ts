@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { load } from "@tauri-apps/plugin-store";
 import { setGameModeActive } from "../lib/gameMode";
+import { gameNameFrom, recordGameState } from "../lib/gameSessions";
 
 export type GameState = { active: boolean; title: string; processName: string };
 
@@ -73,6 +74,12 @@ export function useGameMode({ busy, onHiddenHeartbeat }: UseGameModeParams) {
       listen<GameState>("game-mode", (event) => {
         setGame(event.payload);
         setGameModeActive(event.payload.active);
+        // A qué juega y cuánto (contexto para Miku + pausas en sesiones
+        // largas, ver gameSessions.ts).
+        const { active, processName, title } = event.payload;
+        recordGameState(active, active ? gameNameFrom(processName, title) : null).catch(
+          console.error,
+        );
         console.log(
           `[Modo juego] ${event.payload.active ? `activo (${event.payload.processName})` : "inactivo"}`,
         );

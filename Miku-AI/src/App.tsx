@@ -32,6 +32,8 @@ import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
 import { useStreamMode } from "./hooks/useStreamMode";
 import { useGameMode } from "./hooks/useGameMode";
+import { useGameBreaks } from "./hooks/useGameBreaks";
+import { describeGameContext } from "./lib/gameSessions";
 import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge } from "./lib/knowledge";
 import { useTouchReactions } from "./hooks/useTouchReactions";
@@ -738,6 +740,7 @@ function App() {
         streamModeActive: isStreamModeActive(),
         relevantKnowledge,
         recentTouches: consumeTouchSummary(),
+        gameContext: await describeGameContext(),
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,
@@ -1090,12 +1093,26 @@ function App() {
     processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
 
+  // Pausas en sesiones largas de juego (ver useGameBreaks.ts).
+  const gameBreaks = useGameBreaks({ speak: speech.speak, voicePitchRef, voiceRateRef });
+  useEffect(() => {
+    const id = setInterval(() => {
+      gameBreaks.check().catch(console.error);
+    }, 60 * 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Modo juego (ver useGameMode.ts / game_mode.rs).
   const gameMode = useGameMode({
     busy: speechRecognition.listening || isThinking || speech.isSpeaking,
     // Oculta, el bucle de dibujo (donde se revisan los recordatorios) está
-    // detenido: los recordatorios se revisan con el latido de Rust.
-    onHiddenHeartbeat: () => reminders.checkReminders(),
+    // detenido y los temporizadores de la página, frenados: los
+    // recordatorios y las pausas se revisan con el latido de Rust.
+    onHiddenHeartbeat: () => {
+      reminders.checkReminders();
+      gameBreaks.check().catch(console.error);
+    },
   });
 
   const handleMouseDown = (e: React.MouseEvent) => {
