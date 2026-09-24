@@ -27,6 +27,10 @@ function smoothstep(t: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
+// El balanceo ambiente de un hueso que se mueve por primera vez entra de a
+// poco, en vez de aparecer de golpe (hasta 1.5°) en el primer cuadro.
+const SWAY_FADE_IN_MS = 1000;
+
 type UseMovementParams = {
   movementBonesRef: RefObject<Record<string, THREE.Object3D | null>>;
   fingerBonesRef: RefObject<Record<string, THREE.Object3D | null>>;
@@ -45,6 +49,19 @@ export function useMovement({
   headBoneRef,
 }: UseMovementParams) {
   const boneTransitionsRef = useRef<Record<string, BoneTransition>>({});
+  // Lo que se ve en cada hueso es la suma de tres capas: la POSE (lo que
+  // interpolan las transiciones), el balanceo ambiente y la respiración /
+  // vaivén de cabeza. Las transiciones tienen que partir de la pose sola:
+  // antes partían de rotation[axis], que ya traía las otras dos capas -- y
+  // para cabeza y pecho, además, la respiración recién escrita en este mismo
+  // cuadro. Resultado: al volver de una reacción que bajaba la cabeza
+  // (falda, head.x=-28), la cabeza saltaba ~14° al reposo en un cuadro
+  // (medido; lo notó Sebastián), y cada vuelta dejaba el hueso corrido
+  // hasta 1.5° por el balanceo sumado dos veces.
+  const poseValueRef = useRef<Record<string, number>>({});
+  const swayStartRef = useRef<Record<string, number>>({});
+  // Respiración / vaivén de cabeza del cuadro actual, por hueso y eje.
+  const breathingRef = useRef(new Map<THREE.Object3D, Partial<Record<"x" | "y" | "z", number>>>());
   const pendingQuirkRevertsRef = useRef<Record<string, PendingQuirkRevert>>({});
   // Mismo problema que los huesos de cuerpo (ver revertAnimatedBonesExcept),
   // pero para el wiggle de dedos: animatedHandSidesRef nunca se apagaba
@@ -86,6 +103,13 @@ export function useMovement({
     })();
   }, []);
 
+  // La pose actual de un hueso, sin balanceo ni respiración encima. Un
+  // hueso que nunca se movió no tiene pose guardada: es lo que se ve menos
+  // la respiración (la del último cuadro, que es la que tiene puesta).
+  function poseValueOf(key: string, node: THREE.Object3D, axis: "x" | "y" | "z"): number {
+    return poseValueRef.current[key] ?? node.rotation[axis] - (breathingRef.current.get(node)?.[axis] ?? 0);
+  }
+
   // Tarea 3.1, Paso 3: autoRevertDelayMs es opcional -- cuando se usa (para
   // quirks idle), después de duracion+autoRevertDelayMs el hueso vuelve
   // solo a lo que tenía ANTES de este movimiento (no al reposo absoluto,
@@ -106,7 +130,7 @@ export function useMovement({
       const offsetRad =
         (intensityToDegrees(intensity, range[0], range[1]) * Math.PI) / 180;
       const targetRad = restRad + offsetRad;
-      const currentValue = boneNode.rotation[axis];
+      const currentValue = poseValueOf(key, boneNode, axis);
 
       boneTransitionsRef.current[key] = {
         startValue: currentValue,
@@ -161,7 +185,7 @@ export function useMovement({
       if (!boneNode) continue;
       const restRad = boneRestRotationRef.current[boneName]?.[axis] ?? 0;
       boneTransitionsRef.current[key] = {
-        startValue: boneNode.rotation[axis],
+        startValue: poseValueOf(key, boneNode, axis),
         targetValue: restRad,
         startTime: now,
         duration: transition.duration,
@@ -287,14 +311,26 @@ export function useMovement({
     const chestBone = chestBoneRef.current;
     const headBone = headBoneRef.current;
 
+    // Respiración y vaivén de cabeza: se escriben tal cual en un hueso que
+    // no tiene pose, y se SUMAN a la pose en uno que sí (en el bucle de
+    // transiciones, más abajo) -- así no se apagan para siempre la primera
+    // vez que una reacción toca la cabeza o el pecho.
+    const breathing = breathingRef.current;
+    breathing.clear();
     if (chestBone) {
-      chestBone.rotation.x = Math.sin(elapsed * 1.2) * 0.025;
+      breathing.set(chestBone, { x: Math.sin(elapsed * 1.2) * 0.025 });
     }
-
     if (headBone) {
-      headBone.rotation.y =
-        Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04;
-      headBone.rotation.x = Math.sin(elapsed * 0.3) * 0.03;
+      breathing.set(headBone, {
+        ...breathing.get(headBone),
+        y: Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04,
+        x: Math.sin(elapsed * 0.3) * 0.03,
+      });
+    }
+    for (const [node, axes] of breathing) {
+      for (const axis of Object.keys(axes) as ("x" | "y" | "z")[]) {
+        node.rotation[axis] = axes[axis]!;
+      }
     }
 
     // Tarea 3.1, Paso 3: procesa los regresos automáticos de quirks
@@ -308,7 +344,7 @@ export function useMovement({
         const boneNode = movementBonesRef.current[boneName];
         if (!boneNode) continue;
         boneTransitionsRef.current[key] = {
-          startValue: boneNode.rotation[axis],
+          startValue: poseValueOf(key, boneNode, axis),
           targetValue: revert.revertToValue,
           startTime: now,
           duration: revert.revertDuration,
@@ -386,6 +422,7 @@ export function useMovement({
       const isFinger = !movementBonesRef.current[boneName];
       let sway = 0;
       if (!isFinger) {
+        poseValueRef.current[key] = value;
         // Balanceo ambiente del cuerpo (Paso 1) -- que ninguna pose,
         // ni siquiera una "permanente", quede completamente congelada.
         let seed = 0;
@@ -393,7 +430,11 @@ export function useMovement({
         const freq = 0.3 + (seed % 7) * 0.05;
         const phase = seed % 10;
         const swayRad = (1.5 * Math.PI) / 180;
-        sway = Math.sin(elapsed * freq + phase) * swayRad;
+        const swayStart = (swayStartRef.current[key] ??= now);
+        const fadeIn = smoothstep((now - swayStart) / SWAY_FADE_IN_MS);
+        sway =
+          Math.sin(elapsed * freq + phase) * swayRad * fadeIn +
+          (breathingRef.current.get(boneNode)?.[axis] ?? 0);
       } else {
         // Tarea 3.1, Paso 2b: oscilación de dedos para gestos
         // "animados" -- más rápida y notoria que el balanceo ambiente
