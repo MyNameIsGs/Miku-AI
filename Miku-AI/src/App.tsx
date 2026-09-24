@@ -15,6 +15,7 @@ import { useVoiceServer } from "./hooks/useVoiceServer";
 import { useVRMScene } from "./hooks/useVRMScene";
 import { useMovement } from "./hooks/useMovement";
 import { useFace } from "./hooks/useFace";
+import { useCursorGaze } from "./hooks/useCursorGaze";
 import { useSpeech } from "./hooks/useSpeech";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useWakeWord } from "./hooks/useWakeWord";
@@ -583,6 +584,15 @@ function App() {
 
   const face = useFace({ vrmRef, gazeTargetObjectRef });
 
+  // Sigue el mouse con la mirada cuando pasa cerca de ella.
+  const cursorGaze = useCursorGaze({
+    cameraRef,
+    canvasRef,
+    headBoneRef,
+    gazeOverrideRef: face.gazeOverrideRef,
+    headLookRef: movement.headLookRef,
+  });
+
   // Captura el canvas como imagen después de que la animación probablemente
   // ya se asentó, para que la próxima consulta al LLM pueda incluir cómo
   // quedó ella de verdad, no solo la descripción textual. Se hace marcando
@@ -1060,6 +1070,9 @@ function App() {
     // los procesa useMovement. Kickear el quirk idle es fire-and-forget
     // (no toca nada síncronamente en este mismo frame), así que no
     // importa si corre antes o después de updateMovement().
+    // La mirada al cursor va antes: decide a dónde miran los ojos
+    // (updateFace) y cuánto acompaña la cabeza (updateMovement).
+    cursorGaze.update();
     movement.updateMovement(now, delta, elapsed);
 
     // Etapa 9: el temporizador de silencio y el disparo del quirk idle

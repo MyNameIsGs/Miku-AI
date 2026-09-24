@@ -14,6 +14,10 @@ const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
   lookRight: { x: -0.7, y: 0 },
 };
 
+// Seguir el cursor es más rápido que la mirada errante (que es un paseo
+// lento de los ojos): tiene que sentirse como que lo sigue con la vista.
+const CURSOR_GAZE_SMOOTHING = 0.15;
+
 const VISEME_SHAPES = ["aa", "ih", "ou", "ee", "oh"];
 // Cuánto tarda la boca en recorrer la mitad del camino hacia la forma
 // siguiente (ver setViseme). Más alto = más suave pero más "perezosa":
@@ -49,6 +53,9 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     target: null as string | null,
     nextChangeTime: 3 + Math.random() * 4,
   });
+  // Punto del mundo al que mirar en vez de la mirada errante (el cursor
+  // cuando pasa cerca de ella, ver useCursorGaze.ts), o null.
+  const gazeOverrideRef = useRef<THREE.Vector3 | null>(null);
   const visemeWeightsRef = useRef<Record<string, number>>({
     aa: 0,
     ih: 0,
@@ -165,8 +172,19 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     }
 
     const gazeTargetObject = gazeTargetObjectRef.current;
-    if (gazeTargetObject) {
+    const gazeOverride = gazeOverrideRef.current;
+    if (gazeTargetObject && gazeOverride) {
+      // Sigue al cursor. La mirada errante queda sincronizada con donde
+      // está mirando, para que al soltar el cursor vuelva sin saltar.
+      const position = gazeTargetObject.position;
+      position.lerp(gazeOverride, CURSOR_GAZE_SMOOTHING);
+      gazeStateRef.current.offsetCurrent.x = position.x;
+      gazeStateRef.current.offsetCurrent.y = position.y - 1.4;
+      gazeStateRef.current.target = null;
+    } else if (gazeTargetObject) {
       const gazeState = gazeStateRef.current;
+      // Volver a la distancia de siempre si venía de mirar el cursor.
+      gazeTargetObject.position.z += (1 - gazeTargetObject.position.z) * GAZE_SMOOTHING;
       if (!isSpeakingRef.current) {
         gazeState.nextChangeTime -= delta;
         if (gazeState.nextChangeTime <= 0) {
@@ -200,6 +218,7 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
 
   return {
     isSpeakingRef,
+    gazeOverrideRef,
     setExpression,
     getExpression,
     setViseme,

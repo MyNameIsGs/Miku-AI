@@ -62,6 +62,9 @@ export function useMovement({
   const swayStartRef = useRef<Record<string, number>>({});
   // Respiración / vaivén de cabeza del cuadro actual, por hueso y eje.
   const breathingRef = useRef(new Map<THREE.Object3D, Partial<Record<"x" | "y" | "z", number>>>());
+  // Cuánto acompaña la cabeza a la mirada cuando sigue el cursor (radianes,
+  // ya suavizado, ver useCursorGaze.ts). Se suma al vaivén de cabeza.
+  const headLookRef = useRef({ yaw: 0, pitch: 0 });
   const pendingQuirkRevertsRef = useRef<Record<string, PendingQuirkRevert>>({});
   // Mismo problema que los huesos de cuerpo (ver revertAnimatedBonesExcept),
   // pero para el wiggle de dedos: animatedHandSidesRef nunca se apagaba
@@ -323,8 +326,8 @@ export function useMovement({
     if (headBone) {
       breathing.set(headBone, {
         ...breathing.get(headBone),
-        y: Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04,
-        x: Math.sin(elapsed * 0.3) * 0.03,
+        y: Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04 + headLookRef.current.yaw,
+        x: Math.sin(elapsed * 0.3) * 0.03 + headLookRef.current.pitch,
       });
     }
     for (const [node, axes] of breathing) {
@@ -459,6 +462,7 @@ export function useMovement({
 
   return {
     boneTransitionsRef,
+    headLookRef,
     animatedHandSidesRef,
     customHandGesturesRef,
     scheduleMovement,

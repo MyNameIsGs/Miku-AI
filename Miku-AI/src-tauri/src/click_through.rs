@@ -76,6 +76,22 @@ fn start_watcher(window: WebviewWindow) {
     });
 }
 
+// Posición del cursor relativa a la ventana, en píxeles CSS (puede estar
+// fuera: negativa o más grande que la ventana). Para que Miku siga el mouse
+// con la mirada (ver useCursorGaze.ts): con click-through el frontend no
+// recibe eventos del mouse, y fuera de la ventana nunca los recibe.
+#[tauri::command]
+pub fn cursor_position(window: WebviewWindow) -> Option<(f64, f64)> {
+    let mut cursor = POINT::default();
+    unsafe { GetCursorPos(&mut cursor) }.ok()?;
+    let origin = window.inner_position().ok()?;
+    let scale = window.scale_factor().ok()?;
+    Some((
+        (cursor.x - origin.x) as f64 / scale,
+        (cursor.y - origin.y) as f64 / scale,
+    ))
+}
+
 #[tauri::command]
 pub fn set_click_through(window: WebviewWindow, enabled: bool, regions: Vec<Region>) {
     if let Ok(mut state) = STATE.lock() {

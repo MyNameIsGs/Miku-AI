@@ -262,6 +262,7 @@ pub fn run() {
             active_window::ventana_activa,
             obs_status::obs_estado,
             click_through::set_click_through,
+            click_through::cursor_position,
             game_mode::set_game_mode_enabled,
             game_mode::game_mode_hide,
             game_mode::game_mode_show,
