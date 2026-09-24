@@ -92,6 +92,59 @@ class OpenRouterApi(private val apiKey: String) {
             .getString("content")
     }
 
+    // Tarea 6.3 en Android (ver BuscarEnWeb.kt): llamada APARTE con el
+    // plugin `{ id: "web" }` en el body, nunca como `plugins` de la
+    // conversación principal -- con el modelo actual el plugin busca en
+    // CADA mensaje que lo lleva (verificado en desktop, hasta "2+2"). Así
+    // solo se busca cuando Miku llama la tool. Devuelve el texto tal cual
+    // (puede venir vacío); el formato para el modelo lo arma BuscarEnWeb.
+    suspend fun webSearch(
+        systemPrompt: String,
+        consulta: String,
+        maxResults: Int,
+        attempt: Int = 1
+    ): String = withContext(Dispatchers.IO) {
+        val messages = JSONArray().apply {
+            put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
+            put(JSONObject().apply { put("role", "user"); put("content", consulta) })
+        }
+
+        val bodyJson = JSONObject().apply {
+            put("model", MODEL)
+            put("max_tokens", 4000)
+            put("messages", messages)
+            put("plugins", JSONArray().put(JSONObject().apply {
+                put("id", "web")
+                put("max_results", maxResults)
+            }))
+        }.toString().toRequestBody("application/json".toMediaType())
+
+        val request = Request.Builder()
+            .url(OR_URL)
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("HTTP-Referer", REFERER)
+            .post(bodyJson)
+            .build()
+
+        val response = client.newCall(request).execute()
+
+        // Mismo reintento ante 429 que chat() (y que
+        // fetchOpenRouterWithRetry del lado desktop).
+        if (response.code == 429 && attempt < 4) {
+            delay(1500L * attempt)
+            return@withContext webSearch(systemPrompt, consulta, maxResults, attempt + 1)
+        }
+        if (!response.isSuccessful) throw IOException("OpenRouter ${response.code}")
+
+        val message = JSONObject(response.body!!.string())
+            .getJSONArray("choices")
+            .getJSONObject(0)
+            .getJSONObject("message")
+        // isNull primero: en Android, optString sobre un null de JSON
+        // devuelve el texto "null", no el fallback.
+        if (message.isNull("content")) "" else message.getString("content")
+    }
+
     // Primer paso de tool calling en Android -- mismo protocolo nativo de
     // OpenRouter que runToolCallingCycle en lib/openrouter.ts del lado
     // desktop: manda tools + tool_choice="auto", detecta

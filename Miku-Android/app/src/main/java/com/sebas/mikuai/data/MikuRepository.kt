@@ -140,7 +140,7 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
         userMessage,
         userImageBase64,
         Tools.schemas(),
-    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi) }
+    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi, orApi) }
 
     // Segundo paso de "Miku en Android" (ver SpotifyAuth.kt / SpotifyApi.kt).
     suspend fun connectSpotify() = spotifyAuth.connect()
