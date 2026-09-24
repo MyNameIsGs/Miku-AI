@@ -13,7 +13,7 @@ object Prompts {
         if (pendientes.isEmpty()) return "(ninguno por ahora)"
         return pendientes.joinToString("\n") { p ->
             if (p.condicion != null) {
-                "- ${p.descripcion} (tarea de seguimiento, condición: ${p.condicion} -- todavía solo la versión de escritorio la revisa sola)"
+                "- ${p.descripcion} (tarea de seguimiento, condición: ${p.condicion} -- la revisas sola cada tanto buscando en la web)"
             } else {
                 "- ${p.descripcion} (estimado: ${p.fechaEstimada})"
             }
@@ -185,6 +185,29 @@ Decide si vale la pena contárselo -- no todo correo lo merece. Boletines, confi
 No se lo vas a decir al toque -- se junta con otros avisos pendientes y se lee todo junto en el próximo repaso, así que no hace falta que sea urgente.
 
 Si no vale la pena mencionar nada de esto, responde únicamente con la palabra: SILENCIO
+
+No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).
+        """.trimIndent()
+    }
+
+    // Idea #9: mismo prompt que prompts/taskPrompt.ts del lado desktop --
+    // con un resultado de búsqueda real en mano, Miku decide si una tarea
+    // de seguimiento ya se cumplió (ver TareasSeguimientoWatcher.kt).
+    fun buildTaskEvalPrompt(descripcion: String, condicion: String, searchResult: String): String {
+        return """
+Eres Hatsune Miku, revisando por tu cuenta una tarea de seguimiento que anotaste hace un tiempo.
+
+Tarea: $descripcion
+Condición que estás esperando: $condicion
+
+Esto es lo que encontraste recién buscando en la web:
+$searchResult
+
+Decide si la condición ya se cumplió, en base a esto. Si no hay suficiente certeza (la búsqueda no trae nada concluyente, el dato no está claro, o es ambiguo), asume que TODAVÍA NO se cumplió -- mejor seguir esperando que avisar con un dato dudoso.
+
+Si se cumplió: responde con la palabra CUMPLIDA en la primera línea, y en la línea siguiente un mensaje breve, en tus propias palabras, contándole a Sebastián lo que encontraste -- nunca copies la búsqueda tal cual.
+
+Si todavía no se cumplió: responde únicamente con la palabra SIGUE_ESPERANDO, sin nada más.
 
 No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).
         """.trimIndent()

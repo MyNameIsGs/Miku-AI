@@ -9,10 +9,11 @@ import org.json.JSONObject
 // para nada todavía (eso es lógica del loop idle de desktop).
 //
 // Idea #9: condicion/ultimaRevisionCondicion son de las tareas de
-// seguimiento (desktop, lib/pendientes.ts) -- Android todavía no tiene un
-// equivalente de buscar_en_web para revisarlas sola (ver Tools.kt), así
-// que por ahora solo lee/preserva estos dos campos al escribir, para no
-// perderlos si Android toca un pendiente creado desde desktop (o al revés).
+// seguimiento (desktop, lib/pendientes.ts). Android también las revisa
+// sola (TareasSeguimientoWatcher.kt, con buscar_en_web) -- como es el
+// mismo archivo, ultimaRevisionCondicion lo comparten los dos lados: si
+// desktop ya revisó una tarea hace poco, Android no la vuelve a buscar
+// (y al revés), así no se paga dos veces la misma búsqueda.
 data class Pendiente(
     val id: String,
     val descripcion: String,

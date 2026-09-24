@@ -25,7 +25,7 @@ object Tools {
                     })
                     put("condicion", JSONObject().apply {
                         put("type", "string")
-                        put("description", "Opcional. Solo si esto es algo verificable buscando en la web y cambia con el tiempo (ej. \"el pasaje baja de \$800\"). Nota: desde el celular queda anotado pero todavía no lo revisas sola -- eso solo lo hace la versión de escritorio por ahora.")
+                        put("description", "Opcional. Úsala SOLO si esto es algo que se puede verificar buscando en la web y cambia con el tiempo (ej. \"el pasaje a Japón baja de \$800\", \"sale una fecha para el próximo álbum de tal artista\"). En ese caso lo revisas sola de vez en cuando con una búsqueda real, y avisas cuando se cumpla. No la uses para cosas que Sebastián simplemente te contó que van a pasar -- para eso alcanza con descripcion y fecha_estimada.")
                     })
                 },
                 required = listOf("descripcion", "fecha_estimada"),
@@ -157,6 +157,21 @@ object Tools {
                 required = listOf("modo"),
             )
         )
+        // Tarea 6.3: misma tool que lib/tools/buscarEnWeb.ts de desktop
+        // (ver BuscarEnWeb.kt).
+        put(
+            buildTool(
+                name = "buscar_en_web",
+                description = "Busca en internet información actual o que no sepas de memoria (noticias, datos recientes, precios de referencia, temas puntuales). No sirve para precios en vivo ni para reservar nada -- devuelve un resumen de lo que se encontró, con fuentes.",
+                properties = JSONObject().apply {
+                    put("consulta", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Qué buscar, en pocas palabras, como se escribiría en un buscador.")
+                    })
+                },
+                required = listOf("consulta"),
+            )
+        )
         put(
             buildTool(
                 name = "revisar_correo",
@@ -192,6 +207,7 @@ object Tools {
         spotify: SpotifyApi,
         gmail: GmailApi,
         calendar: CalendarApi,
+        openRouter: OpenRouterApi,
     ): String {
         val args = try {
             JSONObject(argumentsJson)
@@ -294,6 +310,7 @@ object Tools {
                         else -> "Repetición desactivada."
                     }
                 }
+                "buscar_en_web" -> BuscarEnWeb.execute(openRouter, args.optString("consulta", ""))
                 "revisar_correo" -> {
                     val dias = if (args.has("dias") && args.get("dias") is Number) {
                         args.getInt("dias").coerceAtLeast(1)

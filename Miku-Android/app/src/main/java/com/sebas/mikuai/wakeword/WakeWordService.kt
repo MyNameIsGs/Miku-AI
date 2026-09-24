@@ -36,10 +36,12 @@ import com.sebas.mikuai.data.GitHubApi
 import com.sebas.mikuai.data.GmailWatcher
 import com.sebas.mikuai.data.MarkerParser
 import com.sebas.mikuai.data.MikuRepository
+import com.sebas.mikuai.data.OpenRouterApi
 import com.sebas.mikuai.data.PendientesRepository
 import com.sebas.mikuai.data.PendientesWatcher
 import com.sebas.mikuai.data.Prompts
 import com.sebas.mikuai.data.SecurePrefs
+import com.sebas.mikuai.data.TareasSeguimientoWatcher
 import com.sebas.mikuai.data.isQuietHours
 import com.sebas.mikuai.voice.AudioPlayer
 import com.sebas.mikuai.voice.EdgeTtsClient
@@ -124,9 +126,16 @@ class WakeWordService : Service() {
     // chequeo de fondo (decidir si mencionar correo nuevo) -- null si no
     // hay token de GitHub u OpenRouter configurado.
     private var mikuRepoForIdleChecks: MikuRepository? = null
+    // Idea #9: tareas de seguimiento (pendientes con condición), mismo
+    // criterio que useTaskWatcher.ts de desktop -- necesita GitHub Y
+    // OpenRouter (busca en la web y decide con el LLM), null si falta
+    // alguno. Se frena sola a una búsqueda cada varias horas, ver
+    // TareasSeguimientoWatcher.kt.
+    private var tareasSeguimientoWatcher: TareasSeguimientoWatcher? = null
 
     // Resumen agrupado: correo nuevo, avisos de anticipación larga de
-    // Calendar, y (idea #21) pendientes vencidos, NO son urgentes -- se
+    // Calendar, (idea #21) pendientes vencidos y (idea #9) tareas de
+    // seguimiento cumplidas, NO son urgentes -- se
     // acumulan acá y se leen juntos cada NOTIFICATION_DIGEST_INTERVAL_MS,
     // en vez de interrumpir apenas se detectan. El aviso de "está por
     // empezar" es la excepción a propósito: sigue siendo inmediato,
@@ -147,6 +156,10 @@ class WakeWordService : Service() {
             pendientesWatcher = PendientesWatcher(PendientesRepository(GitHubApi(ghToken)))
             prefs.getOpenRouterKey()?.let { orKey ->
                 mikuRepoForIdleChecks = MikuRepository(ghToken, orKey, applicationContext, prefs)
+                tareasSeguimientoWatcher = TareasSeguimientoWatcher(
+                    PendientesRepository(GitHubApi(ghToken)),
+                    OpenRouterApi(orKey),
+                )
             }
         }
         lastDigestFlushAt = System.currentTimeMillis()
@@ -576,7 +589,9 @@ class WakeWordService : Service() {
 
     /**
      * Chequeo periódico de fondo (correo nuevo + los dos avisos de
-     * Calendar, ver GmailWatcher.kt/CalendarWatcher.kt) -- se reprograma a
+     * Calendar + pendientes vencidos + tareas de seguimiento, ver
+     * GmailWatcher.kt/CalendarWatcher.kt/PendientesWatcher.kt/
+     * TareasSeguimientoWatcher.kt) -- se reprograma a
      * sí mismo cada [BACKGROUND_CHECK_INTERVAL_MS], mientras el servicio
      * esté vivo. Solo corre si el wake-word está realmente escuchando en
      * este momento ([capturing], fase Idle) -- si hay una conversación en
@@ -584,7 +599,7 @@ class WakeWordService : Service() {
      * cola de audio acá como en desktop, así que evitar la superposición
      * es más simple que resolverla).
      *
-     * Los tres chequeos pueden traer algo en el mismo turno (ej. un
+     * Varios chequeos pueden traer algo en el mismo turno (ej. un
      * correo Y un evento próximo) -- en vez de hablar varias veces
      * seguidas (sin cola de audio, arriesgaría superponerlas), se juntan
      * en un solo mensaje.
@@ -641,6 +656,17 @@ class WakeWordService : Service() {
                     try {
                         pendientesWatcher?.checkDuePendientes()?.let { pendingDigestItems.add(it) }
                     } catch (e: Exception) {
+                    }
+                    // Idea #9: tarea de seguimiento cumplida -- no urgente,
+                    // mismo destino que en desktop (queueAnnouncement al
+                    // resumen agrupado). Casi siempre devuelve null sin
+                    // buscar nada: solo revisa una vez cada varias horas.
+                    try {
+                        tareasSeguimientoWatcher?.checkTareas()?.let { pendingDigestItems.add(it) }
+                    } catch (e: Exception) {
+                        // Error de red o de OpenRouter -- la tarea no quedó
+                        // marcada como revisada, se reintenta en la próxima
+                        // ventana.
                     }
 
                     val now = System.currentTimeMillis()

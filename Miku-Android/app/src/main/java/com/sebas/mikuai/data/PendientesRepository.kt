@@ -6,6 +6,11 @@ import java.util.UUID
 
 private const val PENDIENTES_PATH = "Miku-AI/memory/pendientes.json"
 
+// Idea #9: mismo valor que CONDITION_CHECK_COOLDOWN_MS en lib/pendientes.ts
+// de desktop -- cada revisión de una condición es una búsqueda web real
+// (cuesta dinero), por eso el cooldown es de horas.
+private const val CONDITION_CHECK_COOLDOWN_MS = 6 * 60 * 60 * 1000L // 6 horas
+
 // Primer paso de tool calling en Android (Nivel 3 de la Tarea 6.7 del lado
 // desktop, primer paso del lado Android): lee/escribe pendientes.json
 // directo contra la API de contenidos de GitHub -- mismo archivo que ya
@@ -24,9 +29,8 @@ class PendientesRepository(private val ghApi: GitHubApi) {
     }
 
     // Idea #9: condicion es opcional -- si viene, esto queda como tarea de
-    // seguimiento (ver Pendiente.kt). Android todavía no tiene forma de
-    // revisarlas sola (le falta el equivalente de buscar_en_web), así que
-    // por ahora solo queda anotada -- desktop es quien la revisa.
+    // seguimiento (ver Pendiente.kt), que después revisa sola
+    // TareasSeguimientoWatcher.kt (o desktop, el que llegue primero).
     suspend fun anotarPendiente(descripcion: String, fechaEstimada: String, condicion: String? = null): String {
         val nuevo = Pendiente(
             id = UUID.randomUUID().toString(),
@@ -40,7 +44,7 @@ class PendientesRepository(private val ghApi: GitHubApi) {
         )
         writeWithRetry { current -> current + nuevo }
         return if (condicion != null) {
-            "Anotado como tarea de seguimiento: \"$descripcion\" (condición: $condicion)."
+            "Anotado como tarea de seguimiento: \"$descripcion\" (condición: $condicion). La voy a revisar sola de vez en cuando."
         } else {
             "Anotado: \"$descripcion\" (estimado: $fechaEstimada)."
         }
@@ -77,6 +81,38 @@ class PendientesRepository(private val ghApi: GitHubApi) {
         val ts = Instant.now().toString()
         writeWithRetry { current ->
             current.map { p -> if (p.id in ids) p.copy(ultimoRecordatorio = ts) else p }
+        }
+    }
+
+    // Idea #9: pendientes activos con condición que no se hayan revisado
+    // en las últimas CONDITION_CHECK_COOLDOWN_MS -- mismo criterio que
+    // getTareasSeguimiento en lib/pendientes.ts de desktop.
+    suspend fun loadTareasSeguimiento(): List<Pendiente> {
+        val now = System.currentTimeMillis()
+        return loadActivePendientes().filter { p ->
+            if (p.condicion.isNullOrBlank()) return@filter false
+            val ultimaMs = p.ultimaRevisionCondicion?.let {
+                runCatching { Instant.parse(it).toEpochMilli() }.getOrNull()
+            }
+            ultimaMs == null || now - ultimaMs >= CONDITION_CHECK_COOLDOWN_MS
+        }
+    }
+
+    // Mismo campo que markCondicionRevisada en desktop.
+    suspend fun marcarCondicionRevisada(ids: List<String>) {
+        if (ids.isEmpty()) return
+        val ts = Instant.now().toString()
+        writeWithRetry { current ->
+            current.map { p -> if (p.id in ids) p.copy(ultimaRevisionCondicion = ts) else p }
+        }
+    }
+
+    // Por id, no por descripción como cerrarPendiente -- lo usa el chequeo
+    // de fondo, que ya tiene el pendiente exacto en mano (mismo motivo que
+    // closePendienteById en desktop).
+    suspend fun cerrarPendientePorId(id: String) {
+        writeWithRetry { current ->
+            current.map { p -> if (p.id == id) p.copy(estado = "cerrado") else p }
         }
     }
 
