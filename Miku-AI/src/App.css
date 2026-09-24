@@ -524,6 +524,82 @@ button {
   font-style: italic;
   margin: 0;
 }
+
+.memory-panel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.memory-panel-tabs button,
+.memory-panel-entry button {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.memory-panel-tabs button.active {
+  background: rgba(100, 200, 255, 0.5);
+}
+
+.memory-panel-entry button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.memory-panel-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.memory-panel-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.memory-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.memory-panel-textarea {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: white;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.memory-panel-readonly {
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.memory-panel-error {
+  color: rgba(255, 140, 140, 0.95);
+  margin: 0 0 6px 0;
+}
 .toolbar button.active {
   background: rgba(100, 200, 255, 0.5);
 }

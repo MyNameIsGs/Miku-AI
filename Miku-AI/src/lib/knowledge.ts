@@ -53,11 +53,19 @@ export async function ensureKnowledgeFile() {
 
 // Una entrada = un bloque separado por línea en blanco. El título (#) y la
 // descripción entre paréntesis del principio no son entradas.
-function parseEntries(content: string): string[] {
+function splitBlocks(content: string): string[] {
   return content
     .split(/\n\s*\n/)
     .map((block) => block.trim())
-    .filter((block) => block && !block.startsWith("#") && !block.startsWith("("));
+    .filter(Boolean);
+}
+
+function isEntryBlock(block: string): boolean {
+  return !block.startsWith("#") && !block.startsWith("(");
+}
+
+function parseEntries(content: string): string[] {
+  return splitBlocks(content).filter(isEntryBlock);
 }
 
 export async function loadKnowledgeEntries(): Promise<string[]> {
@@ -71,6 +79,42 @@ export async function appendKnowledge(text: string) {
   const { filePath } = await knowledgePaths();
   const current = await readTextFile(filePath);
   await writeTextFile(filePath, `${current.trim()}\n\n${text.trim()}\n`);
+}
+
+// Edición a mano desde el panel de memoria. La entrada se busca por su
+// texto y no por posición: Miku puede agregar una mientras el panel está
+// abierto, y así eso no corre los índices. Si ya no está (la cambió otra
+// cosa entretanto), se avisa en vez de pisar algo equivocado.
+//
+// El índice de embeddings no se toca: vectorsForEntries descarta solo lo
+// que ya no existe y calcula lo nuevo en la próxima búsqueda.
+async function rewriteKnowledgeEntry(oldText: string, newText: string | null) {
+  await ensureKnowledgeFile();
+  const { filePath } = await knowledgePaths();
+  const blocks = splitBlocks(await readTextFile(filePath));
+  const target = oldText.trim();
+  const i = blocks.findIndex((block) => isEntryBlock(block) && block === target);
+  if (i === -1) {
+    throw new Error("La entrada ya no está en conocimiento.md (¿cambió mientras tanto?)");
+  }
+  if (newText === null) {
+    blocks.splice(i, 1);
+  } else {
+    // Sin líneas en blanco adentro: partirían la entrada en varias. Y sin
+    // "#"/"(" al principio, que la convertirían en algo que no es entrada.
+    const cleaned = newText.trim().replace(/\n\s*\n/g, "\n").replace(/^[#(]+\s*/, "");
+    if (!cleaned) throw new Error("La entrada no puede quedar vacía");
+    blocks[i] = cleaned;
+  }
+  await writeTextFile(filePath, `${blocks.join("\n\n")}\n`);
+}
+
+export async function updateKnowledgeEntry(oldText: string, newText: string) {
+  await rewriteKnowledgeEntry(oldText, newText);
+}
+
+export async function deleteKnowledgeEntry(text: string) {
+  await rewriteKnowledgeEntry(text, null);
 }
 
 async function embed(texts: string[], kind: "query" | "passage"): Promise<number[][]> {
