@@ -10,10 +10,11 @@ export type GameState = { active: boolean; title: string; processName: string };
 // CSS en .app-container, ver App.css).
 export type GameVisual = "shown" | "hiding" | "hidden" | "appearing";
 
-// Después de hablar se espera más antes de volver a esconderse: cubre la
-// ventana de seguimiento de la Tarea 8.1 (5 s para seguir hablando sin
-// "Hey Miku").
-const HIDE_DELAY_AFTER_CONVERSATION_MS = 6000;
+// Después de hablar se espera más antes de volver a esconderse: da tiempo
+// a terminar de leer la respuesta en pantalla (con 6 s no alcanzaba, pidió
+// Sebastián) y cubre de sobra la ventana de seguimiento de la Tarea 8.1
+// (5 s para seguir hablando sin "Hey Miku").
+const HIDE_DELAY_AFTER_CONVERSATION_MS = 15000;
 // Al entrar a un juego, casi enseguida.
 const HIDE_DELAY_ON_GAME_START_MS = 1500;
 const HIDE_ANIMATION_MS = 400;
