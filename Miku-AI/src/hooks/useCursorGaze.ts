@@ -56,9 +56,12 @@ type UseCursorGazeParams = {
   headBoneRef: RefObject<THREE.Object3D | null>;
   gazeOverrideRef: RefObject<THREE.Vector3 | null>;
   headLookRef: RefObject<{ yaw: number; pitch: number }>;
+  // Con una pose puesta en la cabeza (reacción, quirk, gesto), la cabeza no
+  // acompaña al cursor; los ojos sí.
+  isHeadPosed: () => boolean;
 };
 
-export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideRef, headLookRef }: UseCursorGazeParams) {
+export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideRef, headLookRef, isHeadPosed }: UseCursorGazeParams) {
   const targetRef = useRef<THREE.Vector3 | null>(null);
   const lastPosRef = useRef<[number, number] | null>(null);
   const lastMoveRef = useRef(0);
@@ -112,7 +115,7 @@ export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideR
     let yaw = 0;
     let pitch = 0;
     const head = headBoneRef.current;
-    if (target && head) {
+    if (target && head && !isHeadPosed()) {
       const d = target.clone().sub(head.getWorldPosition(new THREE.Vector3()));
       // Miku mira a +z con su izquierda en +x: girar a su izquierda es y+,
       // mirar arriba es x+ (ver la tabla de ejes del prompt).

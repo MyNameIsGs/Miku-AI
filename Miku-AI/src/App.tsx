@@ -597,6 +597,7 @@ function App() {
     headBoneRef,
     gazeOverrideRef: face.gazeOverrideRef,
     headLookRef: movement.headLookRef,
+    isHeadPosed: movement.isHeadPosed,
   });
 
   // Captura el canvas como imagen después de que la animación probablemente

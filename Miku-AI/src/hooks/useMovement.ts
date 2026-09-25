@@ -59,6 +59,9 @@ const WEIGHT_CHANGE_MIN_MS = 8000;
 const WEIGHT_CHANGE_EXTRA_MS = 7000;
 const WEIGHT_TIME_CONSTANT_S = 0.8;
 
+// Desde cuánto se considera que la cabeza tiene una pose puesta.
+const HEAD_POSED_MIN_RAD = THREE.MathUtils.degToRad(2);
+
 export function useMovement({
   movementBonesRef,
   fingerBonesRef,
@@ -126,6 +129,22 @@ export function useMovement({
       }
     })();
   }, []);
+
+  // ¿Hay una pose puesta en la cabeza o el cuello (una reacción al tacto, un
+  // quirk, un gesto de la charla)? Mientras la haya, la cabeza no acompaña
+  // al cursor (ver useCursorGaze): lo notó Sebastián al tocarle la falda --
+  // con la cabeza bajada por la reacción, empezaba a moverse siguiendo el
+  // mouse.
+  function isHeadPosed(): boolean {
+    for (const [key, transition] of Object.entries(boneTransitionsRef.current)) {
+      const [bone, axis] = key.split(".") as [string, "x" | "y" | "z"];
+      if (bone !== "head" && bone !== "neck") continue;
+      if (transition.animated) return true;
+      const rest = boneRestRotationRef.current[bone]?.[axis] ?? 0;
+      if (Math.abs(transition.targetValue - rest) > HEAD_POSED_MIN_RAD) return true;
+    }
+    return false;
+  }
 
   // Avanza el cambio de peso y mueve cadera y piernas (nadie más las
   // controla, así que se escriben directo). Devuelve cuánto está cargada
@@ -506,6 +525,7 @@ export function useMovement({
   return {
     boneTransitionsRef,
     headLookRef,
+    isHeadPosed,
     animatedHandSidesRef,
     customHandGesturesRef,
     scheduleMovement,
