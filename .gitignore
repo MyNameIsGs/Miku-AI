@@ -55,3 +55,11 @@ scripts/*-results/
 # Se descarga de huggingface.co/intfloat/multilingual-e5-small (ver
 # resolve_embeddings_dir en voice_server.py) y viaja dentro del .exe.
 Miku-Voice-Service/embeddings/
+
+# Configuración local de Claude Code (permisos y worktrees de esta PC)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Perfiles de onnxruntime (enable_profiling) y modelos de prueba sueltos
+Miku-Voice-Service/onnxruntime_profile_*.json
+Miku-Voice-Service/smoke_test*.onnx
