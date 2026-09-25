@@ -11,6 +11,7 @@ import { buildIdlePrompt, getHeldPoseSummary } from "../prompts/idlePrompt";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { parseMarkers } from "../lib/markers";
 import { parseRequestedFace } from "../lib/faceParts";
+import { processSleepRedesignMarkers } from "../lib/sleepStore";
 import { loadMemoryContext } from "../lib/memory";
 import { describeSelfMovement } from "../lib/proprioception";
 import {
@@ -379,7 +380,10 @@ export function useIdleQuirks({
 
       // Reacciones al tacto y pendientes: de cualquiera de los dos pasos.
       const replies = decideReply !== null && decideReply !== reply ? [decideReply, reply] : [reply];
-      for (const r of replies) await processRedesignMarkers(r);
+      for (const r of replies) {
+        await processRedesignMarkers(r);
+        await processSleepRedesignMarkers(r);
+      }
 
       const spoken = replies
         .map((r) => parseMarkers(r, voicePitchRef.current, voiceRateRef.current).cleanText)

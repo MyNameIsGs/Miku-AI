@@ -35,6 +35,7 @@ const HELP = `Banco de Miku -- en la consola, window.bt:
   bt.shot(nombre, ángulo?, encuadre?) foto a bench-shots/<nombre>.jpg
   bt.faceStep(segundos, now)        avanza la cara sin cambiar la expresión
   bt.face                           el hook useFace completo
+  bt.bone(nombre)                   {node, rest} del hueso que mueve useMovement
   bt.morphs([nombres])              influencia real de morphs de la cara (0-1)
   bt.movement                       el hook useMovement completo`;
 
@@ -104,6 +105,8 @@ function Bench() {
       (solveReach as any)(vrmRef.current!, movementBonesRef.current, boneRestRotationRef.current, side, place, cameraRef.current!.position.clone(), palm),
     describe: () => describeBodyNow(vrmRef.current!),
     vrm: () => vrmRef.current,
+    // El mismo nodo que mueve useMovement, y su rotación de reposo.
+    bone: (name: string) => ({ node: movementBonesRef.current[name], rest: boneRestRotationRef.current[name] }),
     face,
     // Avanza la cara `seconds` segundos simulados SIN cambiar la expresión.
     faceStep: (seconds: number, startNow: number) => {

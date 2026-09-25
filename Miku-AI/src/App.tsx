@@ -40,6 +40,7 @@ import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge, takeKnowledgeEditFeedback } from "./lib/knowledge";
 import { beginReply, endReply, noteInterruption, noteRevealProgress, takeTalkSignals } from "./lib/talkSignals";
 import { loadRecentChatHistory, saveChatHistory } from "./lib/chatHistory";
+import { useSleep } from "./hooks/useSleep";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -591,6 +592,7 @@ function App() {
     // A6: si la cortó con ⏹ (antes de cualquier await: si ella sigue
     // hablando, queda registrado que él le escribió encima).
     const talkSignals = takeTalkSignals();
+    sleep.wakeUp("le hablaron");
     setIsThinking(true);
     idleQuirks.lastInteractionTimeRef.current = performance.now();
     // Tarea 8.7: fire-and-forget a propósito -- no se espera, para no
@@ -947,6 +949,7 @@ function App() {
     // Etapa 9: el temporizador de silencio y el disparo del quirk idle
     // ahora los procesa useIdleQuirks.
     idleQuirks.checkIdleQuirk(now);
+    sleep.check(now);
 
     // poner_recordatorio: chequeo liviano (solo timestamps en memoria) de
     // recordatorios vencidos, independiente del intervalo de 2.5 minutos
@@ -1194,6 +1197,19 @@ function App() {
     onInteraction: () => {
       idleQuirks.lastInteractionTimeRef.current = performance.now();
     },
+    processMemoryMarkers: memoryFiles.processMemoryMarkers,
+  });
+
+  // Punto 3: se duerme cuando Sebastián no está (ver useSleep.ts).
+  const sleep = useSleep({
+    scheduleMovement: movement.scheduleMovement,
+    releaseQuirkRevertsNow: movement.releaseQuirkRevertsNow,
+    revertAnimatedBonesExcept: movement.revertAnimatedBonesExcept,
+    getExpression: face.getExpression,
+    setExpression: face.setExpression,
+    showExpressionFor: face.showExpressionFor,
+    isSpeakingRef: face.isSpeakingRef,
+    lastInteractionTimeRef: idleQuirks.lastInteractionTimeRef,
     processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
 

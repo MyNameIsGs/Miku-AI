@@ -9,6 +9,7 @@ import { QuirksStore } from "../lib/quirks";
 import { buildMovementInstructions, buildTouchReactionsNote } from "./systemPrompt";
 import { bodyNewsSince } from "../config/bodyChangelog";
 import { buildFacePartsInstructions, describeFace } from "../lib/faceParts";
+import { getSleepDesign } from "../lib/sleepStore";
 import { getDesignedReaction, reactionsPendingReview } from "../lib/touchReactionsStore";
 
 export interface BuildIdlePromptParams {
@@ -169,6 +170,15 @@ function buildDecidePrompt({
           .map((name) => `${name} (${quirks[name].state === "evaluando" ? "todavía evaluando" : "confirmado"})`)
           .join(", ")}. El código ya los corre solo de vez en cuando.`
       : "Todavía no tienes quirks propios (gestos con nombre que puedes inventar y repetir).";
+  // Punto 3: cómo se duerme y se despierta (lo diseñó ella); puede cambiarlo.
+  const sleepMoments = [
+    getSleepDesign("dormir") ? "dormirte ([REDISEÑAR_DORMIR])" : null,
+    getSleepDesign("despertar") ? "despertarte ([REDISEÑAR_DESPERTAR])" : null,
+  ].filter(Boolean);
+  const sleepLine =
+    sleepMoments.length > 0
+      ? ` Cuando Sebastián se va un buen rato te quedas dormida; tu forma de ${sleepMoments.join(" y de ")} la diseñaste tú. Si quieres cambiarla, escribe ese marcador y te lo vuelvo a preguntar la próxima vez que te pase.`
+      : "";
   const heldPoseNote = heldPoseSummary
     ? `\nLlevas un rato sosteniendo una pose (${heldPoseSummary}). Si quieres volver a algo más neutral, también se pide con [QUIERO_MOVERME].\n`
     : "";
@@ -199,7 +209,7 @@ Si te provoca hacer algo con tu cuerpo o tu cara ahora (un gesto, estirarte, un 
 
 [QUIERO_MOVERME: lo que quieres hacer]
 
-y enseguida te doy todo lo que necesitas saber sobre tu cuerpo para hacerlo bien. ${quirksLine}
+y enseguida te doy todo lo que necesitas saber sobre tu cuerpo para hacerlo bien. ${quirksLine}${sleepLine}
 
 ${buildTouchReactionsNote()}
 Fuera de lo de los pendientes, no escribas texto ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.

@@ -23,6 +23,7 @@ export type CallKind =
   | "seguimiento"
   | "buscar en web"
   | "consolidar memoria"
+  | "diseñar sueño"
   | "otro";
 
 type Totals = { calls: number; prompt: number; completion: number; cost: number };
