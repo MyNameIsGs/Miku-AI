@@ -39,6 +39,7 @@ import { describeGameContext } from "./lib/gameSessions";
 import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge, takeKnowledgeEditFeedback } from "./lib/knowledge";
 import { beginReply, endReply, noteInterruption, noteRevealProgress, takeTalkSignals } from "./lib/talkSignals";
+import { loadRecentChatHistory, saveChatHistory } from "./lib/chatHistory";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -143,6 +144,17 @@ function App() {
   // partir un grupo assistant+tool a la mitad (ver gotcha en
   // lib/openrouter.ts).
   const conversationHistoryRef = useRef<ChatMessage[][]>([]);
+  // Punto 2: si al abrir se retomó una charla reciente, se le avisa en el
+  // primer mensaje (ver lib/chatHistory.ts).
+  const resumedNoteRef = useRef<string | null>(null);
+  useEffect(() => {
+    loadRecentChatHistory().then((recent) => {
+      if (!recent || conversationHistoryRef.current.length > 0) return;
+      conversationHistoryRef.current = recent.turns;
+      resumedNoteRef.current = `La app se cerró y se volvió a abrir. La charla que ves arriba es de antes de eso (lo último, hace ${recent.minutesAgo} min).`;
+      console.log(`[Charla] Se retomó la charla anterior (${recent.turns.length} turnos, hace ${recent.minutesAgo} min).`);
+    });
+  }, []);
 
   const movementBonesRef = useRef<Record<string, THREE.Object3D | null>>({});
   const fingerBonesRef = useRef<Record<string, THREE.Object3D | null>>({});
@@ -652,7 +664,9 @@ function App() {
         gameContext: await describeGameContext(),
         knowledgeEditFeedback: takeKnowledgeEditFeedback(),
         talkSignals,
+        resumedNote: resumedNoteRef.current,
       });
+      resumedNoteRef.current = null;
 
       // Aplana los turnos guardados a la forma plana que espera la API,
       // pasando tool_calls/tool_call_id tal cual cuando corresponde.
@@ -856,6 +870,7 @@ function App() {
         conversationHistoryRef.current =
           conversationHistoryRef.current.slice(-MAX_HISTORY_TURNS);
       }
+      saveChatHistory(conversationHistoryRef.current);
 
       // El texto ya NO se muestra completo de una -- se revela en sync con
       // el audio (ver onReveal en useSpeech.ts), para inmersión. "Pensando..."

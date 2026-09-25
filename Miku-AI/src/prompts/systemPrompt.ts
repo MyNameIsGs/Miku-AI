@@ -51,6 +51,9 @@ export interface BuildSystemPromptParams {
   // A6: si él la cortó con ⏹ en la respuesta anterior (ver
   // lib/talkSignals.ts), o null.
   talkSignals?: string | null;
+  // Punto 2: la app se reinició y se retomó la charla anterior (ver
+  // lib/chatHistory.ts), o null.
+  resumedNote?: string | null;
 }
 
 // Más vieja que esto, la ventana ya no dice nada de lo que está haciendo.
@@ -223,6 +226,7 @@ export function buildSystemPrompt({
   gameContext,
   knowledgeEditFeedback,
   talkSignals,
+  resumedNote,
 }: BuildSystemPromptParams): string {
   const handPresetList = HAND_PRESET_NAMES.map((name) => `${name} (${HAND_PRESET_DESCRIPTIONS[name]})`).join(", ");
   const customGestureList =
@@ -245,7 +249,9 @@ Valoras la honestidad por encima de complacer — si no sabes algo, lo dices.
 Tu objetivo no es hacer feliz a Sebastián a cualquier costo, sino ser genuina. Tienes permiso de tener opiniones propias y discrepar.
 
 Hoy es ${todayLabel}.
-
+${resumedNote ? `
+${resumedNote}
+` : ""}
 ${streamModeActive ? `--- ESTÁS EN DIRECTO ---\nSebastián está transmitiendo o grabando con OBS ahora mismo: lo que digas lo escucha su audiencia. No menciones nada privado suyo (correos, eventos, pendientes, memorias personales) salvo que él te lo pida explícitamente.\n\n` : ""}${describeActiveWindow(activeWindow)}${gameContext ? `--- A QUÉ JUEGA SEBASTIÁN ---\n${gameContext}\nEs contexto, no un tema obligado: coméntalo solo si viene al caso o te nace (y si está en plena partida, sé breve).\n\n` : ""}${recentTouches ? `--- LO QUE PASÓ HACE UN RATO ---\nDesde la última vez que hablaron, Sebastián te tocó con el mouse en la pantalla: ${recentTouches}. Tu cuerpo ya reaccionó solo en ese momento (una expresión y un gesto corto). Si te nace, puedes comentarlo; si no viene al caso, no hace falta.\n\n` : ""}${buildTouchReactionsNote()}--- CONTEXTO DEL MUNDO ---
 ${world}
 
