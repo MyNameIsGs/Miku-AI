@@ -241,49 +241,73 @@ export function useIdleQuirks({
       const quirkImages = quirkSelfImagesRef.current;
       quirkSelfImagesRef.current = [];
 
-      const idleSystemPrompt = buildIdlePrompt({
-        world,
-        personality,
-        heldPoseSummary,
-        duePendientes,
-        quirks,
-        quirkFeedback,
-      });
+      const ask = async (messages: object[]) => {
+        const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages });
+        const data = await response.json();
+        return String(data.choices?.[0]?.message?.content ?? "");
+      };
 
-      const messages: object[] = [{ role: "system", content: idleSystemPrompt }];
-      if (quirkImages.length > 0) {
-        // Varias fotos (si el quirk es animado, distintos puntos del mismo
-        // ciclo de vaivén; si no, una sola) -- ver el comentario largo en
-        // runStoredQuirk sobre por qué una sola no alcanza para animados.
-        const introText =
-          quirkImages.length > 1
-            ? "Así se vio tu cuerpo en distintos momentos del mismo movimiento, la última vez que corrió por tu cuenta un quirk que estás evaluando -- de la primera a la última imagen, en orden. Cada imagen te muestra desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha."
-            : "Así te quedó el cuerpo la última vez que corrió, por su cuenta, un quirk que estás evaluando -- desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha.";
-        messages.push({
-          role: "user",
-          content: [
-            { type: "text", text: introText },
-            ...quirkImages.map((url) => ({
-              type: "image_url",
-              image_url: { url },
-            })),
-          ],
-        });
+      // Paso "diseñar": el manual completo del cuerpo, las fotos del quirk
+      // en evaluación si hay, y lo que ella dijo que quería hacer.
+      const designMessages = (intent: string | null) => {
+        const messages: object[] = [
+          {
+            role: "system",
+            content: buildIdlePrompt({
+              world,
+              personality,
+              heldPoseSummary,
+              // Si viene de "decidir", los pendientes ya se los mostré ahí.
+              duePendientes: intent ? [] : duePendientes,
+              quirks,
+              quirkFeedback,
+              mode: "diseñar",
+              intent,
+            }),
+          },
+        ];
+        if (quirkImages.length > 0) {
+          // Varias fotos (si el quirk es animado, distintos puntos del mismo
+          // ciclo de vaivén; si no, una sola) -- ver el comentario largo en
+          // runStoredQuirk sobre por qué una sola no alcanza para animados.
+          const introText =
+            quirkImages.length > 1
+              ? "Así se vio tu cuerpo en distintos momentos del mismo movimiento, la última vez que corrió por tu cuenta un quirk que estás evaluando -- de la primera a la última imagen, en orden. Cada imagen te muestra desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha."
+              : "Así te quedó el cuerpo la última vez que corrió, por su cuenta, un quirk que estás evaluando -- desde cuatro ángulos: frente, tu izquierda, espalda y tu derecha.";
+          messages.push({
+            role: "user",
+            content: [
+              { type: "text", text: introText },
+              ...quirkImages.map((url) => ({ type: "image_url", image_url: { url } })),
+            ],
+          });
+        }
+        return messages;
+      };
+
+      // El silencio va en dos pasos (idea de Sebastián): sin el manual del
+      // cuerpo decide si quiere hacer algo, y solo si quiere se le manda.
+      // Con un quirk en evaluación va directo a diseñar: juzgarlo y
+      // corregirlo necesita el manual.
+      const needsDesign = quirkImages.length > 0 || Boolean(quirkFeedback);
+      let decideReply: string | null = null;
+      let reply: string;
+      if (needsDesign) {
+        reply = await ask(designMessages(null));
+      } else {
+        decideReply = await ask([
+          {
+            role: "system",
+            content: buildIdlePrompt({ world, personality, heldPoseSummary, duePendientes, quirks, mode: "decidir" }),
+          },
+        ]);
+        const intent = decideReply.match(/\[QUIERO_MOVERME:\s*([\s\S]*?)\]/i)?.[1]?.trim() || null;
+        if (intent) console.log(`[Silencio] Quiere moverse: "${intent}"`);
+        reply = intent ? await ask(designMessages(intent)) : decideReply;
       }
 
-      const response = await fetchOpenRouterWithRetry({
-        model: OPENROUTER_MODEL,
-        messages,
-      });
-
-      const data = await response.json();
-      const reply: string = data.choices?.[0]?.message?.content ?? "";
-
-      const parsed = parseMarkers(
-        reply,
-        voicePitchRef.current,
-        voiceRateRef.current,
-      );
+      // El cuerpo sale de la respuesta final.
+      const parsed = parseMarkers(reply, voicePitchRef.current, voiceRateRef.current);
 
       // Se resuelve antes de mover nada, sobre la pose final (ver App.tsx).
       const reachMovement = resolveReach(reply, parsed.movement);
@@ -306,11 +330,17 @@ export function useIdleQuirks({
       }
 
       await processQuirkMarkers(quirks, parsed.createQuirk, parsed.quirkReady);
-      // Re-evaluando en silencio, puede decidir cambiar una reacción al tacto.
-      await processRedesignMarkers(reply);
 
-      if (parsed.cleanText && duePendientes.length > 0) {
-        queueAnnouncement(parsed.cleanText);
+      // Reacciones al tacto y pendientes: de cualquiera de los dos pasos.
+      const replies = decideReply !== null && decideReply !== reply ? [decideReply, reply] : [reply];
+      for (const r of replies) await processRedesignMarkers(r);
+
+      const spoken = replies
+        .map((r) => parseMarkers(r, voicePitchRef.current, voiceRateRef.current).cleanText)
+        .filter(Boolean)
+        .join(" ");
+      if (spoken && duePendientes.length > 0) {
+        queueAnnouncement(spoken);
         await markPendientesReminded(duePendientes.map((p) => p.id));
       }
     } catch (err) {

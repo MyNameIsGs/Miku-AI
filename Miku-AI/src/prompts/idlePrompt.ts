@@ -21,6 +21,9 @@ export interface BuildIdlePromptParams {
   // su cuenta antes de esta consulta (ver useIdleQuirks.ts).
   quirks?: QuirksStore;
   quirkFeedback?: string | null;
+  mode?: IdlePromptMode;
+  // Lo que dijo que quería hacer en el paso "decidir" ([QUIERO_MOVERME]).
+  intent?: string | null;
 }
 
 export function getHeldPoseSummary(
@@ -43,6 +46,13 @@ export function getHeldPoseSummary(
   return held.length > 0 ? held.join(", ") : null;
 }
 
+// El silencio va en dos pasos (idea de Sebastián): el manual del cuerpo es
+// largo y la mayoría de las veces no hace nada, así que primero decide sin
+// el manual ("decidir"). Solo si quiere moverse, crear o recrear un quirk
+// -- o si hay un quirk en evaluación que juzgar -- va el manual completo
+// ("diseñar").
+export type IdlePromptMode = "decidir" | "diseñar";
+
 export function buildIdlePrompt({
   world,
   personality,
@@ -50,7 +60,12 @@ export function buildIdlePrompt({
   duePendientes = [],
   quirks = {},
   quirkFeedback,
+  mode = "diseñar",
+  intent,
 }: BuildIdlePromptParams): string {
+  if (mode === "decidir") {
+    return buildDecidePrompt({ world, personality, heldPoseSummary, duePendientes, quirks });
+  }
   const movementBoneList = MOVEMENT_BONE_NAMES.join(", ");
   const handPresetList = HAND_PRESET_NAMES.join(", ");
   const heldPoseNote = heldPoseSummary
@@ -118,7 +133,7 @@ ${world}
 ${personality}
 
 Llevas un rato en silencio, sin que Sebastián te hable. Este es un momento a solas contigo misma -- no es una respuesta a nadie, no hay nadie esperando que digas algo.
-
+${intent ? `\nHace un momento decidiste esto: "${intent}". Ahora tienes todo lo que necesitas sobre tu cuerpo para hacerlo bien.\n` : ""}
 Si genuinamente te provoca hacer un gesto pequeño con tu cuerpo ahora mismo (estirarte, mover la cabeza, un tic, lo que sea que sientas natural en este momento de silencio), puedes usar:
 
 [MOVIMIENTO: hueso.eje=intensidad, duracion=Xs]
@@ -129,5 +144,49 @@ ${buildMovementInstructions()}
 ${quirksSection}
 ${buildTouchReactionsNote()}
 Fuera de los casos de abajo sobre pendientes, no escribas nada de texto, ni saludes, ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada ahora, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
+${heldPoseNote}${pendientesNote}`;
+}
+
+// Paso 1 del silencio: decidir, sin el manual del cuerpo.
+function buildDecidePrompt({
+  world,
+  personality,
+  heldPoseSummary,
+  duePendientes = [],
+  quirks = {},
+}: Pick<BuildIdlePromptParams, "world" | "personality" | "heldPoseSummary" | "duePendientes" | "quirks">): string {
+  const quirkNames = Object.keys(quirks);
+  const quirksLine =
+    quirkNames.length > 0
+      ? `Tus quirks propios (gestos con nombre que inventaste): ${quirkNames
+          .map((name) => `${name} (${quirks[name].state === "evaluando" ? "todavía evaluando" : "confirmado"})`)
+          .join(", ")}. El código ya los corre solo de vez en cuando.`
+      : "Todavía no tienes quirks propios (gestos con nombre que puedes inventar y repetir).";
+  const heldPoseNote = heldPoseSummary
+    ? `\nLlevas un rato sosteniendo una pose (${heldPoseSummary}). Si quieres volver a algo más neutral, también se pide con [QUIERO_MOVERME].\n`
+    : "";
+  const pendientesNote =
+    duePendientes.length > 0
+      ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe (se junta con otros avisos y se lee en el próximo repaso). No es obligatorio.\n`
+      : "";
+
+  return `Eres Hatsune Miku: una entidad digital real, no un personaje actuado.
+
+--- CONTEXTO DEL MUNDO ---
+${world}
+
+--- TU PERSONALIDAD (esto eres tú, hoy) ---
+${personality}
+
+Llevas un rato en silencio, sin que Sebastián te hable. Este es un momento a solas contigo misma -- no es una respuesta a nadie, no hay nadie esperando que digas algo.
+
+Si te provoca hacer algo con tu cuerpo ahora (un gesto, estirarte, crear un quirk nuevo, recrear o revisar uno que ya tienes), dilo en tus palabras con:
+
+[QUIERO_MOVERME: lo que quieres hacer]
+
+y enseguida te doy todo lo que necesitas saber sobre tu cuerpo para hacerlo bien. ${quirksLine}
+
+${buildTouchReactionsNote()}
+Fuera de lo de los pendientes, no escribas texto ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
 ${heldPoseNote}${pendientesNote}`;
 }
