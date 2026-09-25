@@ -37,7 +37,7 @@ import { useGameBreaks } from "./hooks/useGameBreaks";
 import { usePerfMonitor } from "./hooks/usePerfMonitor";
 import { describeGameContext } from "./lib/gameSessions";
 import { isStreamModeActive } from "./lib/streamMode";
-import { retrieveKnowledge } from "./lib/knowledge";
+import { retrieveKnowledge, takeKnowledgeEditFeedback } from "./lib/knowledge";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -807,6 +807,7 @@ function App() {
         relevantKnowledge,
         recentTouches: consumeTouchSummary(),
         gameContext: await describeGameContext(),
+        knowledgeEditFeedback: takeKnowledgeEditFeedback(),
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,

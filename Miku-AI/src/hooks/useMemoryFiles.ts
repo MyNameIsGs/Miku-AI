@@ -12,7 +12,7 @@ import {
   appendToMemoryFile,
   backupAndOverwriteMemoryFile,
 } from "../lib/memory";
-import { appendKnowledge } from "../lib/knowledge";
+import { appendKnowledge, editKnowledgeByFragment } from "../lib/knowledge";
 
 export function useMemoryFiles() {
   const memoryWriteCountRef = useRef(0);
@@ -168,6 +168,17 @@ export function useMemoryFiles() {
     ];
     for (const match of knowledgeMatches) {
       await appendKnowledge(match[1].trim());
+    }
+
+    // Corregir u olvidar SOLO su saber práctico (ver editKnowledgeByFragment:
+    // nunca toca memories.md, su personalidad ni el diario).
+    for (const match of reply.matchAll(/\[CORREGIR_CONOCIMIENTO:\s*([\s\S]*?)\]/g)) {
+      const [fragment, ...rest] = match[1].split(/\s*(?:→|->)\s*/);
+      const newText = rest.join(" → ").trim();
+      if (fragment?.trim() && newText) await editKnowledgeByFragment(fragment.trim(), newText);
+    }
+    for (const match of reply.matchAll(/\[OLVIDAR_CONOCIMIENTO:\s*([\s\S]*?)\]/g)) {
+      await editKnowledgeByFragment(match[1].trim(), null);
     }
 
     await recordMemoryWrites(personalityMatches.length + memoryMatches.length);

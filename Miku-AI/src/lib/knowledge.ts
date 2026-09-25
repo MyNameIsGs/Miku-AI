@@ -117,6 +117,65 @@ export async function deleteKnowledgeEntry(text: string) {
   await rewriteKnowledgeEntry(text, null);
 }
 
+// --- Miku corrige u olvida su propio saber práctico ---
+// [CORREGIR_CONOCIMIENTO: fragmento → texto nuevo] y [OLVIDAR_CONOCIMIENTO:
+// fragmento]. SOLO sobre conocimiento.md: sus recuerdos (memories.md), su
+// personalidad y su diario no tienen camino de borrado desde acá -- pedido
+// explícito de Sebastián (recuerdos como que él la llamó "hija" no se
+// pueden perder). La idea es la de una memoria humana: si algo de su
+// cuerpo quedó viejo, borra la instrucción desactualizada y, si quiere,
+// guarda en sus memorias un recuerdo breve de cómo se equivocó.
+
+// Menos que esto no alcanza para saber cuál entrada es.
+const MIN_FRAGMENT_CHARS = 12;
+
+const normalizeForMatch = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim();
+
+// La única entrada que contiene el fragmento (sin distinguir mayúsculas ni
+// espacios), o por qué no se puede elegir una.
+export function findEntryByFragment(
+  entries: string[],
+  fragment: string,
+): { entry: string } | { error: string } {
+  const wanted = normalizeForMatch(fragment);
+  if (wanted.length < MIN_FRAGMENT_CHARS) {
+    return { error: `el fragmento "${fragment}" es muy corto para saber cuál entrada es (mínimo ${MIN_FRAGMENT_CHARS} letras)` };
+  }
+  const matches = entries.filter((entry) => normalizeForMatch(entry).includes(wanted));
+  if (matches.length === 0) return { error: `no hay ninguna entrada de tu conocimiento práctico que contenga "${fragment}"` };
+  if (matches.length > 1) return { error: `"${fragment}" aparece en ${matches.length} entradas; usa un fragmento más específico` };
+  return { entry: matches[0] };
+}
+
+const preview = (text: string) => (text.length > 90 ? `${text.slice(0, 90)}…` : text);
+
+// Qué pasó con sus últimos pedidos de corregir/olvidar, para decírselo en
+// la próxima respuesta (si un fragmento no sirvió, que lo sepa).
+let pendingEditFeedback: string[] = [];
+
+export function takeKnowledgeEditFeedback(): string | null {
+  if (pendingEditFeedback.length === 0) return null;
+  const text = pendingEditFeedback.map((line) => `- ${line}`).join("\n");
+  pendingEditFeedback = [];
+  return text;
+}
+
+export async function editKnowledgeByFragment(fragment: string, newText: string | null) {
+  const found = findEntryByFragment(await loadKnowledgeEntries(), fragment);
+  let line: string;
+  if ("error" in found) {
+    line = `No se cambió nada: ${found.error}.`;
+  } else {
+    await rewriteKnowledgeEntry(found.entry, newText);
+    line =
+      newText === null
+        ? `Olvidaste: "${preview(found.entry)}"`
+        : `Corregiste: "${preview(found.entry)}" → "${preview(newText.trim())}"`;
+  }
+  console.log(`[Conocimiento] ${line}`);
+  pendingEditFeedback.push(line);
+}
+
 async function embed(texts: string[], kind: "query" | "passage"): Promise<number[][]> {
   const response = await fetch(`${VOICE_SERVER_URL}/embed`, {
     method: "POST",
