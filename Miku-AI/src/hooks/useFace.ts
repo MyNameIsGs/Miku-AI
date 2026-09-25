@@ -7,7 +7,6 @@ import {
   DOUBLE_BLINK_CHANCE,
 } from "../config/constants";
 import { FACE_PARTS, decodeFace, faceExpressionName, registerFaceParts } from "../lib/faceParts";
-import { invoke } from "@tauri-apps/api/core";
 
 const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
   lookUp: { x: 0, y: 0.7 },
@@ -58,19 +57,6 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     target: null as string | null,
     nextChangeTime: 3 + Math.random() * 4,
   });
-  // Diagnóstico del parpadeo (Sebastián dijo que "no parece funcionar", y en
-  // el banco sí funciona): cuánto se cierra DE VERDAD el párpado en el
-  // modelo en cada parpadeo, y con qué expresión. Resumen una vez por minuto.
-  const blinkDiagRef = useRef({
-    mesh: null as THREE.Mesh | null,
-    morphIndex: -1,
-    windowStart: 0,
-    blinks: 0,
-    closures: [] as number[],
-    currentMax: 0,
-    wasBlinking: false,
-    expressions: {} as Record<string, number>,
-  });
   // [CARA] (ver lib/faceParts.ts): peso actual de cada parte, suavizado
   // igual que las expresiones. Se registran en el VRM la primera vez.
   const facePartWeightsRef = useRef<Record<string, number>>(
@@ -90,6 +76,24 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
 
   function setExpression(name: string) {
     activeExpressionRef.current = name;
+  }
+
+  // Una cara por un rato, fuera de una respuesta hablada (un gesto en
+  // silencio, un quirk, una respuesta con la voz silenciada): se pone y
+  // después vuelve la que había. Si mientras tanto empezó a hablar o
+  // alguien puso otra cara, no se pisa.
+  const momentRef = useRef<{ base: string; expression: string; timer: number } | null>(null);
+  function showExpressionFor(expression: string, forMs: number) {
+    const base = momentRef.current ? momentRef.current.base : activeExpressionRef.current;
+    if (momentRef.current) clearTimeout(momentRef.current.timer);
+    activeExpressionRef.current = expression;
+    const timer = window.setTimeout(() => {
+      momentRef.current = null;
+      if (activeExpressionRef.current === expression && !isSpeakingRef.current) {
+        activeExpressionRef.current = base;
+      }
+    }, forMs);
+    momentRef.current = { base, expression, timer };
   }
 
   // Tarea 8.12: la reacción al tacto cambia la expresión un momento y
@@ -138,50 +142,6 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     }
   }
 
-  // Lee cuánto quedó cerrado el párpado en el cuadro anterior (lo que de
-  // verdad se dibujó, después de overrideBlink) y arma el resumen.
-  function traceBlink(now: number, isBlinking: boolean) {
-    const diag = blinkDiagRef.current;
-    const vrm = vrmRef.current;
-    if (!vrm) return;
-    if (!diag.mesh) {
-      vrm.scene.traverse((object) => {
-        const mesh = object as THREE.Mesh;
-        const index = mesh.isMesh ? mesh.morphTargetDictionary?.["まばたき"] : undefined;
-        if (!diag.mesh && index !== undefined) {
-          diag.mesh = mesh;
-          diag.morphIndex = index;
-        }
-      });
-      diag.windowStart = now;
-      if (!diag.mesh) return;
-    }
-    // El párpado de ESTE cuadro refleja lo que se pidió en el anterior.
-    const closure = diag.mesh.morphTargetInfluences?.[diag.morphIndex] ?? 0;
-    if (isBlinking && !diag.wasBlinking) {
-      // Empieza un parpadeo: se cuenta con la expresión de ese momento.
-      diag.blinks++;
-      diag.currentMax = 0;
-      const expr = activeExpressionRef.current.startsWith("cara:") ? "cara" : activeExpressionRef.current;
-      diag.expressions[expr] = (diag.expressions[expr] ?? 0) + 1;
-    }
-    if (isBlinking || diag.wasBlinking) diag.currentMax = Math.max(diag.currentMax, closure);
-    if (!isBlinking && diag.wasBlinking) diag.closures.push(diag.currentMax);
-    diag.wasBlinking = isBlinking;
-    if (now - diag.windowStart >= 60_000) {
-      const seen = diag.closures.filter((c) => c > 0.5).length;
-      const avg = diag.closures.length ? diag.closures.reduce((a, b) => a + b, 0) / diag.closures.length : 0;
-      const exprs = Object.entries(diag.expressions).map(([e, n]) => `${e} ${n}`).join(", ") || "-";
-      const msg = `[Parpadeo] último minuto: ${diag.blinks} parpadeos, ${seen} con el ojo cerrado de verdad (cierre medio ${Math.round(avg * 100)}%); expresiones: ${exprs}`;
-      console.log(msg);
-      invoke("log_to_terminal", { msg }).catch(() => {});
-      diag.windowStart = now;
-      diag.blinks = 0;
-      diag.closures = [];
-      diag.expressions = {};
-    }
-  }
-
   // Corre dentro de onBeforeRender, antes de vrm.update(delta) -- ver el
   // contrato del loop en useVRMScene. No usa "now" (los temporizadores de
   // parpadeo/mirada se miden con delta), pero se mantiene el parámetro
@@ -196,7 +156,6 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
 
     const expressionWeights = expressionWeightsRef.current;
     const blinkState = blinkStateRef.current;
-    traceBlink(_now, blinkState.isBlinking);
 
     // Parpadea siempre, también con una expresión puesta (antes no: con una
     // expresión activa -- o sea, casi siempre que hablaba -- tenía los ojos
@@ -308,6 +267,7 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     gazeOverrideRef,
     setExpression,
     getExpression,
+    showExpressionFor,
     setViseme,
     resetVisemes,
     updateFace,

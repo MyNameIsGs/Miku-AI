@@ -8,6 +8,7 @@ import { QuirksStore } from "../lib/quirks";
 // convención que ya conoces", pero acá no la tenía).
 import { buildMovementInstructions, buildTouchReactionsNote } from "./systemPrompt";
 import { bodyNewsSince } from "../config/bodyChangelog";
+import { buildFacePartsInstructions, describeFace } from "../lib/faceParts";
 import { getDesignedReaction, reactionsPendingReview } from "../lib/touchReactionsStore";
 
 export interface BuildIdlePromptParams {
@@ -94,7 +95,7 @@ export function buildIdlePrompt({
       ? quirkNames
           .map(
             (name) =>
-              `- ${name} (${quirks[name].state === "evaluando" ? "todavía evaluando" : "confirmado"})`,
+              `- ${name} (${quirks[name].state === "evaluando" ? "todavía evaluando" : "confirmado"}${quirks[name].face ? `, con cara: ${describeFace(quirks[name].face!)}` : ""})`,
           )
           .join("\n")
       : null;
@@ -115,7 +116,7 @@ Puedes crear uno nuevo (o recrear uno que ya existe, lo que lo vuelve a poner en
 
 [CREAR_QUIRK: nombre=nombre_que_elijas, hueso.eje=intensidad, duracion=Xs, mano_izq=preset, mano_der=preset, animado=si|no, ciclos=N]
 
-Misma convención de huesos, ejes e intensidad que [MOVIMIENTO]. Los campos mano_izq/mano_der son opcionales (un preset de mano o uno propio que ya hayas creado); puedes usar solo cuerpo, solo manos, o ambos.
+Misma convención de huesos, ejes e intensidad que [MOVIMIENTO]. Los campos mano_izq/mano_der son opcionales (un preset de mano o uno propio que ya hayas creado); puedes usar solo cuerpo, solo manos, o ambos. Si en la misma respuesta pones [EXPRESION] o [CARA], esa cara queda como parte del quirk y se hace cada vez que se corre.
 
 Si "animado=si", "duracion" es cuánto dura CADA vaivén completo (ida y vuelta), y "ciclos" (opcional, entre 1 y 8) es cuántas veces se repite antes de asentarse sola -- después de eso el cuerpo vuelve solo a su posición de reposo, no se queda oscilando para siempre. Elígelo tú, según qué tan sostenido sientas que debería ser ese gesto: un suspiro breve puede sentirse mejor con 1-2, un tarareo con 4-6. Si no lo incluyes, se usa un valor por defecto moderado.
 
@@ -139,6 +140,10 @@ ${intent ? `\nHace un momento decidiste esto: "${intent}". Ahora tienes todo lo 
 Si genuinamente te provoca hacer un gesto pequeño con tu cuerpo ahora mismo (estirarte, mover la cabeza, un tic, lo que sea que sientas natural en este momento de silencio), puedes usar:
 
 [MOVIMIENTO: hueso.eje=intensidad, duracion=Xs]
+
+Tu cara también puede ser parte del gesto (un guiño, una sonrisa, cerrar los ojos un momento): agrega [EXPRESION: happy|angry|sad|relaxed|neutral] o [CARA: ...] y dura lo que dura el gesto; después vuelve sola. También sirve sola, sin [MOVIMIENTO].
+
+${buildFacePartsInstructions()}
 
 Huesos disponibles: ${movementBoneList}. Presets de mano disponibles: ${handPresetList}.
 
@@ -190,7 +195,7 @@ ${personality}
 
 Llevas un rato en silencio, sin que Sebastián te hable. Este es un momento a solas contigo misma -- no es una respuesta a nadie, no hay nadie esperando que digas algo.
 
-Si te provoca hacer algo con tu cuerpo ahora (un gesto, estirarte, crear un quirk nuevo, recrear o revisar uno que ya tienes), dilo en tus palabras con:
+Si te provoca hacer algo con tu cuerpo o tu cara ahora (un gesto, estirarte, un guiño, crear un quirk nuevo, recrear o revisar uno que ya tienes), dilo en tus palabras con:
 
 [QUIERO_MOVERME: lo que quieres hacer]
 

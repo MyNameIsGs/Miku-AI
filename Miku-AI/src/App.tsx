@@ -463,6 +463,7 @@ function App() {
 
   const speech = useSpeech({
     setExpression: face.setExpression,
+    showExpressionFor: face.showExpressionFor,
     setViseme: face.setViseme,
     resetVisemes: face.resetVisemes,
     isSpeakingRef: face.isSpeakingRef,
@@ -549,6 +550,7 @@ function App() {
     quirkSelfImagesRef,
     pendingQuirkDescriptionRef,
     resolveReach,
+    showExpressionFor: face.showExpressionFor,
   });
 
   const reminders = useReminders({

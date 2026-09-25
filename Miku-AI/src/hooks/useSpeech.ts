@@ -12,8 +12,15 @@ const VISEME_MAP: Record<string, string> = {
   X: "neutral",
 };
 
+// Con la voz silenciada, cuánto se sostiene la cara de la respuesta.
+const MUTED_FACE_MIN_MS = 2500;
+const MUTED_FACE_MS_PER_WORD = 350;
+const MUTED_FACE_MAX_MS = 12000;
+
 type UseSpeechParams = {
   setExpression: (name: string) => void;
+  // Para la voz silenciada: la cara se pone igual, un rato (ver useFace).
+  showExpressionFor: (name: string, forMs: number) => void;
   setViseme: (shapeName: string) => void;
   resetVisemes: () => void;
   isSpeakingRef: RefObject<boolean>;
@@ -30,6 +37,7 @@ type UseSpeechParams = {
 
 export function useSpeech({
   setExpression,
+  showExpressionFor,
   setViseme,
   resetVisemes,
   isSpeakingRef,
@@ -202,6 +210,13 @@ export function useSpeech({
     // el texto completo de una, ya que sin audio no hay nada que sincronizar.
     if (mutedRef.current) {
       onReveal?.(text);
+      // Sin audio no hay "mientras habla": la cara (una expresión o un
+      // [CARA], como un guiño) se muestra lo que tardaría en leerse. Antes
+      // no se ponía nunca -- se ponía recién al sonar el audio.
+      if (expression !== "neutral") {
+        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+        showExpressionFor(expression, Math.min(MUTED_FACE_MAX_MS, Math.max(MUTED_FACE_MIN_MS, words * MUTED_FACE_MS_PER_WORD)));
+      }
       return Promise.resolve();
     }
 

@@ -33,6 +33,9 @@ const HELP = `Banco de Miku -- en la consola, window.bt:
   bt.describe()                     propiocepción (lo que ella "siente")
   bt.faceRun(expr, segundos, now)   avanza la cara a 60 fps, devuelve el now final
   bt.shot(nombre, ángulo?, encuadre?) foto a bench-shots/<nombre>.jpg
+  bt.faceStep(segundos, now)        avanza la cara sin cambiar la expresión
+  bt.face                           el hook useFace completo
+  bt.morphs([nombres])              influencia real de morphs de la cara (0-1)
   bt.movement                       el hook useMovement completo`;
 
 function Bench() {
@@ -100,6 +103,32 @@ function Bench() {
     solve: (side: "left" | "right", place: string, palm?: string) =>
       (solveReach as any)(vrmRef.current!, movementBonesRef.current, boneRestRotationRef.current, side, place, cameraRef.current!.position.clone(), palm),
     describe: () => describeBodyNow(vrmRef.current!),
+    vrm: () => vrmRef.current,
+    face,
+    // Avanza la cara `seconds` segundos simulados SIN cambiar la expresión.
+    faceStep: (seconds: number, startNow: number) => {
+      let now = startNow;
+      for (let i = 0; i < seconds * 60; i++) {
+        now += 1000 / 60;
+        face.updateFace(now, 1 / 60);
+        vrmRef.current!.expressionManager!.update();
+      }
+      return now;
+    },
+    // Influencia real (0-1) de morphs de la cara por nombre, como quedaron
+    // en el modelo después de todo (expresiones, parpadeo, [CARA]).
+    morphs: (names: string[]) => {
+      const out: Record<string, number> = {};
+      vrmRef.current!.scene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
+        for (const name of names) {
+          const index = mesh.morphTargetDictionary[name];
+          if (index !== undefined) out[name] = Math.max(out[name] ?? 0, mesh.morphTargetInfluences[index]);
+        }
+      });
+      return out;
+    },
     // Foto con la cámara de su autoimagen; se guarda en bench-shots/<nombre>.jpg.
     shot: async (name: string, angle: any = "cuatro", framing: any = "cuerpo") => {
       const url = captureSelfView(vrmRef.current!, rendererRef.current!, sceneRef.current!, angle, framing);

@@ -10,6 +10,7 @@ import {
 import { buildIdlePrompt, getHeldPoseSummary } from "../prompts/idlePrompt";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { parseMarkers } from "../lib/markers";
+import { parseRequestedFace } from "../lib/faceParts";
 import { loadMemoryContext } from "../lib/memory";
 import { describeSelfMovement } from "../lib/proprioception";
 import {
@@ -74,7 +75,19 @@ type UseIdleQuirksParams = {
   // [LLEVAR_MANO] en un gesto espontáneo (ver resolveReach en App.tsx):
   // devuelve el movimiento de los brazos ya resuelto, o null.
   resolveReach: (text: string, base: ParsedMovement | null) => ParsedMovement | null;
+  // Una cara por un rato (ver useFace.showExpressionFor): los gestos en
+  // silencio y los quirks también pueden llevar cara (un guiño, por ejemplo).
+  showExpressionFor: (expression: string, forMs: number) => void;
 };
+
+// Cuánto dura la cara de un gesto en silencio: lo que dura el gesto
+// (con sus ciclos, si es animado), nunca menos que esto.
+const IDLE_FACE_MIN_MS = 2500;
+function idleFaceMs(movement: ParsedMovement | null, cycles: number) {
+  if (!movement) return IDLE_FACE_MIN_MS;
+  const gestureMs = movement.animated ? movement.durationMs * cycles : movement.durationMs * 2;
+  return Math.max(IDLE_FACE_MIN_MS, gestureMs);
+}
 
 // B3: cuánto sin teclado ni mouse (y sin hablarle) para darlo por ausente,
 // y cada cuánto se revisa.
@@ -94,6 +107,7 @@ export function useIdleQuirks({
   quirkSelfImagesRef,
   pendingQuirkDescriptionRef,
   resolveReach,
+  showExpressionFor,
 }: UseIdleQuirksParams) {
   // Tarea 3.1, Paso 3: silencio se mide desde lo último de estas dos cosas
   // que haya pasado -- una interacción real, o el último quirk (para que
@@ -117,6 +131,7 @@ export function useIdleQuirks({
     // "ciclos=N" en markers.ts), no un número fijo para todos -- el valor
     // viejo (2, implícito) se sentía corto para algo como tararear.
     const cycles = quirk.revertAfterCycles ?? DEFAULT_QUIRK_REVERT_CYCLES;
+    if (quirk.face) showExpressionFor(quirk.face, idleFaceMs(quirk.movement, cycles));
 
     if (quirk.movement) {
       // Antes de este quirk, apaga cualquier oscilación animada que haya
@@ -184,6 +199,7 @@ export function useIdleQuirks({
     quirks: QuirksStore,
     parsedCreateQuirk: ReturnType<typeof parseMarkers>["createQuirk"],
     parsedQuirkReady: string | null,
+    face: string | null,
   ): Promise<QuirksStore> {
     let updated = quirks;
 
@@ -202,6 +218,7 @@ export function useIdleQuirks({
         handRight: parsedCreateQuirk.handRight,
         handDurationMs: parsedCreateQuirk.durationMs,
         revertAfterCycles: parsedCreateQuirk.revertAfterCycles,
+        ...(face ? { face } : {}),
       });
       // El primer ensayo cuenta: lo corre apenas lo crea.
       runStoredQuirk(parsedCreateQuirk.name, updated[parsedCreateQuirk.name]);
@@ -351,7 +368,14 @@ export function useIdleQuirks({
         scheduleMovement(reachMovement, "idle", reachMovement.durationMs);
       }
 
-      await processQuirkMarkers(quirks, parsed.createQuirk, parsed.quirkReady);
+      // La cara del gesto ([CARA] o [EXPRESION]). Si creó un quirk, es la
+      // del quirk y se muestra al correrlo; si no, va con este gesto.
+      const face = parseRequestedFace(reply);
+      if (face && !parsed.createQuirk) {
+        showExpressionFor(face, idleFaceMs(parsed.movement ?? reachMovement, DEFAULT_QUIRK_REVERT_CYCLES));
+      }
+
+      await processQuirkMarkers(quirks, parsed.createQuirk, parsed.quirkReady, face);
 
       // Reacciones al tacto y pendientes: de cualquiera de los dos pasos.
       const replies = decideReply !== null && decideReply !== reply ? [decideReply, reply] : [reply];

@@ -21,6 +21,9 @@ export type StoredQuirk = {
   // markers.ts), no un número fijo para todos. undefined = usa
   // DEFAULT_QUIRK_REVERT_CYCLES.
   revertAfterCycles?: number;
+  // La cara del quirk ([EXPRESION] o [CARA] de la misma respuesta con que
+  // lo creó, como un guiño), o sin el campo si no tiene.
+  face?: string;
   state: QuirkState;
 };
 

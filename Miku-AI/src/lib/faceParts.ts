@@ -100,6 +100,25 @@ export function parseFaceMarker(text: string): string | null {
   return Object.keys(parts).length > 0 ? encodeFace(parts) : null;
 }
 
+// Una cara guardada, en palabras para ella: "happy" o "guino_izq=100, boca_sonrisa=100".
+export function describeFace(face: string): string {
+  const parts = decodeFace(face);
+  if (!parts) return face;
+  return Object.entries(parts)
+    .map(([part, w]) => `${part}=${Math.round(w * 100)}`)
+    .join(", ");
+}
+
+// La cara que pidió en un texto, si pidió una: [CARA] gana sobre
+// [EXPRESION]. null si no trae ninguna (a diferencia de parseMarkers, que
+// cae al humor de base).
+export function parseRequestedFace(text: string): string | null {
+  const face = parseFaceMarker(text);
+  if (face) return face;
+  const expressions = [...text.matchAll(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/gi)];
+  return expressions.length > 0 ? expressions[expressions.length - 1][1].toLowerCase() : null;
+}
+
 export function buildFacePartsInstructions(): string {
   const lines = Object.entries(FACE_PARTS)
     .map(([part, def]) => `- ${part}: ${def.description}`)
