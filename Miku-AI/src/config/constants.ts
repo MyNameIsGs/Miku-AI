@@ -11,6 +11,9 @@ export const OPENROUTER_MODEL = "deepseek/deepseek-v4.1-flash";
 
 export const MAX_HISTORY_TURNS = 20;
 
+// Cada cuántas escrituras (memorias o personalidad) se sube la memoria a
+// GitHub y se revisa si la personalidad creció tanto como para consolidarla.
+// memories.md nunca se consolida (ver useMemoryFiles.ts).
 export const MEMORY_CONSOLIDATION_THRESHOLD = 5;
 
 export const VOICE_PITCH_MIN = -24;

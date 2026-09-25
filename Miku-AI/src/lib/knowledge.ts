@@ -136,13 +136,15 @@ const normalizeForMatch = (text: string) => text.toLowerCase().replace(/\s+/g, "
 export function findEntryByFragment(
   entries: string[],
   fragment: string,
+  // Cómo se nombra el archivo en el mensaje de error.
+  what: string = "de tu conocimiento práctico",
 ): { entry: string } | { error: string } {
   const wanted = normalizeForMatch(fragment);
   if (wanted.length < MIN_FRAGMENT_CHARS) {
     return { error: `el fragmento "${fragment}" es muy corto para saber cuál entrada es (mínimo ${MIN_FRAGMENT_CHARS} letras)` };
   }
   const matches = entries.filter((entry) => normalizeForMatch(entry).includes(wanted));
-  if (matches.length === 0) return { error: `no hay ninguna entrada de tu conocimiento práctico que contenga "${fragment}"` };
+  if (matches.length === 0) return { error: `no hay ninguna entrada ${what} que contenga "${fragment}"` };
   if (matches.length > 1) return { error: `"${fragment}" aparece en ${matches.length} entradas; usa un fragmento más específico` };
   return { entry: matches[0] };
 }
@@ -152,6 +154,11 @@ const preview = (text: string) => (text.length > 90 ? `${text.slice(0, 90)}…` 
 // Qué pasó con sus últimos pedidos de corregir/olvidar, para decírselo en
 // la próxima respuesta (si un fragmento no sirvió, que lo sepa).
 let pendingEditFeedback: string[] = [];
+
+// También la usan sus recuerdos (marcar uno como importante, ver memory.ts).
+export function noteEditFeedback(line: string) {
+  pendingEditFeedback.push(line);
+}
 
 export function takeKnowledgeEditFeedback(): string | null {
   if (pendingEditFeedback.length === 0) return null;
@@ -203,9 +210,8 @@ async function loadIndex(indexPath: string): Promise<KnowledgeIndex> {
 
 // Vectores de todas las entradas: reusa los del caché y calcula solo los
 // que falten (entradas nuevas o editadas a mano). Las que ya no existen se
-// sacan del caché.
-async function vectorsForEntries(entries: string[]): Promise<number[][]> {
-  const { indexPath } = await knowledgePaths();
+// sacan del caché. Cada archivo tiene su propio caché (indexPath).
+async function vectorsForEntries(entries: string[], indexPath: string): Promise<number[][]> {
   const index = await loadIndex(indexPath);
 
   const current = new Set(entries);
@@ -235,21 +241,34 @@ export async function retrieveKnowledge(
 ): Promise<string[]> {
   const entries = await loadKnowledgeEntries();
   if (entries.length === 0) return [];
-
+  const { indexPath } = await knowledgePaths();
   try {
-    const [entryVectors, [queryVector]] = await Promise.all([
-      vectorsForEntries(entries),
-      embed([query.slice(0, 2000)], "query"),
-    ]);
-    // Vectores normalizados: el producto punto es la similitud coseno.
-    const scored = entries.map((entry, i) => ({
-      entry,
-      score: entryVectors[i].reduce((sum, value, j) => sum + value * queryVector[j], 0),
-    }));
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, k).map((s) => s.entry);
+    return await rankByMeaning(entries, query, k, indexPath);
   } catch (err) {
     console.warn("[Conocimiento] Búsqueda semántica no disponible, uso las más recientes:", err);
     return entries.slice(-k);
   }
+}
+
+// Las k entradas más parecidas a `query`, de más a menos parecida (también
+// la usan los recuerdos viejos, ver memory.ts). Tira error si el servidor
+// de voz no responde: quien llama decide qué usar en ese caso.
+export async function rankByMeaning(
+  entries: string[],
+  query: string,
+  k: number,
+  indexPath: string,
+): Promise<string[]> {
+  if (entries.length === 0) return [];
+  const [entryVectors, [queryVector]] = await Promise.all([
+    vectorsForEntries(entries, indexPath),
+    embed([query.slice(0, 2000)], "query"),
+  ]);
+  // Vectores normalizados: el producto punto es la similitud coseno.
+  const scored = entries.map((entry, i) => ({
+    entry,
+    score: entryVectors[i].reduce((sum, value, j) => sum + value * queryVector[j], 0),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, k).map((s) => s.entry);
 }

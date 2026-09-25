@@ -11,8 +11,12 @@ import {
   loadMemoryContext,
   appendToMemoryFile,
   backupAndOverwriteMemoryFile,
+  markMemoryImportant,
 } from "../lib/memory";
 import { appendKnowledge, editKnowledgeByFragment } from "../lib/knowledge";
+
+// Recién pasado este largo se consolida la personalidad (hoy tiene ~600).
+const PERSONALITY_CONSOLIDATION_MIN_CHARS = 2500;
 
 export function useMemoryFiles() {
   const memoryWriteCountRef = useRef(0);
@@ -43,14 +47,16 @@ export function useMemoryFiles() {
     })();
   }, []);
 
+  // Solo la personalidad se consolida, y solo si creció de verdad.
+  // memories.md ya NO: el modelo lo reescribía resumiendo lo viejo, y un
+  // recuerdo como que Sebastián la llamó "hija" podía quedar diluido (pedido
+  // de él). Sus recuerdos son solo de agregar; cuando son muchos, se cargan
+  // los recientes, los importantes y los relacionados (ver memory.ts).
   async function consolidateMemoryFile(
-    file: "personality" | "memories",
+    file: "personality",
     currentContent: string,
   ): Promise<string> {
-    const instruction =
-      file === "personality"
-        ? `Este es tu archivo de personalidad actual. Reescríbelo completo de forma más concisa: fusiona ideas repetidas en una sola línea, elimina duplicados, conserva todo lo genuinamente distinto. Responde SOLO con el contenido nuevo del archivo, sin explicaciones ni comentarios adicionales.`
-        : `Este es tu archivo de memorias actual. Reescríbelo completo: agrupa eventos similares antiguos en resúmenes breves (por ejemplo, "hubo varias sesiones de pruebas técnicas de voz y lipsync"), pero conserva los eventos más recientes con su detalle original. Elimina duplicados. Responde SOLO con el contenido nuevo del archivo, sin explicaciones ni comentarios adicionales.`;
+    const instruction = `Este es tu archivo de personalidad actual. Reescríbelo completo de forma más concisa: fusiona ideas repetidas en una sola línea, elimina duplicados, conserva todo lo genuinamente distinto. Responde SOLO con el contenido nuevo del archivo, sin explicaciones ni comentarios adicionales.`;
 
     const response = await fetchOpenRouterWithRetry({
       model: OPENROUTER_MODEL,
@@ -77,34 +83,19 @@ export function useMemoryFiles() {
     if (memoryWriteCountRef.current < MEMORY_CONSOLIDATION_THRESHOLD) return;
 
     try {
-      const { personality, memories } = await loadMemoryContext();
-
-      const [newPersonality, newMemories] = await Promise.allSettled([
-        consolidateMemoryFile("personality", personality),
-        consolidateMemoryFile("memories", memories),
-      ]);
-
-      if (newPersonality.status === "fulfilled") {
-        await backupAndOverwriteMemoryFile("personality", newPersonality.value);
-      } else {
-        console.error(
-          "Error consolidando personality.md, se conserva el original:",
-          newPersonality.reason,
-        );
+      const { personality } = await loadMemoryContext();
+      if (personality.length > PERSONALITY_CONSOLIDATION_MIN_CHARS) {
+        try {
+          const newPersonality = await consolidateMemoryFile("personality", personality);
+          await backupAndOverwriteMemoryFile("personality", newPersonality);
+          console.log("[INFO] personality.md consolidada.");
+        } catch (err) {
+          console.error("Error consolidando personality.md, se conserva el original:", err);
+        }
       }
 
-      if (newMemories.status === "fulfilled") {
-        await backupAndOverwriteMemoryFile("memories", newMemories.value);
-      } else {
-        console.error(
-          "Error consolidando memories.md, se conserva el original:",
-          newMemories.reason,
-        );
-      }
-
-      console.log("[INFO] Consolidación de memoria completada.");
-
-      // Al final del bloque de consolidación exitosa:
+      // Cada tantas escrituras se sube la memoria a GitHub (además de al
+      // cerrar la app).
       invoke("sync_memory_to_github", { repoRoot: REPO_ROOT }).catch((err) =>
         console.error("[SYNC] Error al sincronizar con GitHub:", err),
       );
@@ -179,6 +170,11 @@ export function useMemoryFiles() {
     }
     for (const match of reply.matchAll(/\[OLVIDAR_CONOCIMIENTO:\s*([\s\S]*?)\]/g)) {
       await editKnowledgeByFragment(match[1].trim(), null);
+    }
+
+    // Marca uno de sus recuerdos como importante (solo agrega la etiqueta).
+    for (const match of reply.matchAll(/\[MEMORIA_IMPORTANTE:\s*([\s\S]*?)\]/g)) {
+      await markMemoryImportant(match[1].trim());
     }
 
     await recordMemoryWrites(personalityMatches.length + memoryMatches.length);

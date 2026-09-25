@@ -589,7 +589,17 @@ function App() {
       console.error("Error en el briefing automático:", err),
     );
     try {
-      const { personality, world, memories } = await loadMemoryContext();
+      // Tarea 8.11: se busca con lo que dijo ahora Y la última respuesta de
+      // Miku -- un "sí, hazlo" solo no dice de qué se está hablando. Sirve
+      // para el conocimiento y para traer recuerdos viejos relacionados.
+      const lastAssistantText =
+        conversationHistoryRef.current
+          .flat()
+          .filter((m) => m.role === "assistant" && typeof m.content === "string")
+          .map((m) => m.content as string)
+          .pop() ?? "";
+      const talkQuery = `${lastAssistantText.slice(-600)}\n${userMessage}`;
+      const { personality, world, memories } = await loadMemoryContext(talkQuery);
 
       const customGestureNames = Object.keys(
         movement.customHandGesturesRef.current,
@@ -623,17 +633,7 @@ function App() {
         processName: string;
         secondsAgo: number;
       } | null>("ventana_activa").catch(() => null);
-      // Tarea 8.11: se busca con lo que dijo ahora Y la última respuesta de
-      // Miku -- un "sí, hazlo" solo no dice de qué se está hablando.
-      const lastAssistantText =
-        conversationHistoryRef.current
-          .flat()
-          .filter((m) => m.role === "assistant" && typeof m.content === "string")
-          .map((m) => m.content as string)
-          .pop() ?? "";
-      const relevantKnowledge = await retrieveKnowledge(
-        `${lastAssistantText.slice(-600)}\n${userMessage}`,
-      );
+      const relevantKnowledge = await retrieveKnowledge(talkQuery);
 
       const systemPrompt = buildSystemPrompt({
         world,
