@@ -2,6 +2,7 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { ParsedMovement } from "../types";
 import { BONE_RANGES_VERSION } from "../config/boneRanges";
+import { BODY_TOOLS_VERSION } from "../config/bodyChangelog";
 import { migrateEntriesV1toV2 } from "./boneRangesMigration";
 
 // Tarea 8.12, segunda parte: las reacciones al tacto las decide Miku, no
@@ -41,6 +42,10 @@ export type DesignedTouchReaction = {
   // Versión de los rangos de huesos con que están escritas las
   // intensidades (sin el campo = versión 1). Ver lib/boneRangesMigration.ts.
   rangos?: number;
+  // Con qué versión de las herramientas de su cuerpo la diseñó o la revisó
+  // por última vez (ver config/bodyChangelog.ts). Menor que la actual (o
+  // sin el campo): puede revisarla con lo nuevo, si ella quiere.
+  cuerpo?: number;
 };
 
 type Store = Partial<Record<TouchReactionKey, DesignedTouchReaction>>;
@@ -82,7 +87,21 @@ export function getDesignedReaction(key: TouchReactionKey): DesignedTouchReactio
 }
 
 export async function saveDesignedReaction(key: TouchReactionKey, reaction: DesignedTouchReaction) {
-  cache = { ...cache, [key]: { ...reaction, rangos: BONE_RANGES_VERSION } };
+  cache = { ...cache, [key]: { ...reaction, rangos: BONE_RANGES_VERSION, cuerpo: BODY_TOOLS_VERSION } };
+  await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
+}
+
+// Las que diseñó antes de las últimas novedades de su cuerpo.
+export function reactionsPendingReview(): TouchReactionKey[] {
+  return (Object.keys(cache) as TouchReactionKey[]).filter((key) => (cache[key]?.cuerpo ?? 0) < BODY_TOOLS_VERSION);
+}
+
+// Revisó una y decidió dejarla como estaba: no se le vuelve a ofrecer
+// hasta que haya novedades nuevas.
+export async function markReactionReviewed(key: TouchReactionKey) {
+  const reaction = cache[key];
+  if (!reaction) return;
+  cache = { ...cache, [key]: { ...reaction, cuerpo: BODY_TOOLS_VERSION } };
   await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
 }
 

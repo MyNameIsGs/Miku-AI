@@ -25,7 +25,8 @@ import {
   QuirksStore,
 } from "../lib/quirks";
 import { BoneTransition, MovementOrigin, ParsedMovement } from "../types";
-import { processRedesignMarkers } from "../lib/touchReactionsStore";
+import { TOUCH_REACTION_LABELS, TouchReactionKey, processRedesignMarkers } from "../lib/touchReactionsStore";
+import { reviewTouchReaction } from "../lib/touchReview";
 
 type UseIdleQuirksParams = {
   boneTransitionsRef: RefObject<Record<string, BoneTransition>>;
@@ -304,6 +305,16 @@ export function useIdleQuirks({
         const intent = decideReply.match(/\[QUIERO_MOVERME:\s*([\s\S]*?)\]/i)?.[1]?.trim() || null;
         if (intent) console.log(`[Silencio] Quiere moverse: "${intent}"`);
         reply = intent ? await ask(designMessages(intent)) : decideReply;
+
+        // A4: pidió revisar una reacción al tacto con las novedades de su
+        // cuerpo (una por consulta).
+        const reviewKey = decideReply.match(/\[REVISAR_REACCION:\s*([^\]]+)\]/i)?.[1]?.trim().toLowerCase();
+        if (reviewKey && reviewKey in TOUCH_REACTION_LABELS) {
+          console.log(`[Silencio] Quiere revisar su reacción a "${reviewKey}"`);
+          await reviewTouchReaction(reviewKey as TouchReactionKey).catch((err) =>
+            console.error("Error revisando una reacción al tacto:", err),
+          );
+        }
       }
 
       // El cuerpo sale de la respuesta final.

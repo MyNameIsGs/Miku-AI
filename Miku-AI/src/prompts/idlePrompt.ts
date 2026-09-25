@@ -7,6 +7,8 @@ import { QuirksStore } from "../lib/quirks";
 // quirks sin la explicación de ejes y rangos (antes decía "la misma
 // convención que ya conoces", pero acá no la tenía).
 import { buildMovementInstructions, buildTouchReactionsNote } from "./systemPrompt";
+import { bodyNewsSince } from "../config/bodyChangelog";
+import { getDesignedReaction, reactionsPendingReview } from "../lib/touchReactionsStore";
 
 export interface BuildIdlePromptParams {
   world: string;
@@ -165,6 +167,14 @@ function buildDecidePrompt({
   const heldPoseNote = heldPoseSummary
     ? `\nLlevas un rato sosteniendo una pose (${heldPoseSummary}). Si quieres volver a algo más neutral, también se pide con [QUIERO_MOVERME].\n`
     : "";
+  // A4: reacciones al tacto diseñadas antes de las novedades de su cuerpo.
+  // Se las cuento; revisarlas es decisión suya.
+  const toReview = reactionsPendingReview();
+  const oldestVersion = Math.min(...toReview.map((key) => getDesignedReaction(key)?.cuerpo ?? 0));
+  const reviewNote =
+    toReview.length > 0
+      ? `\n--- NOVEDADES DE TU CUERPO ---\n${bodyNewsSince(oldestVersion)}\n\nAlgunas de tus reacciones al tacto las diseñaste antes de esto: ${toReview.join(", ")}. Si quieres, puedes revisar una con lo nuevo: [REVISAR_REACCION: zona]. Vas a ver cómo te queda hoy y decidir si la mejoras o la dejas igual. No es obligatorio; lo mismo con tus quirks y gestos (esos se mejoran recreándolos, con [QUIERO_MOVERME]).\n`
+      : "";
   const pendientesNote =
     duePendientes.length > 0
       ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe (se junta con otros avisos y se lee en el próximo repaso). No es obligatorio.\n`
@@ -188,5 +198,5 @@ y enseguida te doy todo lo que necesitas saber sobre tu cuerpo para hacerlo bien
 
 ${buildTouchReactionsNote()}
 Fuera de lo de los pendientes, no escribas texto ni le hables a nadie -- esto no es una conversación. Si no te provoca hacer nada, no incluyas ningún marcador; la mayoría de las veces está perfectamente bien no hacer nada.
-${heldPoseNote}${pendientesNote}`;
+${heldPoseNote}${reviewNote}${pendientesNote}`;
 }

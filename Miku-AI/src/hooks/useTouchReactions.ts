@@ -181,7 +181,7 @@ function describeForDesign(key: TouchReactionKey, side: "left" | "right" | null)
 // Lo que propuso Miku para una reacción: [EXPRESION], [MOVIMIENTO] y
 // [LLEVAR_MANO] (este último ya resuelto en ángulos, se guarda junto con el
 // resto). Nada de eso = no propuso nada.
-function interpretDesign(reply: string): { movement: ParsedMovement | null; expression: string | null } {
+export function interpretDesign(reply: string): { movement: ParsedMovement | null; expression: string | null } {
   const explicitMovement = parseMovementMarker(reply);
   const reachMovement = getReachResolver()?.(reply, explicitMovement) ?? null;
   const movement =
@@ -198,7 +198,7 @@ function interpretDesign(reply: string): { movement: ParsedMovement | null; expr
 }
 
 // Zonas con lado: la reacción se diseña de un lado y del otro se espeja.
-const SIDED_KEYS: TouchReactionKey[] = ["cara", "coletas", "mano", "brazo", "pierna"];
+export const SIDED_KEYS: TouchReactionKey[] = ["cara", "coletas", "mano", "brazo", "pierna"];
 
 // Si el diseño falla (sin conexión, respuesta sin marcadores), no se
 // reintenta en cada toque: se espera este tiempo.
@@ -206,8 +206,8 @@ const DESIGN_RETRY_AFTER_MS = 5 * 60 * 1000;
 
 // Duraciones aceptadas para lo que diseñe Miku (la de la caricia puede ser
 // más larga: si es animada, es el período del vaivén).
-const DESIGN_DURATION_RANGE_MS: [number, number] = [150, 1500];
-const DESIGN_PET_DURATION_RANGE_MS: [number, number] = [150, 3000];
+export const DESIGN_DURATION_RANGE_MS: [number, number] = [150, 1500];
+export const DESIGN_PET_DURATION_RANGE_MS: [number, number] = [150, 3000];
 
 // Muchos toques seguidos, en cualquier lado: se harta y mira para otro lado.
 const ANNOYED_TAP_COUNT = 5;
