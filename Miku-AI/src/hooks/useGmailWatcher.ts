@@ -51,7 +51,7 @@ export function useGmailWatcher({ queueAnnouncement }: UseGmailWatcherParams) {
         const response = await fetchOpenRouterWithRetry({
           model: OPENROUTER_MODEL,
           messages: [{ role: "system", content: prompt }],
-        });
+        }, { kind: "correo" });
         const data = await response.json();
         const reply: string = data.choices?.[0]?.message?.content ?? "";
         const parsed = parseMarkers(reply, 0, 0);

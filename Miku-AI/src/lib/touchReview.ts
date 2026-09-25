@@ -64,7 +64,7 @@ export async function reviewTouchReaction(key: TouchReactionKey): Promise<Review
     });
   }
 
-  const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages });
+  const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages }, { kind: "revisión de tacto" });
   const data = await response.json();
   const reply = String(data.choices?.[0]?.message?.content ?? "");
 

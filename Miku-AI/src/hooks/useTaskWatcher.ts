@@ -44,7 +44,7 @@ export function useTaskWatcher({ queueAnnouncement }: UseTaskWatcherParams) {
     const response = await fetchOpenRouterWithRetry({
       model: OPENROUTER_MODEL,
       messages: [{ role: "system", content: prompt }],
-    });
+    }, { kind: "seguimiento" });
     const data = await response.json();
     const reply: string = (data.choices?.[0]?.message?.content ?? "").trim();
 

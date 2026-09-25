@@ -1,9 +1,12 @@
+import { CallKind, recordUsage } from "./tokenUsage";
 import { ChatMessage, ToolCall } from "../types";
 import { getToolSchemas, executeTool } from "./tools";
 
 export async function fetchOpenRouterWithRetry(
   body: object,
-  onRetry?: (attempt: number, maxAttempts: number, delayMs: number) => void,
+  // kind: para qué es la llamada, para medir cuánto gasta cada tipo (B2,
+  // ver lib/tokenUsage.ts).
+  { kind = "otro", onRetry }: { kind?: CallKind; onRetry?: (attempt: number, maxAttempts: number, delayMs: number) => void } = {},
 ): Promise<Response> {
   const delaysMs = [2000, 5000, 10000];
   let lastResponse: Response;
@@ -22,6 +25,14 @@ export async function fetchOpenRouterWithRetry(
     );
 
     if (lastResponse.status !== 429 || attempt === delaysMs.length) {
+      if (lastResponse.ok) {
+        // Se lee de una copia: quien llamó lee la respuesta como siempre.
+        lastResponse
+          .clone()
+          .json()
+          .then((data) => recordUsage(kind, data?.usage))
+          .catch(() => {});
+      }
       return lastResponse;
     }
 
@@ -74,7 +85,7 @@ export async function runToolCallingCycle(
         tools: getToolSchemas(),
         tool_choice: "auto",
       },
-      onRetry,
+      { kind: "charla", onRetry },
     );
 
     const data = await response.json();

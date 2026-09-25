@@ -242,8 +242,8 @@ export function useIdleQuirks({
       const quirkImages = quirkSelfImagesRef.current;
       quirkSelfImagesRef.current = [];
 
-      const ask = async (messages: object[]) => {
-        const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages });
+      const ask = async (messages: object[], kind: "silencio (decidir)" | "silencio (diseñar)" = "silencio (diseñar)") => {
+        const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages }, { kind });
         const data = await response.json();
         return String(data.choices?.[0]?.message?.content ?? "");
       };
@@ -301,7 +301,7 @@ export function useIdleQuirks({
             role: "system",
             content: buildIdlePrompt({ world, personality, heldPoseSummary, duePendientes, quirks, mode: "decidir" }),
           },
-        ]);
+        ], "silencio (decidir)");
         const intent = decideReply.match(/\[QUIERO_MOVERME:\s*([\s\S]*?)\]/i)?.[1]?.trim() || null;
         if (intent) console.log(`[Silencio] Quiere moverse: "${intent}"`);
         reply = intent ? await ask(designMessages(intent)) : decideReply;

@@ -66,7 +66,7 @@ export function useBriefing({ speak, voicePitchRef, voiceRateRef }: UseBriefingP
       const response = await fetchOpenRouterWithRetry({
         model: OPENROUTER_MODEL,
         messages: [{ role: "system", content: prompt }],
-      });
+      }, { kind: "briefing" });
       const data = await response.json();
       const reply: string = (data.choices?.[0]?.message?.content ?? "").trim();
 

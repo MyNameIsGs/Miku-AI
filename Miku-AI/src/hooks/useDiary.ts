@@ -58,7 +58,7 @@ export function useDiary({ conversationHistoryRef }: UseDiaryParams) {
       const response = await fetchOpenRouterWithRetry({
         model: OPENROUTER_MODEL,
         messages: [{ role: "system", content: prompt }],
-      });
+      }, { kind: "diario" });
       const data = await response.json();
       const reply: string = (data.choices?.[0]?.message?.content ?? "").trim();
 

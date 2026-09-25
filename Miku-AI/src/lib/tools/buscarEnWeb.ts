@@ -51,7 +51,7 @@ export const buscarEnWeb: ToolDefinition = {
           { role: "user", content: consulta },
         ],
         plugins: [{ id: "web", max_results: MAX_RESULTS }],
-      });
+      }, { kind: "buscar en web" });
 
       const data = await response.json();
       const content: string | undefined = data.choices?.[0]?.message?.content;

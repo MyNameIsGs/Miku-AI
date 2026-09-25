@@ -58,7 +58,7 @@ export function useMemoryFiles() {
         { role: "system", content: instruction },
         { role: "user", content: currentContent },
       ],
-    });
+    }, { kind: "consolidar memoria" });
 
     const data = await response.json();
     const newContent: string | undefined =

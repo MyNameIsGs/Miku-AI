@@ -353,7 +353,7 @@ export function useTouchReactions({
           baseReaction: base ? describeReaction(base) : null,
         });
         const ask = async (messages: object[]) => {
-          const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages });
+          const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages }, { kind: "tacto" });
           const data = await response.json();
           return String(data.choices?.[0]?.message?.content ?? "");
         };
