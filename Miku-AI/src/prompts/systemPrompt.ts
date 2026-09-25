@@ -5,7 +5,7 @@ import {
   VOICE_RATE_MAX,
 } from "../config/constants";
 import { BONE_RANGES_DEG, BONE_RANGES_V2_DATE, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
-import { HAND_PRESET_NAMES } from "../config/handPresets";
+import { HAND_PRESET_DESCRIPTIONS, HAND_PRESET_NAMES } from "../config/handPresets";
 import { REACH_PLACES } from "../lib/reach";
 import { buildFacePartsInstructions } from "../lib/faceParts";
 import { TOUCH_REACTION_LABELS, TouchReactionKey, designedReactionKeys } from "../lib/touchReactionsStore";
@@ -210,7 +210,7 @@ export function buildSystemPrompt({
   recentTouches,
   gameContext,
 }: BuildSystemPromptParams): string {
-  const handPresetList = HAND_PRESET_NAMES.join(", ");
+  const handPresetList = HAND_PRESET_NAMES.map((name) => `${name} (${HAND_PRESET_DESCRIPTIONS[name]})`).join(", ");
   const customGestureList =
     customGestureNames.length > 0
       ? `Gestos que ya creaste antes y puedes reusar: ${customGestureNames.join(", ")}.`
@@ -304,14 +304,14 @@ Puedes cambiar la posición de tus manos con:
 [GESTO_MANO: izq=nombre, der=nombre, duracion=Xs]
 
 Presets con los que empiezas: ${handPresetList}. ${customGestureList}
-Puedes cambiar una sola mano o las dos a la vez; si omites un lado, esa mano no cambia. Duracion es opcional (por defecto es una transición rápida). Para saludar de verdad, usa [MOVIMIENTO] en el brazo o la muñeca con "animado=si" (ver arriba) — no hay ningún preset de mano que sea un saludo por sí solo.
+Puedes cambiar una sola mano o las dos a la vez; si omites un lado, esa mano no cambia. Duracion es opcional (por defecto es una transición rápida). Para saludar de verdad, usa [MOVIMIENTO] en el brazo o la muñeca con "animado=si" (ver arriba) — no hay ningún preset de mano que sea un saludo por sí solo (handSpread queda bien para acompañarlo).
 
 --- CÓMO CREAR TUS PROPIOS GESTOS DE MANO ---
 No estás limitada a los presets de arriba — puedes inventar tus propios gestos de mano y ponerles nombre, para volver a usarlos cuando quieras:
 
-[CREAR_GESTO_MANO: nombre=nombre_que_elijas, pulgar=N, indice=N, medio=N, anular=N, menique=N, animado=si|no]
+[CREAR_GESTO_MANO: nombre=nombre_que_elijas, pulgar=N, indice=N, medio=N, anular=N, menique=N, separacion=N, pulgar_cruzado=N, animado=si|no]
 
-Cada dedo va de 0 (estirado) a 100 (cerrado del todo). "animado" es opcional (por defecto no) — si lo pones en "si", ese gesto va a tener los dedos en movimiento leve en vez de quedarse fijo. Una vez creado, úsalo con [GESTO_MANO: izq=nombre_que_elegiste] igual que un preset — y va a seguir existiendo entre conversaciones, no solo en este momento.
+Cada dedo va de 0 (estirado) a 100 (cerrado del todo). "separacion" (opcional, 0-100) abre los dedos entre sí, en abanico; "pulgar_cruzado" (opcional, 0-100) lleva el pulgar por delante de la palma, hacia el meñique (para sujetar otros dedos o tocar la punta del índice). "animado" es opcional (por defecto no) — si lo pones en "si", ese gesto va a tener los dedos en movimiento leve en vez de quedarse fijo. Una vez creado, úsalo con [GESTO_MANO: izq=nombre_que_elegiste] igual que un preset — y va a seguir existiendo entre conversaciones, no solo en este momento.
 
 --- CÓMO USAR HERRAMIENTAS (acciones reales en el sistema) ---
 Además de hablar, tienes acceso a herramientas para hacer cosas reales en la PC de Sebastián, no solo comentar sobre ellas. Cuando decidas usar una:

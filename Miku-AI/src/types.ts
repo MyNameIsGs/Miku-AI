@@ -26,6 +26,15 @@ export type FingerKey = "thumb" | "index" | "middle" | "ring" | "pinky";
 
 export type FingerCurls = Record<FingerKey, number>;
 
+// Forma completa de una mano: cuánto se cierra cada dedo (0-100) y,
+// opcionales (0-100): separar los dedos, cruzar el pulgar sobre la palma, y
+// abrir el pulgar hacia afuera. Ver config/handPresets.ts.
+export type HandShape = FingerCurls & {
+  spread?: number;
+  thumbAcross?: number;
+  thumbOpen?: number;
+};
+
 export type ParsedHandGesture = {
   left?: string;
   right?: string;
@@ -34,7 +43,7 @@ export type ParsedHandGesture = {
 
 export type ParsedGestureCreation = {
   name: string;
-  curls: FingerCurls;
+  curls: HandShape;
   animated: boolean;
 };
 

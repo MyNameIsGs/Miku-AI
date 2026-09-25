@@ -63,12 +63,14 @@ export const FINGER_PHALANX_MAX_DEG: Record<
   Distal: 70,
 };
 
+// El pulgar no tiene "Intermediate": sus huesos son Metacarpal (la base,
+// en la palma), Proximal y Distal (nomenclatura VRM 1.0 de three-vrm). Antes
+// se pedía ThumbIntermediate, que no existe, y la base nunca se registraba.
 export function fingerBoneNames(side: "left" | "right"): string[] {
   const names: string[] = [];
   for (const finger of FINGER_NAMES) {
-    names.push(`${side}${finger}Proximal`);
-    names.push(`${side}${finger}Intermediate`);
-    names.push(`${side}${finger}Distal`);
+    const phalanges = finger === "Thumb" ? ["Metacarpal", "Proximal", "Distal"] : ["Proximal", "Intermediate", "Distal"];
+    for (const phalanx of phalanges) names.push(`${side}${finger}${phalanx}`);
   }
   return names;
 }

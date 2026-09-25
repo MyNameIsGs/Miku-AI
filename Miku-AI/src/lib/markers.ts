@@ -15,6 +15,7 @@ import {
   ParsedHandGesture,
   ParsedGestureCreation,
   FingerCurls,
+  HandShape,
 } from "../types";
 
 export function parseMovementMarker(text: string): ParsedMovement | null {
@@ -102,6 +103,7 @@ export function parseCreateHandGestureMarker(
   let name: string | undefined;
   let animated = false;
   const curls: Partial<FingerCurls> = {};
+  const extras: { spread?: number; thumbAcross?: number } = {};
 
   for (const part of parts) {
     const [rawKey, rawValue] = part.split("=").map((s) => s.trim());
@@ -117,6 +119,17 @@ export function parseCreateHandGestureMarker(
       continue;
     }
     if (key === "mano") continue;
+    // Separar los dedos y cruzar el pulgar sobre la palma (0-100), ver
+    // config/handPresets.ts.
+    if (key === "separacion" || key === "separación" || key === "pulgar_cruzado") {
+      const num = parseFloat(rawValue);
+      if (!Number.isNaN(num)) {
+        const value = Math.max(0, Math.min(100, num));
+        if (key === "pulgar_cruzado") extras.thumbAcross = value;
+        else extras.spread = value;
+      }
+      continue;
+    }
 
     const fingerKey = CREATE_GESTURE_FINGER_LABELS[key];
     if (fingerKey) {
@@ -129,12 +142,13 @@ export function parseCreateHandGestureMarker(
 
   if (!name) return null;
 
-  const completeCurls: FingerCurls = {
+  const completeCurls: HandShape = {
     thumb: curls.thumb ?? 0,
     index: curls.index ?? 0,
     middle: curls.middle ?? 0,
     ring: curls.ring ?? 0,
     pinky: curls.pinky ?? 0,
+    ...extras,
   };
 
   return { name, curls: completeCurls, animated };

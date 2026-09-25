@@ -1,15 +1,14 @@
 import { useEffect, useRef, RefObject } from "react";
 import * as THREE from "three";
 import { load } from "@tauri-apps/plugin-store";
-import { BONE_RANGES_DEG, FINGER_KEY_TO_VRM_NAME, FINGER_PHALANX_MAX_DEG } from "../config/boneRanges";
-import { HAND_PRESET_SEEDS } from "../config/handPresets";
+import { BONE_RANGES_DEG } from "../config/boneRanges";
+import { HAND_PRESET_SEEDS, handShapeRotations } from "../config/handPresets";
 import {
   MovementOrigin,
   BoneTransition,
   PendingQuirkRevert,
   ParsedMovement,
-  FingerKey,
-  FingerCurls,
+  HandShape,
 } from "../types";
 
 export function intensityToDegrees(
@@ -79,7 +78,7 @@ export function useMovement({
   // Gestos creados por Miku, persistidos en .settings.dat (no en memory.ts:
   // son datos estructurados, no texto libre de personalidad).
   const customHandGesturesRef = useRef<
-    Record<string, FingerCurls & { animated: boolean }>
+    Record<string, HandShape & { animated: boolean }>
   >({});
   const isCustomGesturesLoaded = useRef(false);
   // Qué lado tiene activo un gesto animado en este momento (los dedos
@@ -95,7 +94,7 @@ export function useMovement({
       try {
         const store = await load(".settings.dat", { autoSave: false });
         const savedGestures =
-          await store.get<Record<string, FingerCurls & { animated: boolean }>>(
+          await store.get<Record<string, HandShape & { animated: boolean }>>(
             "customHandGestures",
           );
         if (savedGestures) customHandGesturesRef.current = savedGestures;
@@ -213,7 +212,7 @@ export function useMovement({
   // presets semilla y después entre los personalizados que Miku creó.
   function getHandGestureDefinition(
     name: string,
-  ): { curls: FingerCurls; animated: boolean } | undefined {
+  ): { curls: HandShape; animated: boolean } | undefined {
     if (HAND_PRESET_SEEDS[name]) {
       return { curls: HAND_PRESET_SEEDS[name], animated: false };
     }
@@ -253,45 +252,37 @@ export function useMovement({
       delete pendingHandRevertsRef.current[side];
     }
 
-    const now = performance.now();
-    for (const fingerKey of Object.keys(curls) as FingerKey[]) {
-      const vrmFingerName = FINGER_KEY_TO_VRM_NAME[fingerKey];
-      const curl = curls[fingerKey];
+    scheduleHandShape(side, curls, durationMs, origin, performance.now());
+  }
 
-      (["Proximal", "Intermediate", "Distal"] as const).forEach((phalanx) => {
-        const boneName = `${side}${vrmFingerName}${phalanx}`;
-        const boneNode = fingerBonesRef.current[boneName];
-        if (!boneNode) return;
-
-        const maxDeg = FINGER_PHALANX_MAX_DEG[phalanx];
-        const sideSign = side === "right" ? 1 : -1;
-        // Confirmado con el calibrador: el pulgar cierra en el eje Y, los
-        // otros 4 dedos en Z -- pero el signo de cierre es el mismo
-        // (negativo) para todos, pulgar incluido.
-        const axis: "y" | "z" = fingerKey === "thumb" ? "y" : "z";
-        const targetDeg = sideSign * -(curl / 100) * maxDeg;
-
-        const restRad = boneRestRotationRef.current[boneName]?.[axis] ?? 0;
-        const targetRad = restRad + (targetDeg * Math.PI) / 180;
-        const key = `${boneName}.${axis}`;
-        const currentValue = boneNode.rotation[axis];
-
-        boneTransitionsRef.current[key] = {
-          startValue: currentValue,
-          targetValue: targetRad,
-          startTime: now,
-          duration: durationMs,
-          origin,
-          animated: false,
-        };
-      });
+  // Programa la transición de cada hueso de una mano hacia una forma (ver
+  // handShapeRotations: ejes y signos medidos en render, pulgar con su base).
+  function scheduleHandShape(
+    side: "left" | "right",
+    shape: HandShape,
+    durationMs: number,
+    origin: MovementOrigin,
+    now: number,
+  ) {
+    for (const { bone, axis, deg } of handShapeRotations(side, shape)) {
+      const boneNode = fingerBonesRef.current[bone];
+      if (!boneNode) continue;
+      const restRad = boneRestRotationRef.current[bone]?.[axis] ?? 0;
+      boneTransitionsRef.current[`${bone}.${axis}`] = {
+        startValue: boneNode.rotation[axis],
+        targetValue: restRad + (deg * Math.PI) / 180,
+        startTime: now,
+        duration: durationMs,
+        origin,
+        animated: false,
+      };
     }
   }
 
   // --- Tarea 3.1, Paso 2b: guardar un gesto de mano creado por Miku ---
   async function saveCustomHandGesture(
     name: string,
-    curls: FingerCurls,
+    curls: HandShape,
     animated: boolean,
   ) {
     customHandGesturesRef.current[name] = { ...curls, animated };
@@ -371,25 +362,9 @@ export function useMovement({
       if (!pending || now < pending.revertAt) continue;
       delete pendingHandRevertsRef.current[sideKey];
       animatedHandSidesRef.current[sideKey] = false;
-      (Object.keys(FINGER_KEY_TO_VRM_NAME) as FingerKey[]).forEach((fingerKey) => {
-        const vrmFingerName = FINGER_KEY_TO_VRM_NAME[fingerKey];
-        const axis: "y" | "z" = fingerKey === "thumb" ? "y" : "z";
-        (["Proximal", "Intermediate", "Distal"] as const).forEach((phalanx) => {
-          const boneName = `${sideKey}${vrmFingerName}${phalanx}`;
-          const boneNode = fingerBonesRef.current[boneName];
-          if (!boneNode) return;
-          const restRad = boneRestRotationRef.current[boneName]?.[axis] ?? 0;
-          const key = `${boneName}.${axis}`;
-          boneTransitionsRef.current[key] = {
-            startValue: boneNode.rotation[axis],
-            targetValue: restRad,
-            startTime: now,
-            duration: pending.revertDuration,
-            origin: "idle",
-            animated: false,
-          };
-        });
-      });
+      // Todos los huesos y ejes de la mano (incluida la separación de los
+      // dedos y la base del pulgar) vuelven a su reposo.
+      scheduleHandShape(sideKey, HAND_PRESET_SEEDS.handOpen, pending.revertDuration, "idle", now);
     }
 
     for (const key of Object.keys(boneTransitionsRef.current)) {
