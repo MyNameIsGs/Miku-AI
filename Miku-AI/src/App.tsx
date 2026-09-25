@@ -53,6 +53,8 @@ import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
+import { ConfigPanel } from "./components/ConfigPanel";
+import { useConnections } from "./hooks/useConnections";
 import {
   loadQuirks,
   confirmQuirk,
@@ -80,20 +82,8 @@ import {
   stripMarkers,
 } from "./lib/markers";
 import { getCurrentMood, setMood } from "./lib/mood";
-import { MCP_SERVERS, McpServerConfig, connectMcpServer, disconnectMcpServer } from "./lib/mcp";
 import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
 import { loadPendientes, getActivePendientes } from "./lib/pendientes";
-import { connectSpotify, isSpotifyConnected } from "./lib/spotify/auth";
-import {
-  connectGmail,
-  disconnectGmailAccount,
-  listConnectedGmailEmails,
-} from "./lib/gmail/auth";
-import {
-  connectCalendar,
-  disconnectCalendarAccount,
-  listConnectedCalendarEmails,
-} from "./lib/calendar/auth";
 
 // Franja de la barra, POR ENCIMA de Miku (la ventana es así de más alta
 // que el canvas, ver tauri.conf.json y .miku-canvas en App.css): no le
@@ -133,22 +123,6 @@ function App() {
   const [clickThrough, setClickThrough] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
-  const [spotifyConnecting, setSpotifyConnecting] = useState(false);
-  const [spotifyError, setSpotifyError] = useState<string | null>(null);
-  const [gmailAccounts, setGmailAccounts] = useState<string[]>([]);
-  const [gmailConnecting, setGmailConnecting] = useState(false);
-  const [gmailError, setGmailError] = useState<string | null>(null);
-  const [calendarAccounts, setCalendarAccounts] = useState<string[]>([]);
-  const [calendarConnecting, setCalendarConnecting] = useState(false);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
-  // Tarea 8.2: Miku como cliente MCP -- qué servidores (ver MCP_SERVERS en
-  // lib/mcp.ts) están conectados ahora mismo, en esta sesión (no persiste
-  // entre reinicios a propósito: son subprocesos, no tiene sentido
-  // "recordar" que estaban conectados si el proceso real ya no existe).
-  const [mcpConnectedIds, setMcpConnectedIds] = useState<string[]>([]);
-  const [mcpConnectingId, setMcpConnectingId] = useState<string | null>(null);
-  const [mcpError, setMcpError] = useState<string | null>(null);
   const { isVoiceReady, downloadProgress, handleCloseApp, registerBeforeSync } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
@@ -277,141 +251,8 @@ function App() {
     })();
   }, [voiceMuted]);
 
-  useEffect(() => {
-    isSpotifyConnected()
-      .then(setSpotifyConnected)
-      .catch((err) => console.error("Error consultando conexión de Spotify:", err));
-    listConnectedGmailEmails()
-      .then(setGmailAccounts)
-      .catch((err) => console.error("Error consultando cuentas de Gmail:", err));
-    listConnectedCalendarEmails()
-      .then(setCalendarAccounts)
-      .catch((err) => console.error("Error consultando cuentas de Calendar:", err));
-  }, []);
-
-  // Qué servidores MCP quedan conectados solos al abrir la app: los que
-  // Sebastián dejó conectados la última vez (pidió no tener que conectar
-  // Playwright a mano cada vez). Desconectar a mano lo saca de la lista.
-  // Seguro de reconectar en cada arranque: medido, si la app muere sin
-  // desconectar, Playwright cierra solo todo su árbol (node + Chrome sin
-  // ventana, 14 procesos) al quedarse sin su entrada -- no se acumulan
-  // navegadores huérfanos.
-  const MCP_AUTOCONNECT_KEY = "mcpAutoConnect";
-  const setMcpAutoConnect = async (serverId: string, enabled: boolean) => {
-    try {
-      const store = await load(".settings.dat", { autoSave: false });
-      const current = (await store.get<string[]>(MCP_AUTOCONNECT_KEY)) ?? [];
-      const next = enabled
-        ? [...current.filter((id) => id !== serverId), serverId]
-        : current.filter((id) => id !== serverId);
-      await store.set(MCP_AUTOCONNECT_KEY, next);
-      await store.save();
-    } catch (err) {
-      console.error("Error guardando la reconexión de servidores MCP:", err);
-    }
-  };
-
-  const handleConnectMcp = async (server: McpServerConfig) => {
-    setMcpConnectingId(server.id);
-    setMcpError(null);
-    try {
-      await connectMcpServer(server);
-      setMcpConnectedIds((prev) => [...prev.filter((id) => id !== server.id), server.id]);
-      await setMcpAutoConnect(server.id, true);
-    } catch (err) {
-      setMcpError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setMcpConnectingId(null);
-    }
-  };
-
-  const handleDisconnectMcp = async (serverId: string) => {
-    try {
-      await disconnectMcpServer(serverId);
-    } catch (err) {
-      console.error("Error desconectando servidor MCP:", err);
-    } finally {
-      setMcpConnectedIds((prev) => prev.filter((id) => id !== serverId));
-      await setMcpAutoConnect(serverId, false);
-    }
-  };
-
-  useEffect(() => {
-    (async () => {
-      let ids: string[] = [];
-      try {
-        const store = await load(".settings.dat", { autoSave: false });
-        ids = (await store.get<string[]>(MCP_AUTOCONNECT_KEY)) ?? [];
-      } catch (err) {
-        console.error("Error leyendo la reconexión de servidores MCP:", err);
-      }
-      // Uno detrás del otro, en segundo plano: no frena el arranque.
-      for (const server of MCP_SERVERS.filter((s) => ids.includes(s.id))) {
-        console.log(`[MCP] Reconectando "${server.id}" (quedó conectado la última vez)...`);
-        await handleConnectMcp(server);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleConnectSpotify = async () => {
-    setSpotifyConnecting(true);
-    setSpotifyError(null);
-    try {
-      await connectSpotify();
-      setSpotifyConnected(true);
-    } catch (err) {
-      setSpotifyError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSpotifyConnecting(false);
-    }
-  };
-
-  const handleConnectGmail = async () => {
-    setGmailConnecting(true);
-    setGmailError(null);
-    try {
-      const email = await connectGmail();
-      setGmailAccounts((prev) => [...prev.filter((e) => e !== email), email]);
-    } catch (err) {
-      console.error("Error conectando Gmail:", err);
-      setGmailError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setGmailConnecting(false);
-    }
-  };
-
-  const handleDisconnectGmail = async (email: string) => {
-    try {
-      await disconnectGmailAccount(email);
-      setGmailAccounts((prev) => prev.filter((e) => e !== email));
-    } catch (err) {
-      console.error("Error desconectando cuenta de Gmail:", err);
-    }
-  };
-
-  const handleConnectCalendar = async () => {
-    setCalendarConnecting(true);
-    setCalendarError(null);
-    try {
-      const email = await connectCalendar();
-      setCalendarAccounts((prev) => [...prev.filter((e) => e !== email), email]);
-    } catch (err) {
-      console.error("Error conectando Calendar:", err);
-      setCalendarError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCalendarConnecting(false);
-    }
-  };
-
-  const handleDisconnectCalendar = async (email: string) => {
-    try {
-      await disconnectCalendarAccount(email);
-      setCalendarAccounts((prev) => prev.filter((e) => e !== email));
-    } catch (err) {
-      console.error("Error desconectando cuenta de Calendar:", err);
-    }
-  };
+  // Spotify, Gmail, Calendar y MCP (ver hooks/useConnections.ts).
+  const connections = useConnections();
 
   // Panel de quirks (idea nueva): recién carga cuando se abre, no hace
   // falta tenerlo cargado todo el tiempo -- el loop idle sigue siendo el
@@ -1682,164 +1523,17 @@ function App() {
       {showMemoryPanel && <MemoryPanel onClose={() => setShowMemoryPanel(false)} />}
 
       {showConfig && (
-        <div className="config-panel">
-          <label>
-            Tono de voz: {voicePitch}
-            <input
-              type="range"
-              min={-12}
-              max={24}
-              value={voicePitch}
-              onChange={(e) => setVoicePitch(Number(e.target.value))}
-            />
-          </label>
-          <label>
-            Velocidad: {voiceRate}%
-            <input
-              type="range"
-              min={-30}
-              max={50}
-              value={voiceRate}
-              onChange={(e) => setVoiceRate(Number(e.target.value))}
-            />
-          </label>
-          <label title="Desde el texto: la boca forma las vocales del español y Miku responde ~1 s antes. Rhubarb: analiza el audio (el de antes).">
-            Boca:{" "}
-            <select
-              value={lipsyncMode}
-              onChange={(e) => setLipsyncMode(e.target.value as "texto" | "rhubarb")}
-            >
-              <option value="texto">Vocales del texto (más rápida)</option>
-              <option value="rhubarb">Rhubarb (la de antes)</option>
-            </select>
-          </label>
-          <div className="oauth-connect-row">
-            <button
-              onClick={handleConnectSpotify}
-              disabled={spotifyConnecting}
-              className={spotifyConnected ? "active" : ""}
-            >
-              {spotifyConnecting
-                ? "Conectando..."
-                : spotifyConnected
-                  ? "Spotify conectado"
-                  : "Conectar Spotify"}
-            </button>
-            {spotifyError && (
-              <span className="oauth-error" title={spotifyError}>
-                Error al conectar Spotify
-              </span>
-            )}
-          </div>
-          <div className="oauth-connect-row gmail-accounts-row">
-            {gmailAccounts.map((email) => (
-              <span key={email} className="gmail-account-chip">
-                {email}
-                <button
-                  onClick={() => handleDisconnectGmail(email)}
-                  title="Desconectar esta cuenta"
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
-            <button onClick={handleConnectGmail} disabled={gmailConnecting}>
-              {gmailConnecting
-                ? "Conectando..."
-                : gmailAccounts.length > 0
-                  ? "+ Otra cuenta de Gmail"
-                  : "Conectar Gmail"}
-            </button>
-            {gmailError && (
-              <span className="oauth-error" title={gmailError}>
-                Error al conectar Gmail
-              </span>
-            )}
-          </div>
-          <div className="oauth-connect-row gmail-accounts-row">
-            {calendarAccounts.map((email) => (
-              <span key={email} className="gmail-account-chip">
-                {email}
-                <button
-                  onClick={() => handleDisconnectCalendar(email)}
-                  title="Desconectar esta cuenta"
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
-            <button onClick={handleConnectCalendar} disabled={calendarConnecting}>
-              {calendarConnecting
-                ? "Conectando..."
-                : calendarAccounts.length > 0
-                  ? "+ Otra cuenta de Calendar"
-                  : "Conectar Calendar"}
-            </button>
-            {calendarError && (
-              <span className="oauth-error" title={calendarError}>
-                Error al conectar Calendar
-              </span>
-            )}
-          </div>
-          <div className="oauth-connect-row gmail-accounts-row">
-            {MCP_SERVERS.map((server) => {
-              const connected = mcpConnectedIds.includes(server.id);
-              return (
-                <span key={server.id} className="gmail-account-chip">
-                  {server.label}
-                  <button
-                    onClick={() =>
-                      connected ? handleDisconnectMcp(server.id) : handleConnectMcp(server)
-                    }
-                    disabled={mcpConnectingId === server.id}
-                    className={connected ? "active" : ""}
-                    title={
-                      connected
-                        ? "Desconectar este servidor MCP"
-                        : "Conectar (puede tardar la primera vez, descarga el paquete)"
-                    }
-                  >
-                    {mcpConnectingId === server.id
-                      ? "Conectando..."
-                      : connected
-                        ? "Conectado ✕"
-                        : "Conectar"}
-                  </button>
-                </span>
-              );
-            })}
-            {mcpError && (
-              <span className="oauth-error" title={mcpError}>
-                Error al conectar servidor MCP
-              </span>
-            )}
-          </div>
-          {/* Tarea 8.3: solo informativo -- el modo stream se prende y se
-              apaga solo según OBS, no hay nada que tocar acá. */}
-          <div className="oauth-connect-row">
-            <span
-              className={streamMode.obsError ? "oauth-error" : undefined}
-              title={streamMode.obsError ?? undefined}
-            >
-              {streamMode.active
-                ? `Modo stream: ACTIVO (OBS ${streamMode.streaming ? "transmitiendo" : "grabando"}) -- avisos y acciones en pausa`
-                : streamMode.obsError
-                  ? "Modo stream: sin conexión con OBS"
-                  : "Modo stream: inactivo (OBS conectado)"}
-            </span>
-          </div>
-          <div className="oauth-connect-row">
-            <label title="Con un juego (o cualquier app) a pantalla completa, Miku se esconde y deja libre la GPU; 'Hey Miku' la trae de vuelta">
-              <input
-                type="checkbox"
-                checked={gameMode.enabled}
-                onChange={(e) => gameMode.setEnabled(e.target.checked)}
-              />{" "}
-              Esconderse en juegos
-              {gameMode.game.active && ` (ahora: ${gameMode.game.processName})`}
-            </label>
-          </div>
-        </div>
+        <ConfigPanel
+          voicePitch={voicePitch}
+          setVoicePitch={setVoicePitch}
+          voiceRate={voiceRate}
+          setVoiceRate={setVoiceRate}
+          lipsyncMode={lipsyncMode}
+          setLipsyncMode={setLipsyncMode}
+          connections={connections}
+          streamMode={streamMode}
+          gameMode={gameMode}
+        />
       )}
       {/* "hablando" no lleva insignia -- ya se ve directo (boca moviéndose
           + texto revelándose), agregarla es redundante. Sebastián lo pidió
