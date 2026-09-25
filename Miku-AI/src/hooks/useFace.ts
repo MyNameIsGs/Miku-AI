@@ -7,6 +7,7 @@ import {
   DOUBLE_BLINK_CHANCE,
 } from "../config/constants";
 import { FACE_PARTS, decodeFace, faceExpressionName, registerFaceParts } from "../lib/faceParts";
+import { getCachedMood } from "../lib/mood";
 
 const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
   lookUp: { x: 0, y: 0.7 },
@@ -28,12 +29,27 @@ const VISEME_SHAPES = ["aa", "ih", "ou", "ee", "oh"];
 // si se pasa, las vocales cortas no llegan a formarse del todo.
 const VISEME_HALF_LIFE_MS = 30;
 
+// Su ánimo de fondo, visible en la cara cuando está en reposo (pedido de
+// Sebastián: no había forma de saber cómo estaba sin preguntarle). No son
+// las expresiones enteras a baja intensidad: "sad" trae lágrimas y
+// "happy"/"relaxed" cierran los ojos (>< y ^^), que durante horas se ven
+// mal y pelean con el parpadeo. Es una cara propia para cada ánimo, con
+// las partes sueltas de [CARA], dosificada.
+export const RESTING_MOOD_FACES: Record<string, Record<string, number>> = {
+  happy: { boca_sonrisa: 0.3, ojos_felices: 0.12 },
+  sad: { cejas_preocupadas: 0.75, boca_puchero: 0.4, mirar_abajo: 0.2 },
+  angry: { cejas_enojadas: 0.75, boca_puchero: 0.5 },
+  relaxed: { ojos_felices: 0.22, boca_sonrisa: 0.12 },
+};
+
 type UseFaceParams = {
   vrmRef: RefObject<VRM | null>;
   gazeTargetObjectRef: RefObject<THREE.Object3D | null>;
+  // Su ánimo actual (por defecto, el guardado; el banco pasa el suyo).
+  getRestingMood?: () => string;
 };
 
-export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
+export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getCachedMood }: UseFaceParams) {
   const activeExpressionRef = useRef<string>("neutral");
   // Escrito por quien reproduce el audio (hoy speak() en App.tsx), leído
   // aquí para pausar la mirada errante mientras Miku habla.
@@ -210,9 +226,15 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
       }
       facePartsRegisteredRef.current = true;
     }
+    // En reposo (cara "neutral", sin [CARA] y sin hablar) se le nota el
+    // ánimo, suave.
+    const restingFace =
+      !faceParts && activeExpressionRef.current === "neutral" && !isSpeakingRef.current
+        ? RESTING_MOOD_FACES[getRestingMood()]
+        : undefined;
     const partWeights = facePartWeightsRef.current;
     for (const part of Object.keys(partWeights)) {
-      const target = faceParts?.[part] ?? 0;
+      const target = faceParts?.[part] ?? restingFace?.[part] ?? 0;
       partWeights[part] += (target - partWeights[part]) * EXPRESSION_SMOOTHING;
       expressionManager.setValue(faceExpressionName(part), partWeights[part]);
     }

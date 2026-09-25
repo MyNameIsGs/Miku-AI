@@ -56,7 +56,8 @@ function Bench() {
   const gazeTargetObjectRef = useRef<THREE.Object3D | null>(null);
   const lowerBodyRef = useRef<Record<string, THREE.Object3D | null>>({});
 
-  const face = useFace({ vrmRef, gazeTargetObjectRef });
+  // El ánimo de reposo se prueba con window.benchMood ("happy", "sad"...).
+  const face = useFace({ vrmRef, gazeTargetObjectRef, getRestingMood: () => (window as any).benchMood ?? "neutral" });
   const movement = useMovement({ movementBonesRef, fingerBonesRef, boneRestRotationRef, chestBoneRef, headBoneRef, lowerBodyRef });
 
   useVRMScene({
