@@ -513,5 +513,191 @@
     "side": null,
     "createdAt": "2026-09-24T18:37:45.498Z",
     "rangos": 2
+  },
+  "agitar": {
+    "expression": "cara:ojos_apretados=0.7,boca_sonrisa=0.8",
+    "entries": [
+      {
+        "bone": "leftUpperArm",
+        "axis": "x",
+        "intensity": -25
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "y",
+        "intensity": -32
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "z",
+        "intensity": 37
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "y",
+        "intensity": -75
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "x",
+        "intensity": 0
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "x",
+        "intensity": 39
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "y",
+        "intensity": -68
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "z",
+        "intensity": 40
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "y",
+        "intensity": 22
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "x",
+        "intensity": 0
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "head",
+        "axis": "z",
+        "intensity": 20
+      },
+      {
+        "bone": "neck",
+        "axis": "z",
+        "intensity": 12
+      },
+      {
+        "bone": "chest",
+        "axis": "z",
+        "intensity": 10
+      },
+      {
+        "bone": "spine",
+        "axis": "z",
+        "intensity": 8
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "z",
+        "intensity": -25
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "z",
+        "intensity": 25
+      }
+    ],
+    "durationMs": 900,
+    "animated": false,
+    "side": null,
+    "createdAt": "2026-09-25T21:29:35.340Z",
+    "moodEffect": "happy",
+    "rangos": 2,
+    "cuerpo": 2,
+    "variantes": {
+      "happy": {
+        "expression": "cara:ojos_felices=1,boca_sonrisa=0.9",
+        "entries": [
+          {
+            "bone": "head",
+            "axis": "z",
+            "intensity": 22
+          },
+          {
+            "bone": "neck",
+            "axis": "z",
+            "intensity": 14
+          },
+          {
+            "bone": "chest",
+            "axis": "z",
+            "intensity": 12
+          },
+          {
+            "bone": "spine",
+            "axis": "z",
+            "intensity": 9
+          },
+          {
+            "bone": "leftShoulder",
+            "axis": "z",
+            "intensity": -20
+          },
+          {
+            "bone": "rightShoulder",
+            "axis": "z",
+            "intensity": 20
+          },
+          {
+            "bone": "leftUpperArm",
+            "axis": "z",
+            "intensity": -30
+          },
+          {
+            "bone": "rightUpperArm",
+            "axis": "z",
+            "intensity": 30
+          },
+          {
+            "bone": "leftUpperArm",
+            "axis": "x",
+            "intensity": 8
+          },
+          {
+            "bone": "rightUpperArm",
+            "axis": "x",
+            "intensity": 8
+          },
+          {
+            "bone": "leftLowerArm",
+            "axis": "y",
+            "intensity": -35
+          },
+          {
+            "bone": "rightLowerArm",
+            "axis": "y",
+            "intensity": 35
+          },
+          {
+            "bone": "leftLowerArm",
+            "axis": "x",
+            "intensity": 40
+          },
+          {
+            "bone": "rightLowerArm",
+            "axis": "x",
+            "intensity": 40
+          }
+        ],
+        "durationMs": 900,
+        "animated": false,
+        "side": null,
+        "createdAt": "2026-09-25T21:30:23.419Z",
+        "moodEffect": "happy",
+        "rangos": 2,
+        "cuerpo": 2
+      }
+    }
   }
 }

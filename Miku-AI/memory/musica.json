@@ -1,0 +1,54 @@
+{
+  "version": 3,
+  "bailes": {
+    "ritmo_movido": {
+      "alGolpe": true,
+      "expression": "cara:ojos_felices=0.55,boca_sonrisa=0.45",
+      "entries": [
+        {
+          "bone": "spine",
+          "axis": "z",
+          "intensity": 7
+        },
+        {
+          "bone": "chest",
+          "axis": "z",
+          "intensity": 5
+        },
+        {
+          "bone": "neck",
+          "axis": "z",
+          "intensity": -3
+        },
+        {
+          "bone": "head",
+          "axis": "z",
+          "intensity": -5
+        },
+        {
+          "bone": "leftShoulder",
+          "axis": "z",
+          "intensity": -4
+        },
+        {
+          "bone": "rightShoulder",
+          "axis": "z",
+          "intensity": 4
+        },
+        {
+          "bone": "leftUpperArm",
+          "axis": "z",
+          "intensity": -6
+        },
+        {
+          "bone": "rightUpperArm",
+          "axis": "z",
+          "intensity": 6
+        }
+      ],
+      "durationMs": 1333,
+      "createdAt": "2026-09-25T21:00:22.703Z",
+      "rangos": 2
+    }
+  }
+}
