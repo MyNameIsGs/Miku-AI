@@ -1297,9 +1297,9 @@ function App() {
     const solved: ParsedMovement["entries"] = [];
     try {
       const camera = cameraRef.current?.position.clone() ?? null;
-      for (const [side, place] of [["left", reach.left], ["right", reach.right]] as const) {
-        if (!place) continue;
-        const result = solveReach(vrm, bones, rest, side, place, camera);
+      for (const [side, request] of [["left", reach.left], ["right", reach.right]] as const) {
+        if (!request) continue;
+        const result = solveReach(vrm, bones, rest, side, request.place, camera, request.palm);
         if (result) solved.push(...result.entries);
       }
     } finally {

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { VRM } from "@pixiv/three-vrm";
+import { VRM, VRMHumanBoneName } from "@pixiv/three-vrm";
 import { BONE_RANGES_DEG } from "../config/boneRanges";
 import { ParsedMovement } from "../types";
 
@@ -70,13 +70,33 @@ export function placeWorldPoint(vrm: VRM, side: Side, placeName: string): THREE.
   return anchor.getWorldPosition(new THREE.Vector3()).add(makeBodyToWorld(vrm, side)(place.offset, anchor));
 }
 
-export type ParsedReach = { left?: string; right?: string; durationMs: number };
+// Hacia dónde puede pedir que mire la palma (opcional, lo elige ella: sin
+// pedirlo, la palma queda donde la deje el cálculo del brazo).
+export const PALM_DIRECTIONS: Record<string, string> = {
+  palma_hacia_la_cara: "la palma mirando hacia tu cara",
+  palma_hacia_el_cuerpo: "la palma mirando hacia tu cuerpo",
+  palma_afuera: "la palma mirando hacia afuera, lejos de tu cuerpo",
+  palma_abajo: "la palma mirando hacia abajo",
+  palma_arriba: "la palma mirando hacia arriba",
+  palma_adelante: "la palma mirando hacia adelante",
+  palma_hacia_ti: "la palma mirando hacia quien te mira (Sebastián)",
+};
+
+export type ReachRequest = { place: string; palm?: string };
+export type ParsedReach = { left?: ReachRequest; right?: ReachRequest; durationMs: number };
+
+// "mejilla" o "mejilla:palma_hacia_la_cara".
+function parseReachValue(value: string): ReachRequest | undefined {
+  const [place, palm] = value.split(":");
+  if (!REACH_PLACES[place]) return undefined;
+  return { place, palm: palm && PALM_DIRECTIONS[palm] ? palm : undefined };
+}
 
 export function parseReachMarker(text: string, defaultDurationMs: number): ParsedReach | null {
   const match = text.match(/\[LLEVAR_MANO:\s*([\s\S]*?)\]/i);
   if (!match) return null;
-  let left: string | undefined;
-  let right: string | undefined;
+  let left: ReachRequest | undefined;
+  let right: ReachRequest | undefined;
   let durationMs = defaultDurationMs;
   for (const part of match[1].split(",").map((p) => p.trim()).filter(Boolean)) {
     const [rawKey, rawValue] = part.split("=").map((s) => s.trim());
@@ -86,10 +106,43 @@ export function parseReachMarker(text: string, defaultDurationMs: number): Parse
     if (key === "duracion") {
       const num = parseFloat(value.replace(/s$/i, ""));
       if (!Number.isNaN(num) && num > 0) durationMs = num * 1000;
-    } else if (key === "izq" && REACH_PLACES[value]) left = value;
-    else if (key === "der" && REACH_PLACES[value]) right = value;
+    } else if (key === "izq") left = parseReachValue(value) ?? left;
+    else if (key === "der") right = parseReachValue(value) ?? right;
   }
   return left || right ? { left, right, durationMs } : null;
+}
+
+// Normal de la palma (sale de la palma, no del dorso), medida con la pose
+// actual: plano muñeca -> nudillo del medio, índice -> meñique. En reposo,
+// con el brazo colgando, mira hacia el cuerpo (verificado en el banco).
+export function palmNormal(vrm: VRM, side: Side): { normal: THREE.Vector3; center: THREE.Vector3 } | null {
+  const pos = (name: string) => vrm.humanoid?.getNormalizedBoneNode(name as VRMHumanBoneName)?.getWorldPosition(new THREE.Vector3()) ?? null;
+  const wrist = pos(`${side}Hand`);
+  const middle = pos(`${side}MiddleProximal`);
+  const index = pos(`${side}IndexProximal`);
+  const little = pos(`${side}LittleProximal`);
+  if (!wrist || !middle || !index || !little) return null;
+  const along = middle.clone().sub(wrist).normalize();
+  const across = index.clone().sub(little).normalize();
+  const normal = new THREE.Vector3().crossVectors(along, across).multiplyScalar(side === "left" ? 1 : -1).normalize();
+  return { normal, center: wrist.clone().lerp(middle, 0.6) };
+}
+
+// Dirección del mundo que pide cada opción de palma, desde el centro de la palma.
+function palmTargetDirection(vrm: VRM, palm: string, palmCenter: THREE.Vector3, cameraWorldPos: THREE.Vector3 | null): THREE.Vector3 | null {
+  const bonePos = (name: VRMHumanBoneName) => vrm.humanoid?.getNormalizedBoneNode(name)?.getWorldPosition(new THREE.Vector3()) ?? null;
+  const head = bonePos("head")?.add(new THREE.Vector3(0, 0.07, 0)) ?? null;
+  const chest = bonePos("chest");
+  switch (palm) {
+    case "palma_hacia_la_cara": return head ? head.sub(palmCenter).normalize() : null;
+    case "palma_hacia_el_cuerpo": return chest ? chest.sub(palmCenter).normalize() : null;
+    case "palma_afuera": return chest ? palmCenter.clone().sub(chest).normalize() : null;
+    case "palma_abajo": return new THREE.Vector3(0, -1, 0);
+    case "palma_arriba": return new THREE.Vector3(0, 1, 0);
+    case "palma_adelante": return new THREE.Vector3(0, 0, 1);
+    case "palma_hacia_ti": return cameraWorldPos ? cameraWorldPos.clone().sub(palmCenter).normalize() : new THREE.Vector3(0, 0, 1);
+    default: return null;
+  }
 }
 
 const AXES = ["x", "y", "z"] as const;
@@ -121,7 +174,28 @@ export type ReachResult = {
   // Cuánto quedó la muñeca del objetivo (cm): > 0 si el lugar no se
   // alcanza del todo sin pasar los límites humanos.
   missCm: number;
+  // Si pidió dirección de palma: cuánto quedó de esa dirección (grados).
+  palmOffDeg: number | null;
 };
+
+// Giros de antebrazo que se prueban cuando pide una dirección de palma.
+// Con el codo doblado, girar el antebrazo (LowerArm.x) también cambia el
+// plano en que dobla el codo (medido), así que para cada giro se recalcula
+// el brazo entero: la muñeca queda en el mismo lugar y solo gira la palma.
+const PALM_TWISTS_DEG = [-90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];
+// Cuánto se "cobra" apuntar mal la palma, en metros de error de muñeca por
+// radián: 1 rad (57°) de palma torcida pesa como 3 cm de mano corrida. Así
+// primero llega, y entre las que llegan elige la que mejor apunta.
+const PALM_WEIGHT_M_PER_RAD = 0.03;
+// Con palma pedida, el codo prueba una vuelta completa alrededor de la línea
+// hombro-muñeca (la mano no se mueve, la palma sí). Un codo lejos de lo
+// natural (abajo y afuera) paga un poco: no conviene levantar el codo para
+// ganar unos grados de palma.
+const PALM_SWIVEL_STEPS = 12;
+const UNNATURAL_ELBOW_M_PER_RAD = 0.012;
+// Último ajuste, solo de muñeca (no mueve la mano de lugar): grilla en los
+// rangos de Hand, en pasos de 10°.
+const WRIST_STEP_DEG = 10;
 
 // Resuelve un brazo. Mueve los huesos para medir y los deja exactamente
 // como estaban antes de volver.
@@ -132,6 +206,7 @@ export function solveReach(
   side: Side,
   placeName: string,
   cameraWorldPos: THREE.Vector3 | null,
+  palm?: string,
 ): ReachResult | null {
   const place = REACH_PLACES[placeName];
   const upName = `${side}UpperArm`;
@@ -171,12 +246,19 @@ export function solveReach(
 
     // Hacia dónde se va el antebrazo al doblar el codo 90° (para saber en
     // qué plano dobla, y alinear ese plano con el que pide el objetivo).
-    low.rotation.y = restRotation[lowName].y + (flexSign * Math.PI) / 2;
-    refresh();
-    const f90 = worldPos(hand).sub(worldPos(low)).normalize();
-    const bendRest = f90.sub(armDirRest.clone().multiplyScalar(f90.dot(armDirRest))).normalize();
-    low.rotation.y = restRotation[lowName].y;
-    refresh();
+    // Depende del giro del antebrazo: se mide para cada giro que se prueba.
+    const lowRest = restRotation[lowName];
+    const bendRestFor = (twistDeg: number) => {
+      low.rotation.set(lowRest.x + THREE.MathUtils.degToRad(twistDeg), lowRest.y + (flexSign * Math.PI) / 2, lowRest.z);
+      refresh();
+      const f90 = worldPos(hand).sub(worldPos(low)).normalize();
+      const bend = f90.sub(armDirRest.clone().multiplyScalar(f90.dot(armDirRest))).normalize();
+      low.rotation.set(lowRest.x, lowRest.y, lowRest.z);
+      refresh();
+      return bend;
+    };
+    const twists = palm ? PALM_TWISTS_DEG : [0];
+    const bendByTwist = new Map(twists.map((t) => [t, bendRestFor(t)]));
 
     const qUpRestWorld = up.getWorldQuaternion(new THREE.Quaternion());
     const qParentWorld = up.parent.getWorldQuaternion(new THREE.Quaternion());
@@ -202,10 +284,32 @@ export function solveReach(
     const dir = toDir.normalize();
     const reachable = S.clone().addScaledVector(dir, dist);
 
-    let best: { entries: ParsedMovement["entries"]; error: number } | null = null;
+    type Candidate = {
+      entries: ParsedMovement["entries"];
+      error: number;
+      score: number;
+      palmOff: number | null;
+      pose: { up: Record<"x" | "y" | "z", number>; flexDeg: number; twistDeg: number };
+    };
+    let best: Candidate | null = null;
+    const twistRange = BONE_RANGES_DEG[lowName].x;
 
-    ELBOW_POLES.forEach((poleBody, poleIndex) => {
-      const pole = bodyToWorld(poleBody).normalize();
+    // Direcciones del codo a probar: las naturales de siempre y, con palma
+    // pedida, además una vuelta completa alrededor de la línea hombro-muñeca.
+    const naturalPole = bodyToWorld(ELBOW_POLES[0]).normalize();
+    const poles: { pole: THREE.Vector3; penalty: number }[] = ELBOW_POLES.map((p, i) => ({ pole: bodyToWorld(p).normalize(), penalty: i * 0.004 }));
+    if (palm) {
+      const base = naturalPole.clone().sub(dir.clone().multiplyScalar(naturalPole.dot(dir))).normalize();
+      for (let i = 0; i < PALM_SWIVEL_STEPS; i++) {
+        const pole = base.clone().applyAxisAngle(dir, (i / PALM_SWIVEL_STEPS) * Math.PI * 2);
+        poles.push({ pole, penalty: pole.angleTo(naturalPole) * UNNATURAL_ELBOW_M_PER_RAD });
+      }
+    }
+
+    for (const twistDeg of twists) {
+    const bendRest = bendByTwist.get(twistDeg)!;
+    poles.forEach(({ pole: poleWorld, penalty }) => {
+      const pole = poleWorld.clone();
       const perp = pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));
       if (perp.lengthSq() < 1e-6) return;
       perp.normalize();
@@ -253,27 +357,96 @@ export function solveReach(
         // Comprobación real: dónde queda la muñeca con los ángulos ya
         // recortados a los rangos.
         for (const axis of AXES) up.rotation[axis] = upRest[axis] + THREE.MathUtils.degToRad(clamped[axis]);
-        low.rotation.set(restRotation[lowName].x, restRotation[lowName].y + THREE.MathUtils.degToRad(flexDeg), restRotation[lowName].z);
+        low.rotation.set(
+          lowRest.x + THREE.MathUtils.degToRad(twistDeg),
+          lowRest.y + THREE.MathUtils.degToRad(flexDeg),
+          lowRest.z,
+        );
         refresh();
-        const error = worldPos(hand).distanceTo(target) + poleIndex * 0.004;
+        const posError = worldPos(hand).distanceTo(target);
+        const error = posError + penalty;
 
-        if (!best || error < best.error) {
+        // Palma: ángulo entre hacia dónde mira y hacia dónde la pidió.
+        let palmOff: number | null = null;
+        if (palm) {
+          const measured = palmNormal(vrm, side);
+          const wanted = measured ? palmTargetDirection(vrm, palm, measured.center, cameraWorldPos) : null;
+          if (measured && wanted) palmOff = Math.acos(THREE.MathUtils.clamp(measured.normal.dot(wanted), -1, 1));
+        }
+        const score = error + (palmOff ?? 0) * PALM_WEIGHT_M_PER_RAD;
+
+        if (!best || score < best.score) {
           best = {
-            error,
+            error: posError,
+            score,
+            palmOff,
+            pose: { up: clamped, flexDeg, twistDeg },
             entries: [
               ...AXES.map((axis) => ({ bone: upName, axis, intensity: Math.round(toIntensity(clamped[axis], upRanges[axis])) })),
               { bone: lowName, axis: "y" as const, intensity: Math.round(toIntensity(flexDeg, flexRange)) },
-              { bone: lowName, axis: "x" as const, intensity: 0 },
+              { bone: lowName, axis: "x" as const, intensity: Math.round(toIntensity(twistDeg, twistRange)) },
               { bone: lowName, axis: "z" as const, intensity: 0 },
             ],
           };
         }
       }
     });
+    }
 
     if (!best) return null;
-    const chosen = best as { entries: ParsedMovement["entries"]; error: number };
-    return { entries: chosen.entries, missCm: Math.round(chosen.error * 100) };
+    const chosen = best as Candidate;
+    let entries = chosen.entries;
+    let palmOff = chosen.palmOff;
+
+    // Ajuste final solo de muñeca, si pidió palma: no mueve la mano de
+    // lugar, así que se busca aparte, con el brazo ya ubicado.
+    if (palm) {
+      const upRest = restRotation[upName];
+      for (const axis of AXES) up.rotation[axis] = upRest[axis] + THREE.MathUtils.degToRad(chosen.pose.up[axis]);
+      low.rotation.set(
+        lowRest.x + THREE.MathUtils.degToRad(chosen.pose.twistDeg),
+        lowRest.y + THREE.MathUtils.degToRad(chosen.pose.flexDeg),
+        lowRest.z,
+      );
+      const handRest = restRotation[handName];
+      const handRanges = BONE_RANGES_DEG[handName];
+      const steps = (range: [number, number]) => {
+        const values: number[] = [];
+        for (let v = range[0]; v <= range[1] + 1e-6; v += WRIST_STEP_DEG) values.push(v);
+        if (!values.includes(0)) values.push(0);
+        return values;
+      };
+      let bestWrist = { x: 0, y: 0, z: 0, off: palmOff ?? Math.PI };
+      for (const wx of steps(handRanges.x)) {
+        for (const wy of steps(handRanges.y)) {
+          for (const wz of steps(handRanges.z)) {
+            hand.rotation.set(
+              handRest.x + THREE.MathUtils.degToRad(wx),
+              handRest.y + THREE.MathUtils.degToRad(wy),
+              handRest.z + THREE.MathUtils.degToRad(wz),
+            );
+            refresh();
+            const measured = palmNormal(vrm, side);
+            const wanted = measured ? palmTargetDirection(vrm, palm, measured.center, cameraWorldPos) : null;
+            if (!measured || !wanted) continue;
+            // Un poco de preferencia por la muñeca recta: a igual palma, menos doblez.
+            const off = Math.acos(THREE.MathUtils.clamp(measured.normal.dot(wanted), -1, 1)) + (Math.abs(wx) + Math.abs(wy) + Math.abs(wz)) * 0.0005;
+            if (off < bestWrist.off) bestWrist = { x: wx, y: wy, z: wz, off };
+          }
+        }
+      }
+      palmOff = bestWrist.off;
+      entries = [
+        ...entries,
+        ...AXES.map((axis) => ({ bone: handName, axis, intensity: Math.round(toIntensity(bestWrist[axis], handRanges[axis])) })),
+      ];
+    }
+
+    return {
+      entries,
+      missCm: Math.round(chosen.error * 100),
+      palmOffDeg: palmOff === null ? null : Math.round(THREE.MathUtils.radToDeg(palmOff)),
+    };
   } finally {
     armNodes.forEach(([, node], i) => node.rotation.copy(saved[i]));
     refresh();

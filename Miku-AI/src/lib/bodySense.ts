@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { VRM, VRMHumanBoneName } from "@pixiv/three-vrm";
-import { REACH_PLACES, placeWorldPoint } from "./reach";
+import { REACH_PLACES, palmNormal, placeWorldPoint } from "./reach";
 
 // Propiocepción real: cómo QUEDÓ el cuerpo de Miku, medido en la pose (no
 // los números que ella pidió). Antes, después de moverse, recibía de vuelta
@@ -81,7 +81,34 @@ function describeArm(vrm: VRM, side: "left" | "right"): string | null {
   // En reposo (colgando, codo estirado) no hay nada que contar.
   if (elevation < 30 && elbowFlex < 15 && !handText) return null;
   const angle = where === "colgando" ? "" : ` (${Math.round(elevation)}° desde colgando)`;
-  return `- Brazo ${SIDE_LABEL_M[side]}: ${where}${angle}, ${elbowText}${handText}.`;
+  const palmText = describePalm(vrm, side);
+  return `- Brazo ${SIDE_LABEL_M[side]}: ${where}${angle}, ${elbowText}${handText}${palmText ? `; ${palmText}` : ""}.`;
+}
+
+// Hacia dónde mira la palma, en palabras: primero si mira a la cara o al
+// cuerpo (cuando la mano está cerca), si no, la dirección que más pesa.
+function describePalm(vrm: VRM, side: "left" | "right"): string | null {
+  const palm = palmNormal(vrm, side);
+  if (!palm) return null;
+  const s = side === "left" ? 1 : -1;
+  const pos = (name: VRMHumanBoneName) => vrm.humanoid?.getNormalizedBoneNode(name)?.getWorldPosition(new THREE.Vector3()) ?? null;
+  const head = pos("head")?.add(new THREE.Vector3(0, 0.07, 0));
+  const chest = pos("chest");
+  const facing = (point: THREE.Vector3 | null | undefined, maxDist: number) =>
+    !!point && point.distanceTo(palm.center) < maxDist && palm.normal.dot(point.clone().sub(palm.center).normalize()) > 0.6;
+  if (facing(head, 0.3)) return "la palma mira hacia tu cara";
+  if (facing(chest, 0.35)) return "la palma mira hacia tu cuerpo";
+  const n = palm.normal;
+  const options: [number, string][] = [
+    [n.y, "hacia arriba"],
+    [-n.y, "hacia abajo"],
+    [n.z, "hacia adelante"],
+    [-n.z, "hacia atrás"],
+    [s * n.x, "hacia afuera"],
+    [-s * n.x, "hacia adentro"],
+  ];
+  options.sort((a, b) => b[0] - a[0]);
+  return `la palma mira ${options[0][1]}`;
 }
 
 // Giro de `child` respecto de `parent`, en los ejes de siempre (x = arriba,

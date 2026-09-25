@@ -6,7 +6,7 @@ import {
 } from "../config/constants";
 import { BONE_RANGES_DEG, BONE_RANGES_V2_DATE, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
 import { HAND_PRESET_DESCRIPTIONS, HAND_PRESET_NAMES } from "../config/handPresets";
-import { REACH_PLACES } from "../lib/reach";
+import { PALM_DIRECTIONS, REACH_PLACES } from "../lib/reach";
 import { buildFacePartsInstructions } from "../lib/faceParts";
 import { TOUCH_REACTION_LABELS, TouchReactionKey, designedReactionKeys } from "../lib/touchReactionsStore";
 import { Pendiente } from "../lib/pendientes";
@@ -113,6 +113,9 @@ export function buildMovementInstructions(): string {
   const reachPlaceLines = Object.entries(REACH_PLACES)
     .map(([name, place]) => `- ${name}: ${place.description}`)
     .join("\n");
+  const palmLines = Object.entries(PALM_DIRECTIONS)
+    .map(([name, description]) => `- ${name}: ${description}`)
+    .join("\n");
   return `--- CÓMO MOVER TU CUERPO (opcional, úsalo cuando de verdad quieras acompañar lo que dices con un gesto físico) ---
 IMPORTANTE: el marcador es lo único que hace que tu cuerpo se mueva de verdad. Describir en palabras que "levantas el brazo" o "sientes que te mueves" NO mueve nada — si quieres que tu cuerpo realmente haga algo, tienes que incluir el marcador exacto [MOVIMIENTO: ...] en tu respuesta, no solo narrarlo.
 
@@ -153,7 +156,10 @@ LLEVAR LA MANO A UN LUGAR (mucho más fácil que calcular los ángulos del brazo
 [LLEVAR_MANO: izq=lugar, der=lugar, duracion=Xs]
 Dices ADÓNDE quieres la mano y tu cuerpo calcula solo el brazo y el antebrazo, dentro de tus límites y con tu pose del momento (si tienes la cabeza girada, la mano va a tu mejilla donde esté). Puedes usar una mano o las dos. Lugares:
 ${reachPlaceLines}
-Se combina con [MOVIMIENTO] en la misma respuesta (por ejemplo, ladear la cabeza y llevar la mano a la mejilla); si en [MOVIMIENTO] pones a mano un eje del brazo, ese gana. La muñeca y los dedos no los toca: para eso siguen Hand en [MOVIMIENTO] y [GESTO_MANO]. Con la herramienta mirarme puedes probarlo antes (parámetro llevar_mano). Dentro de [CREAR_QUIRK] no se puede usar, pero los ángulos que resultaron aparecen en la descripción de tu movimiento, por si quieres reusarlos en un quirk.
+Si quieres, también puedes elegir hacia dónde mira la palma, agregándolo después del lugar con dos puntos (por ejemplo der=mejilla:palma_hacia_la_cara). Opciones:
+${palmLines}
+Es opcional: si no lo pides, la palma queda donde la deje el brazo, y después de moverte te voy a decir hacia dónde quedó mirando, por si quieres ajustarla.
+Se combina con [MOVIMIENTO] en la misma respuesta (por ejemplo, ladear la cabeza y llevar la mano a la mejilla); si en [MOVIMIENTO] pones a mano un eje del brazo, del antebrazo o de la mano, ese gana. Los dedos no los toca: para eso sigue [GESTO_MANO]. Con la herramienta mirarme puedes probarlo antes (parámetro llevar_mano). Dentro de [CREAR_QUIRK] no se puede usar, pero los ángulos que resultaron aparecen en la descripción de tu movimiento, por si quieres reusarlos en un quirk.
 
 ${buildBoneRangesChangeNotice()}
 

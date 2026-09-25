@@ -39,7 +39,7 @@ export const mirarme: ToolDefinition = {
           llevar_mano: {
             type: "string",
             description:
-              "Opcional: probar adónde llevar las manos, con la misma sintaxis de adentro de [LLEVAR_MANO] (ej. 'der=mejilla' o 'izq=cintura, der=cintura'). Se combina con 'movimiento' si pones los dos.",
+              "Opcional: probar adónde llevar las manos, con la misma sintaxis de adentro de [LLEVAR_MANO] (ej. 'der=mejilla', 'der=mejilla:palma_hacia_la_cara' o 'izq=cintura, der=cintura'). Se combina con 'movimiento' si pones los dos.",
           },
         },
         required: ["angulo", "encuadre"],
@@ -52,6 +52,12 @@ export const mirarme: ToolDefinition = {
 
     const angle = (SELF_VIEW_ANGLES.includes(args.angulo as SelfViewAngle) ? args.angulo : "cuatro") as SelfViewAngle;
     const framing = (SELF_VIEW_FRAMINGS.includes(args.encuadre as SelfViewFraming) ? args.encuadre : "cuerpo") as SelfViewFraming;
+    // Para saber con datos cuánto la usa (Sebastián lo preguntó).
+    console.log(
+      `[mirarme] ${angle}, ${framing}` +
+        (args.movimiento ? `, probando "${args.movimiento}"` : "") +
+        (args.llevar_mano ? `, manos "${args.llevar_mano}"` : ""),
+    );
     const rawMovement = String(args.movimiento ?? "").trim();
     const movementPreview = rawMovement ? parseMovementMarker(`[MOVIMIENTO: ${rawMovement}]`) : null;
     if (rawMovement && !movementPreview) {
