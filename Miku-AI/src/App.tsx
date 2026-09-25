@@ -596,8 +596,6 @@ function App() {
     canvasRef,
     headBoneRef,
     gazeOverrideRef: face.gazeOverrideRef,
-    headLookRef: movement.headLookRef,
-    isHeadPosed: movement.isHeadPosed,
   });
 
   // Captura el canvas como imagen después de que la animación probablemente
@@ -1079,8 +1077,7 @@ function App() {
     // los procesa useMovement. Kickear el quirk idle es fire-and-forget
     // (no toca nada síncronamente en este mismo frame), así que no
     // importa si corre antes o después de updateMovement().
-    // La mirada al cursor va antes: decide a dónde miran los ojos
-    // (updateFace) y cuánto acompaña la cabeza (updateMovement).
+    // La mirada al cursor va antes de updateFace: decide a dónde miran los ojos.
     cursorGaze.update();
     movement.updateMovement(now, delta, elapsed);
 

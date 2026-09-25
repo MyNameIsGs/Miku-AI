@@ -59,9 +59,6 @@ const WEIGHT_CHANGE_MIN_MS = 8000;
 const WEIGHT_CHANGE_EXTRA_MS = 7000;
 const WEIGHT_TIME_CONSTANT_S = 0.8;
 
-// Desde cuánto se considera que la cabeza tiene una pose puesta.
-const HEAD_POSED_MIN_RAD = THREE.MathUtils.degToRad(2);
-
 export function useMovement({
   movementBonesRef,
   fingerBonesRef,
@@ -86,9 +83,6 @@ export function useMovement({
   const swayStartRef = useRef<Record<string, number>>({});
   // Respiración / vaivén de cabeza del cuadro actual, por hueso y eje.
   const breathingRef = useRef(new Map<THREE.Object3D, Partial<Record<"x" | "y" | "z", number>>>());
-  // Cuánto acompaña la cabeza a la mirada cuando sigue el cursor (radianes,
-  // ya suavizado, ver useCursorGaze.ts). Se suma al vaivén de cabeza.
-  const headLookRef = useRef({ yaw: 0, pitch: 0 });
   const pendingQuirkRevertsRef = useRef<Record<string, PendingQuirkRevert>>({});
   // Mismo problema que los huesos de cuerpo (ver revertAnimatedBonesExcept),
   // pero para el wiggle de dedos: animatedHandSidesRef nunca se apagaba
@@ -129,22 +123,6 @@ export function useMovement({
       }
     })();
   }, []);
-
-  // ¿Hay una pose puesta en la cabeza o el cuello (una reacción al tacto, un
-  // quirk, un gesto de la charla)? Mientras la haya, la cabeza no acompaña
-  // al cursor (ver useCursorGaze): lo notó Sebastián al tocarle la falda --
-  // con la cabeza bajada por la reacción, empezaba a moverse siguiendo el
-  // mouse.
-  function isHeadPosed(): boolean {
-    for (const [key, transition] of Object.entries(boneTransitionsRef.current)) {
-      const [bone, axis] = key.split(".") as [string, "x" | "y" | "z"];
-      if (bone !== "head" && bone !== "neck") continue;
-      if (transition.animated) return true;
-      const rest = boneRestRotationRef.current[bone]?.[axis] ?? 0;
-      if (Math.abs(transition.targetValue - rest) > HEAD_POSED_MIN_RAD) return true;
-    }
-    return false;
-  }
 
   // Avanza el cambio de peso y mueve cadera y piernas (nadie más las
   // controla, así que se escriben directo). Devuelve cuánto está cargada
@@ -395,8 +373,8 @@ export function useMovement({
     if (headBone) {
       breathing.set(headBone, {
         ...breathing.get(headBone),
-        y: Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04 + headLookRef.current.yaw,
-        x: Math.sin(elapsed * 0.3) * 0.03 + headLookRef.current.pitch,
+        y: Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04,
+        x: Math.sin(elapsed * 0.3) * 0.03,
       });
     }
     // Cambio de peso: la columna y el pecho compensan la cadera (se suman a
@@ -524,8 +502,6 @@ export function useMovement({
 
   return {
     boneTransitionsRef,
-    headLookRef,
-    isHeadPosed,
     animatedHandSidesRef,
     customHandGesturesRef,
     scheduleMovement,

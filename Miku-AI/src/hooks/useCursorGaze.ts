@@ -2,9 +2,13 @@ import { RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { invoke } from "@tauri-apps/api/core";
 
-// Miku sigue el mouse con la mirada cuando Sebastián lo pasa cerca de ella
-// (y lo acompaña apenas con la cabeza). Si el cursor se aleja o se queda
-// quieto un rato, vuelve a su mirada de siempre.
+// Miku sigue el mouse con los ojos cuando Sebastián lo pasa cerca de ella.
+// Si el cursor se aleja o se queda quieto un rato, vuelve a su mirada de
+// siempre. Solo los ojos, a propósito: al principio la cabeza también lo
+// acompañaba, pero dejaba de hacerlo en cuanto ella tenía una pose puesta en
+// la cabeza (y las poses de una respuesta se mantienen), así que el
+// comportamiento cambiaba después de hablarle -- y a Sebastián le gustó
+// más solo con los ojos.
 //
 // La posición del cursor la da Rust (cursor_position en click_through.rs):
 // con click-through el navegador no recibe eventos del mouse, y fuera de la
@@ -20,11 +24,6 @@ const MOVED_THRESHOLD_PX = 2;
 // El punto se proyecta en un plano a esta distancia de la cara, hacia la
 // cámara: los ojos convergen a una distancia creíble.
 const PLANE_DISTANCE_M = 0.6;
-// La cabeza acompaña una fracción del ángulo, con tope.
-const HEAD_FOLLOW = 0.35;
-const HEAD_MAX_YAW = THREE.MathUtils.degToRad(12);
-const HEAD_MAX_PITCH = THREE.MathUtils.degToRad(8);
-const HEAD_SMOOTHING = 0.08;
 
 // Rayo desde la cámara por el punto del cursor (px relativos a la ventana),
 // cortado con un plano frente a la cara (perpendicular a la línea
@@ -55,13 +54,9 @@ type UseCursorGazeParams = {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   headBoneRef: RefObject<THREE.Object3D | null>;
   gazeOverrideRef: RefObject<THREE.Vector3 | null>;
-  headLookRef: RefObject<{ yaw: number; pitch: number }>;
-  // Con una pose puesta en la cabeza (reacción, quirk, gesto), la cabeza no
-  // acompaña al cursor; los ojos sí.
-  isHeadPosed: () => boolean;
 };
 
-export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideRef, headLookRef, isHeadPosed }: UseCursorGazeParams) {
+export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideRef }: UseCursorGazeParams) {
   const targetRef = useRef<THREE.Vector3 | null>(null);
   const lastPosRef = useRef<[number, number] | null>(null);
   const lastMoveRef = useRef(0);
@@ -107,24 +102,9 @@ export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideR
     return cursorToWorldPoint(x, y, camera, canvas.getBoundingClientRect(), head);
   }
 
-  // Cada cuadro (antes de updateFace y updateMovement).
+  // Cada cuadro, antes de updateFace: a dónde miran los ojos.
   function update() {
-    const target = targetRef.current;
-    gazeOverrideRef.current = target;
-
-    let yaw = 0;
-    let pitch = 0;
-    const head = headBoneRef.current;
-    if (target && head && !isHeadPosed()) {
-      const d = target.clone().sub(head.getWorldPosition(new THREE.Vector3()));
-      // Miku mira a +z con su izquierda en +x: girar a su izquierda es y+,
-      // mirar arriba es x+ (ver la tabla de ejes del prompt).
-      yaw = THREE.MathUtils.clamp(Math.atan2(d.x, d.z) * HEAD_FOLLOW, -HEAD_MAX_YAW, HEAD_MAX_YAW);
-      pitch = THREE.MathUtils.clamp(Math.atan2(d.y, Math.hypot(d.x, d.z)) * HEAD_FOLLOW, -HEAD_MAX_PITCH, HEAD_MAX_PITCH);
-    }
-    const look = headLookRef.current;
-    look.yaw += (yaw - look.yaw) * HEAD_SMOOTHING;
-    look.pitch += (pitch - look.pitch) * HEAD_SMOOTHING;
+    gazeOverrideRef.current = targetRef.current;
   }
 
   return { update, targetRef };
