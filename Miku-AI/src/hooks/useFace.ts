@@ -19,6 +19,9 @@ const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
 // lento de los ojos): tiene que sentirse como que lo sigue con la vista.
 const CURSOR_GAZE_SMOOTHING = 0.15;
 
+// Expresiones armadas que cierran los ojos (ver updateFace).
+const EYE_CLOSING_EXPRESSIONS = ["happy", "relaxed"];
+
 const VISEME_SHAPES = ["aa", "ih", "ou", "ee", "oh"];
 // Cuánto tarda la boca en recorrer la mitad del camino hacia la forma
 // siguiente (ver setViseme). Más alto = más suave pero más "perezosa":
@@ -135,19 +138,17 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
 
     const expressionWeights = expressionWeightsRef.current;
     const blinkState = blinkStateRef.current;
-    const expressionActive =
-      activeExpressionRef.current !== "neutral" ||
-      Object.values(expressionWeights).some((w) => w > 0.05) ||
-      Object.values(facePartWeightsRef.current).some((w) => w > 0.05);
 
+    // Parpadea siempre, también con una expresión puesta (antes no: con una
+    // expresión activa -- o sea, casi siempre que hablaba -- tenía los ojos
+    // fijos). Las expresiones que cierran los ojos apagan el parpadeo solas,
+    // en la misma medida (overrideBlink), así no se superponen.
     if (!blinkState.isBlinking) {
-      if (!expressionActive) {
-        blinkState.nextBlinkTime -= delta;
-        if (blinkState.nextBlinkTime <= 0) {
-          blinkState.isBlinking = true;
-          blinkState.blinkElapsed = 0;
-          blinkState.currentBlinkDuration = 0.12 + Math.random() * 0.08;
-        }
+      blinkState.nextBlinkTime -= delta;
+      if (blinkState.nextBlinkTime <= 0) {
+        blinkState.isBlinking = true;
+        blinkState.blinkElapsed = 0;
+        blinkState.currentBlinkDuration = 0.12 + Math.random() * 0.08;
       }
     } else {
       blinkState.blinkElapsed += delta;
@@ -182,6 +183,13 @@ export function useFace({ vrmRef, gazeTargetObjectRef }: UseFaceParams) {
     }
     if (!facePartsRegisteredRef.current && vrmRef.current) {
       registerFaceParts(vrmRef.current);
+      // "happy" cierra los ojos en >< y "relaxed" en ^^ (medido en render):
+      // mientras estén puestas, el parpadeo se apaga en la misma medida, en
+      // vez de superponerse a unos ojos ya cerrados.
+      for (const name of EYE_CLOSING_EXPRESSIONS) {
+        const expression = expressionManager.getExpression(name);
+        if (expression) expression.overrideBlink = "blend";
+      }
       facePartsRegisteredRef.current = true;
     }
     const partWeights = facePartWeightsRef.current;
