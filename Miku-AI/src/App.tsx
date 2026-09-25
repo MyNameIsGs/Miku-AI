@@ -44,6 +44,7 @@ import { useSleep } from "./hooks/useSleep";
 import { useMusicSway } from "./hooks/useMusicSway";
 import { useWindowWind } from "./hooks/useWindowWind";
 import { readDroppedFile } from "./lib/droppedFile";
+import { recordLatency } from "./lib/latencyLog";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -623,6 +624,8 @@ function App() {
 
   async function askMiku(userMessage: string, imageDataUrl?: string | null) {
     if (!isVoiceReady) return;
+    // B4: tiempos de cada tramo (ver lib/latencyLog.ts).
+    const marks = { start: performance.now(), llmStart: 0, llmEnd: 0, speakStart: 0, audioStart: 0 };
     // A6: si la cortó con ⏹ (antes de cualquier await: si ella sigue
     // hablando, queda registrado que él le escribió encima).
     const talkSignals = takeTalkSignals();
@@ -747,6 +750,7 @@ function App() {
       const userContent: ChatContent =
         contentParts.length > 1 ? contentParts : userMessage;
 
+      marks.llmStart = performance.now();
       const toolCycle = await runToolCallingCycle(
         OPENROUTER_MODEL,
         [
@@ -761,6 +765,7 @@ function App() {
         },
       );
 
+      marks.llmEnd = performance.now();
       let reply = toolCycle.finalContent || "No obtuve respuesta.";
 
       await memoryFiles.processMemoryMarkers(reply);
@@ -922,10 +927,13 @@ function App() {
       // voz, que también tarda.
       let revealStarted = false;
       const liveReply = beginReply(reply, userMessage);
+      marks.speakStart = performance.now();
       await speech.speak(reply, messagePitch, messageRate, expression, (partial) => {
         if (!revealStarted) {
           revealStarted = true;
           setIsThinking(false);
+          marks.audioStart = performance.now();
+          recordLatency(marks, voiceMutedRef.current);
         }
         noteRevealProgress(liveReply, partial);
         setLlmResponse(partial);
