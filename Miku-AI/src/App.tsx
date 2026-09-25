@@ -41,6 +41,7 @@ import { retrieveKnowledge, takeKnowledgeEditFeedback } from "./lib/knowledge";
 import { beginReply, endReply, noteInterruption, noteRevealProgress, takeTalkSignals } from "./lib/talkSignals";
 import { loadRecentChatHistory, saveChatHistory } from "./lib/chatHistory";
 import { useSleep } from "./hooks/useSleep";
+import { useMusicSway } from "./hooks/useMusicSway";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -958,6 +959,7 @@ function App() {
     // ahora los procesa useIdleQuirks.
     idleQuirks.checkIdleQuirk(now);
     sleep.check(now);
+    musicSway.update(now);
 
     // poner_recordatorio: chequeo liviano (solo timestamps en memoria) de
     // recordatorios vencidos, independiente del intervalo de 2.5 minutos
@@ -1218,6 +1220,17 @@ function App() {
     showExpressionFor: face.showExpressionFor,
     isSpeakingRef: face.isSpeakingRef,
     lastInteractionTimeRef: idleQuirks.lastInteractionTimeRef,
+    processMemoryMarkers: memoryFiles.processMemoryMarkers,
+  });
+
+  // Punto 5b: se mueve con la música que suena en la PC (ver useMusicSway.ts).
+  const musicSway = useMusicSway({
+    scheduleMovement: movement.scheduleMovement,
+    releaseQuirkRevertsNow: movement.releaseQuirkRevertsNow,
+    boneTransitionsRef: movement.boneTransitionsRef,
+    showExpressionFor: face.showExpressionFor,
+    isSpeakingRef: face.isSpeakingRef,
+    asleepRef: sleep.asleepRef,
     processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
 

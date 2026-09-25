@@ -12,6 +12,7 @@ import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { parseMarkers } from "../lib/markers";
 import { parseRequestedFace } from "../lib/faceParts";
 import { processSleepRedesignMarkers } from "../lib/sleepStore";
+import { processMusicRedesignMarkers } from "../lib/musicStore";
 import { loadMemoryContext } from "../lib/memory";
 import { describeSelfMovement } from "../lib/proprioception";
 import {
@@ -383,6 +384,7 @@ export function useIdleQuirks({
       for (const r of replies) {
         await processRedesignMarkers(r);
         await processSleepRedesignMarkers(r);
+        await processMusicRedesignMarkers(r);
       }
 
       const spoken = replies

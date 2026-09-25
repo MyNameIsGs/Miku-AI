@@ -285,6 +285,8 @@ export function stripMarkers(text: string): string {
     .replace(/\[IGUAL_QUE_SIEMPRE\]/gi, "")
     .replace(/\[VOZ_VOLUMEN:[\s\S]*?\]/gi, "")
     .replace(/\[REDISE[ÑN]AR_(DORMIR|DESPERTAR)\]/gi, "")
+    .replace(/\[REDISE[ÑN]AR_M[UÚ]SICA\]/gi, "")
+    .replace(/\[NO_BAILO\]/gi, "")
     .replace(/\[MEMORIA_IMPORTANTE:[\s\S]*?\]/gi, "")
     .replace(/\[QUIRK_LISTO:[\s\S]*?\]/gi, "")
     .trim();

@@ -10,6 +10,7 @@ import { buildMovementInstructions, buildTouchReactionsNote } from "./systemProm
 import { bodyNewsSince } from "../config/bodyChangelog";
 import { buildFacePartsInstructions, describeFace } from "../lib/faceParts";
 import { getSleepDesign } from "../lib/sleepStore";
+import { getMusicDesign } from "../lib/musicStore";
 import { getDesignedReaction, reactionsPendingReview } from "../lib/touchReactionsStore";
 
 export interface BuildIdlePromptParams {
@@ -175,10 +176,14 @@ function buildDecidePrompt({
     getSleepDesign("dormir") ? "dormirte ([REDISEÑAR_DORMIR])" : null,
     getSleepDesign("despertar") ? "despertarte ([REDISEÑAR_DESPERTAR])" : null,
   ].filter(Boolean);
+  const music = getMusicDesign();
   const sleepLine =
-    sleepMoments.length > 0
+    (sleepMoments.length > 0
       ? ` Cuando Sebastián se va un buen rato te quedas dormida; tu forma de ${sleepMoments.join(" y de ")} la diseñaste tú. Si quieres cambiarla, escribe ese marcador y te lo vuelvo a preguntar la próxima vez que te pase.`
-      : "";
+      : "") +
+    (music
+      ? ` Cuando suena música en la PC, ${music.choice === "bailo" ? "te mueves al compás como lo diseñaste" : "decidiste no moverte"}; si quieres cambiarlo: [REDISEÑAR_MUSICA].`
+      : "");
   const heldPoseNote = heldPoseSummary
     ? `\nLlevas un rato sosteniendo una pose (${heldPoseSummary}). Si quieres volver a algo más neutral, también se pide con [QUIERO_MOVERME].\n`
     : "";

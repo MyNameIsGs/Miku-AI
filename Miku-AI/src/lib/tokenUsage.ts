@@ -24,6 +24,7 @@ export type CallKind =
   | "buscar en web"
   | "consolidar memoria"
   | "diseñar sueño"
+  | "diseñar música"
   | "otro";
 
 type Totals = { calls: number; prompt: number; completion: number; cost: number };
