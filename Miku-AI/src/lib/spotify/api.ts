@@ -20,6 +20,8 @@ export type SpotifyAlbum = {
 
 export type SpotifyNowPlaying = {
   isPlaying: boolean;
+  // Id de la canción (para recordar qué baile eligió Miku con ella).
+  id?: string | null;
   track: string | null;
   artists: string | null;
 };
@@ -338,6 +340,7 @@ export async function getNowPlaying(): Promise<SpotifyNowPlaying> {
   const artists: { name: string }[] = item.artists ?? [];
   return {
     isPlaying: Boolean(data.is_playing),
+    id: item.id ?? null,
     track: item.name ?? null,
     artists: artists.length > 0 ? artists.map((a) => a.name).join(", ") : null,
   };

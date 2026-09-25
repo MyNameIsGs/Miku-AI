@@ -287,6 +287,7 @@ export function stripMarkers(text: string): string {
     .replace(/\[REDISE[ÑN]AR_(DORMIR|DESPERTAR)\]/gi, "")
     .replace(/\[REDISE[ÑN]AR_M[UÚ]SICA\]/gi, "")
     .replace(/\[NO_BAILO\]/gi, "")
+    .replace(/\[(NUEVO_BAILE|BAILE|AL_GOLPE|OLVIDAR_BAILE):[\s\S]*?\]/gi, "")
     .replace(/\[MEMORIA_IMPORTANTE:[\s\S]*?\]/gi, "")
     .replace(/\[QUIRK_LISTO:[\s\S]*?\]/gi, "")
     .trim();
