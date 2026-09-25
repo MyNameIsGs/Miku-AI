@@ -42,6 +42,7 @@ import { beginReply, endReply, noteInterruption, noteRevealProgress, takeTalkSig
 import { loadRecentChatHistory, saveChatHistory } from "./lib/chatHistory";
 import { useSleep } from "./hooks/useSleep";
 import { useMusicSway } from "./hooks/useMusicSway";
+import { useWindowWind } from "./hooks/useWindowWind";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -960,6 +961,7 @@ function App() {
     idleQuirks.checkIdleQuirk(now);
     sleep.check(now);
     musicSway.update(now);
+    windowWind.update(delta);
 
     // poner_recordatorio: chequeo liviano (solo timestamps en memoria) de
     // recordatorios vencidos, independiente del intervalo de 2.5 minutos
@@ -1222,6 +1224,9 @@ function App() {
     lastInteractionTimeRef: idleQuirks.lastInteractionTimeRef,
     processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
+
+  // Punto 6: el pelo y la falda reaccionan al arrastrar la ventana.
+  const windowWind = useWindowWind(vrmRef);
 
   // Punto 5b: se mueve con la música que suena en la PC (ver useMusicSway.ts).
   const musicSway = useMusicSway({

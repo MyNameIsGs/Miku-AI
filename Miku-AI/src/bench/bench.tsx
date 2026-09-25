@@ -23,6 +23,7 @@ import { BONE_RANGES_DEG } from "../config/boneRanges";
 import { captureSelfView } from "../lib/selfView";
 import { solveReach } from "../lib/reach";
 import { describeBodyNow } from "../lib/bodySense";
+import { applyWind } from "../hooks/useWindowWind";
 
 const HELP = `Banco de Miku -- en la consola, window.bt:
   bt.ready()                        modelo cargado
@@ -35,6 +36,7 @@ const HELP = `Banco de Miku -- en la consola, window.bt:
   bt.shot(nombre, ángulo?, encuadre?) foto a bench-shots/<nombre>.jpg
   bt.faceStep(segundos, now)        avanza la cara sin cambiar la expresión
   bt.face                           el hook useFace completo
+  bt.wind(x, y, segundos)          viento en pelo y falda (cm que se movieron)
   bt.bone(nombre)                   {node, rest} del hueso que mueve useMovement
   bt.morphs([nombres])              influencia real de morphs de la cara (0-1)
   bt.movement                       el hook useMovement completo`;
@@ -105,6 +107,35 @@ function Bench() {
       (solveReach as any)(vrmRef.current!, movementBonesRef.current, boneRestRotationRef.current, side, place, cameraRef.current!.position.clone(), palm),
     describe: () => describeBodyNow(vrmRef.current!),
     vrm: () => vrmRef.current,
+    // Viento en el pelo y la falda (como al arrastrar la ventana): aplica
+    // `wind` y avanza la física `seconds` a 60 fps. Devuelve cuánto se
+    // movieron (cm) las puntas de pelo y falda respecto de sin viento.
+    wind: (x: number, y: number, seconds: number) => {
+      const vrm = vrmRef.current!;
+      const originals = new Map();
+      const tips = () => {
+        const out: THREE.Vector3[] = [];
+        for (const joint of vrm.springBoneManager!.joints) out.push(joint.bone.getWorldPosition(new THREE.Vector3()));
+        return out;
+      };
+      const step = (n: number) => {
+        for (let i = 0; i < n; i++) vrm.update(1 / 60);
+      };
+      applyWind(vrm, originals, new THREE.Vector3(0, 0, 0));
+      step(120);
+      const calm = tips();
+      applyWind(vrm, originals, new THREE.Vector3(x, y, 0));
+      step(seconds * 60);
+      const windy = tips();
+      applyWind(vrm, originals, new THREE.Vector3(0, 0, 0));
+      step(120);
+      const back = tips();
+      const moved = windy.map((p, i) => p.distanceTo(calm[i]) * 100);
+      const returned = back.map((p, i) => p.distanceTo(calm[i]) * 100);
+      const max = (a: number[]) => +Math.max(...a).toFixed(1);
+      const dx = windy.reduce((s, p, i) => s + (p.x - calm[i].x), 0) / windy.length;
+      return { joints: moved.length, movedMaxCm: max(moved), meanDxCm: +(dx * 100).toFixed(1), returnedMaxCm: max(returned) };
+    },
     // El mismo nodo que mueve useMovement, y su rotación de reposo.
     bone: (name: string) => ({ node: movementBonesRef.current[name], rest: boneRestRotationRef.current[name] }),
     face,
