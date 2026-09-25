@@ -16,12 +16,22 @@ import { buildMusicDesignPrompt } from "../prompts/musicPrompt";
 type MusicBeat = { bpm: number; confidence: number; level: number; lastBeatMsAgo: number };
 
 // Pulso claro: más de esto, sostenido, es música con ritmo. Medido: bombo
-// sintético 0,89-0,95, una pista real por el loopback 0,81-0,86, voz 0,35,
-// ruido 0,21. Por debajo de OFF, sostenido, se apaga (histéresis).
+// sintético 0,89-0,95, una pista de prueba por el loopback 0,81-0,86, voz
+// 0,35, ruido 0,21. Arranca con pulso claro; una vez sonando, sigue
+// mientras haya sonido (en vivo, una canción real bajaba del umbral en
+// sus partes suaves y se cortaba sola -- reporte de Sebastián). Se apaga
+// con silencio real sostenido (más que la pausa entre canciones) o si pasa
+// mucho rato sin ningún pulso (ya no es música: un video hablado).
 const CONFIDENCE_ON = 0.5;
-const CONFIDENCE_OFF = 0.4;
 const ON_AFTER_MS = 4000;
-const OFF_AFTER_MS = 3000;
+const SILENCE_OFF_AFTER_MS = 5000;
+const NO_PULSE_CONFIDENCE = 0.3;
+const NO_PULSE_OFF_AFTER_MS = 20000;
+// Solo con lecturas así de claras se toman el tempo y la fase; en una
+// parte dudosa se sigue con el último compás bueno.
+const CONFIDENCE_TRUST = 0.45;
+// Resumen en la terminal cada tanto mientras suena (para calibrar).
+const SUMMARY_EVERY_MS = 15000;
 // Menos volumen que esto no cuenta (una pestaña de fondo casi muda).
 const LEVEL_MIN = 0.003;
 // Si Rust deja de mandar, se da por terminada.
@@ -56,7 +66,12 @@ export function useMusicSway({
   const beatRef = useRef<(MusicBeat & { at: number }) | null>(null);
   const musicOnRef = useRef(false);
   const aboveSinceRef = useRef<number | null>(null);
-  const belowSinceRef = useRef<number | null>(null);
+  const silentSinceRef = useRef<number | null>(null);
+  const noPulseSinceRef = useRef<number | null>(null);
+  // El último compás confiable: bpm y cuándo cayó su último golpe.
+  const trustedRef = useRef<{ bpm: number; lastBeatAt: number } | null>(null);
+  const summaryRef = useRef({ since: 0, n: 0, conf: 0, level: 0, trusted: 0 });
+  const lastSummaryAtRef = useRef(0);
   // El vaivén en curso: qué huesos, a qué tempo, y el período del ciclo.
   const swayRef = useRef<{ keys: string[]; bpm: number; cycleMs: number } | null>(null);
   const lastResyncRef = useRef(0);
@@ -157,70 +172,123 @@ export function useMusicSway({
     });
   }
 
+  function log(msg: string) {
+    console.log(msg);
+    invoke("log_to_terminal", { msg }).catch(() => {});
+  }
+
+  // Mismo tempo, o el doble / la mitad (un error típico de estimación en
+  // canciones reales): el vaivén no cambia a la vista, no se reprograma.
+  function sameTempo(a: number, b: number) {
+    return [1, 2, 0.5].some((k) => Math.abs(a - b * k) / (b * k) <= TEMPO_CHANGE_RATIO);
+  }
+
+  function setMusicOff(reason: string) {
+    musicOnRef.current = false;
+    aboveSinceRef.current = null;
+    trustedRef.current = null;
+    log(`[Música] Paró la música (${reason}).`);
+    stopSway();
+  }
+
   // Se llama en cada cuadro; casi siempre no hace nada.
   function update(now: number) {
     const beat = beatRef.current;
-    const fresh = beat && now - beat.at < STALE_AFTER_MS;
+    const fresh = !!beat && now - beat.at < STALE_AFTER_MS;
 
+    // Una lectura nueva (~4 por segundo): estado de la música y compás.
     // Mientras habla, su propia voz ensucia lo que escucha: no se decide nada.
-    if (!isSpeakingRef.current) {
-      const strong = !!fresh && beat!.confidence >= CONFIDENCE_ON && beat!.level >= LEVEL_MIN;
-      const weak = !fresh || beat!.confidence < CONFIDENCE_OFF || beat!.level < LEVEL_MIN;
+    if (fresh && beat && !isSpeakingRef.current && beat.at !== summaryRef.current.since) {
+      summaryRef.current.since = beat.at;
+      const sound = beat.level >= LEVEL_MIN;
+      if (beat.confidence >= CONFIDENCE_TRUST && sound) {
+        trustedRef.current = { bpm: beat.bpm, lastBeatAt: beat.at - beat.lastBeatMsAgo };
+      }
       if (!musicOnRef.current) {
+        const strong = beat.confidence >= CONFIDENCE_ON && sound;
         aboveSinceRef.current = strong ? (aboveSinceRef.current ?? now) : null;
         if (aboveSinceRef.current !== null && now - aboveSinceRef.current >= ON_AFTER_MS) {
           musicOnRef.current = true;
-          belowSinceRef.current = null;
-          console.log(`[Música] Suena música (~${Math.round(beat!.bpm)} BPM).`);
+          silentSinceRef.current = null;
+          noPulseSinceRef.current = null;
+          summaryRef.current = { since: beat.at, n: 0, conf: 0, level: 0, trusted: 0 };
+          lastSummaryAtRef.current = now;
+          log(`[Música] Suena música (~${Math.round(beat.bpm)} BPM, confianza ${beat.confidence.toFixed(2)}).`);
         }
       } else {
-        belowSinceRef.current = weak ? (belowSinceRef.current ?? now) : null;
-        if (belowSinceRef.current !== null && now - belowSinceRef.current >= OFF_AFTER_MS) {
-          musicOnRef.current = false;
-          aboveSinceRef.current = null;
-          console.log("[Música] Paró la música.");
-          stopSway();
+        silentSinceRef.current = sound ? null : (silentSinceRef.current ?? now);
+        noPulseSinceRef.current = beat.confidence < NO_PULSE_CONFIDENCE ? (noPulseSinceRef.current ?? now) : null;
+        const sum = summaryRef.current;
+        sum.n++;
+        sum.conf += beat.confidence;
+        sum.level += beat.level;
+        if (beat.confidence >= CONFIDENCE_TRUST) sum.trusted++;
+        if (silentSinceRef.current !== null && now - silentSinceRef.current >= SILENCE_OFF_AFTER_MS) {
+          setMusicOff("silencio");
+          return;
+        }
+        if (noPulseSinceRef.current !== null && now - noPulseSinceRef.current >= NO_PULSE_OFF_AFTER_MS) {
+          setMusicOff(`sin pulso ${NO_PULSE_OFF_AFTER_MS / 1000} s`);
+          return;
+        }
+        if (now - lastSummaryAtRef.current >= SUMMARY_EVERY_MS && sum.n > 0) {
+          log(
+            `[Música] Sigue: confianza media ${(sum.conf / sum.n).toFixed(2)}, nivel ${(sum.level / sum.n).toFixed(3)}, ` +
+              `${Math.round((sum.trusted / sum.n) * 100)} % de lecturas confiables, compás ${trustedRef.current ? `${Math.round(trustedRef.current.bpm)} BPM` : "ninguno"}` +
+              `${swayRef.current ? `, moviéndose (${Math.round(swayRef.current.bpm)} BPM)` : ", sin moverse"}.`,
+          );
+          lastSummaryAtRef.current = now;
+          summaryRef.current = { since: beat.at, n: 0, conf: 0, level: 0, trusted: 0 };
         }
       }
     }
+    // Rust dejó de mandar (no debería): se da por terminada.
+    if (musicOnRef.current && !fresh) {
+      setMusicOff("sin lecturas del audio");
+      return;
+    }
 
-    if (!musicOnRef.current || !fresh) return;
+    if (!musicOnRef.current) return;
     if (asleepRef.current || isGameModeActive()) {
       stopSway();
       return;
     }
     const design = getMusicDesign();
+    const trusted = trustedRef.current;
     if (!design) {
-      requestDesign(beat!.bpm);
+      if (trusted) requestDesign(trusted.bpm);
       return;
     }
-    if (design.choice !== "bailo") return;
+    if (design.choice !== "bailo" || !trusted) return;
 
     if (now - lastResyncRef.current < RESYNC_EVERY_MS && swayRef.current) return;
     lastResyncRef.current = now;
     // La cara, mientras suene (se renueva en cada revisión).
     if (design.expression) showExpressionFor(design.expression, RESYNC_EVERY_MS + 1500);
 
+    const current = { bpm: trusted.bpm, lastBeatMsAgo: now - trusted.lastBeatAt, confidence: 1, level: 1 };
     const sway = swayRef.current;
     if (sway && swayIsIntact()) {
-      // Reprograma solo si cambió el tempo; si no, corrige la fase.
-      if (Math.abs(beat!.bpm - sway.bpm) / sway.bpm > TEMPO_CHANGE_RATIO) {
-        startSway(beat!, now);
-      } else {
-        // Solo si se corrió de verdad (más de un 15 % de golpe): la
-        // estimación tiembla unos milisegundos y cada corrección es un salto.
-        const beatMs = 60000 / sway.bpm;
-        const transition = boneTransitionsRef.current[sway.keys[0]];
-        if (transition) {
-          const ourBeatAt = transition.startTime + sway.cycleMs * 0.25;
-          const ourMsSinceBeat = (((now - ourBeatAt) % beatMs) + beatMs) % beatMs;
-          let error = ourMsSinceBeat - beat!.lastBeatMsAgo;
-          error = ((error + beatMs * 1.5) % beatMs) - beatMs / 2;
-          if (Math.abs(error) > beatMs * 0.15) {
-            for (const key of sway.keys) {
-              const t = boneTransitionsRef.current[key];
-              if (t) t.startTime += error;
-            }
+      if (!sameTempo(trusted.bpm, sway.bpm)) {
+        log(`[Música] Cambió el tempo: ${Math.round(sway.bpm)} -> ${Math.round(trusted.bpm)} BPM.`);
+        startSway(current, now);
+        return;
+      }
+      // Corrige la fase solo si se corrió de verdad (más de un 15 % de
+      // golpe): la estimación tiembla unos milisegundos y cada corrección
+      // es un salto.
+      const beatMs = 60000 / sway.bpm;
+      const transition = boneTransitionsRef.current[sway.keys[0]];
+      if (transition) {
+        const ourBeatAt = transition.startTime + sway.cycleMs * 0.25;
+        const ourMsSinceBeat = (((now - ourBeatAt) % beatMs) + beatMs) % beatMs;
+        const theirMsSinceBeat = ((current.lastBeatMsAgo % beatMs) + beatMs) % beatMs;
+        let error = ourMsSinceBeat - theirMsSinceBeat;
+        error = ((error + beatMs * 1.5) % beatMs) - beatMs / 2;
+        if (Math.abs(error) > beatMs * 0.15) {
+          for (const key of sway.keys) {
+            const t = boneTransitionsRef.current[key];
+            if (t) t.startTime += error;
           }
         }
       }
@@ -228,7 +296,9 @@ export function useMusicSway({
     }
     const keys = design.entries.map((e) => `${e.bone}.${e.axis}`);
     if (othersBusy(keys, now)) return;
-    startSway(beat!, now);
+    if (sway) log("[Música] Retoma el vaivén (otro gesto había usado esos huesos).");
+    else log(`[Música] Empieza a moverse al compás (${Math.round(trusted.bpm)} BPM).`);
+    startSway(current, now);
   }
 
   return { update, musicOnRef };
