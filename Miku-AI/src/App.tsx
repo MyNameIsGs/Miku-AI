@@ -576,12 +576,16 @@ function App() {
     }
   };
 
+  // Cadera y piernas para el cambio de peso (ver useMovement); se llena
+  // cuando carga el modelo.
+  const lowerBodyRef = useRef<Record<string, THREE.Object3D | null>>({});
   const movement = useMovement({
     movementBonesRef,
     fingerBonesRef,
     boneRestRotationRef,
     chestBoneRef,
     headBoneRef,
+    lowerBodyRef,
   });
 
   const face = useFace({ vrmRef, gazeTargetObjectRef });
@@ -1208,6 +1212,14 @@ function App() {
   // una pose de prueba, se aplica a los huesos solo para la foto y después
   // cada hueso vuelve exactamente a como estaba -- el siguiente cuadro de
   // la ventana ni se entera.
+  useEffect(() => {
+    const humanoid = isVrmLoaded ? vrmRef.current?.humanoid : null;
+    if (!humanoid) return;
+    for (const name of ["hips", "leftUpperLeg", "rightUpperLeg", "leftLowerLeg", "rightLowerLeg"] as const) {
+      lowerBodyRef.current[name] = humanoid.getNormalizedBoneNode(name) ?? null;
+    }
+  }, [isVrmLoaded]);
+
   useEffect(() => {
     if (!isVrmLoaded) return;
     registerSelfViewCapturer((angle, framing, preview, fromRest) => {

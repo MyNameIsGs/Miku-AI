@@ -38,7 +38,26 @@ type UseMovementParams = {
   >;
   chestBoneRef: RefObject<THREE.Object3D | null>;
   headBoneRef: RefObject<THREE.Object3D | null>;
+  // Cadera y piernas (huesos normalizados), para el cambio de peso. Vacío
+  // hasta que carga el modelo.
+  lowerBodyRef: RefObject<Record<string, THREE.Object3D | null>>;
 };
+
+// Cambio de peso de una pierna a otra (contrapposto): la cadera se corre
+// hacia la pierna de apoyo y baja del lado libre, la columna compensa para
+// que el torso siga derecho, y la rodilla libre se afloja. Valores medidos
+// en render: con 2.7° de muslo el pie de apoyo queda exactamente donde
+// estaba (el otro se mueve 2 mm).
+const WEIGHT_HIP_TILT_DEG = 4;
+const WEIGHT_HIP_SHIFT_M = 0.02;
+const WEIGHT_LEG_COMPENSATION_DEG = 2.7;
+const WEIGHT_SPINE_DEG = 2.8;
+const WEIGHT_CHEST_DEG = 1.2;
+const WEIGHT_FREE_THIGH_DEG = 6;
+const WEIGHT_FREE_KNEE_DEG = -12;
+const WEIGHT_CHANGE_MIN_MS = 8000;
+const WEIGHT_CHANGE_EXTRA_MS = 7000;
+const WEIGHT_TIME_CONSTANT_S = 0.8;
 
 export function useMovement({
   movementBonesRef,
@@ -46,7 +65,10 @@ export function useMovement({
   boneRestRotationRef,
   chestBoneRef,
   headBoneRef,
+  lowerBodyRef,
 }: UseMovementParams) {
+  // -1 = peso en la pierna derecha, 1 = en la izquierda, 0 = repartido.
+  const weightShiftRef = useRef({ value: 0, target: 0, nextChangeAt: 0, hipsRestX: null as number | null });
   const boneTransitionsRef = useRef<Record<string, BoneTransition>>({});
   // Lo que se ve en cada hueso es la suma de tres capas: la POSE (lo que
   // interpolan las transiciones), el balanceo ambiente y la respiración /
@@ -104,6 +126,42 @@ export function useMovement({
       }
     })();
   }, []);
+
+  // Avanza el cambio de peso y mueve cadera y piernas (nadie más las
+  // controla, así que se escriben directo). Devuelve cuánto está cargada
+  // cada pierna: 1 = izquierda, -1 = derecha.
+  function updateWeightShift(now: number, delta: number): number {
+    const ws = weightShiftRef.current;
+    const bones = lowerBodyRef.current;
+    const hips = bones.hips;
+    if (!hips) return 0;
+    if (ws.hipsRestX === null) ws.hipsRestX = hips.position.x;
+    if (now >= ws.nextChangeAt) {
+      // Casi siempre sobre una pierna (así se para la gente), a veces al centro.
+      const options = [-1, 1, -1, 1, 0].filter((o) => o !== ws.target);
+      ws.target = options[Math.floor(Math.random() * options.length)];
+      ws.nextChangeAt = now + WEIGHT_CHANGE_MIN_MS + Math.random() * WEIGHT_CHANGE_EXTRA_MS;
+    }
+    ws.value += (ws.target - ws.value) * (1 - Math.exp(-Math.max(0, delta) / WEIGHT_TIME_CONSTANT_S));
+    const w = ws.value;
+    const rad = THREE.MathUtils.degToRad;
+
+    hips.position.x = ws.hipsRestX + w * WEIGHT_HIP_SHIFT_M;
+    hips.rotation.z = rad(-w * WEIGHT_HIP_TILT_DEG);
+    const free = Math.abs(w);
+    for (const side of ["left", "right"] as const) {
+      const thigh = bones[`${side}UpperLeg`];
+      const knee = bones[`${side}LowerLeg`];
+      // La pierna libre es la contraria a la que carga el peso.
+      const isFree = side === "left" ? w < 0 : w > 0;
+      if (thigh) {
+        thigh.rotation.z = rad(w * WEIGHT_LEG_COMPENSATION_DEG);
+        thigh.rotation.x = isFree ? rad(free * WEIGHT_FREE_THIGH_DEG) : 0;
+      }
+      if (knee) knee.rotation.x = isFree ? rad(free * WEIGHT_FREE_KNEE_DEG) : 0;
+    }
+    return w;
+  }
 
   // La pose actual de un hueso, sin balanceo ni respiración encima. Un
   // hueso que nunca se movió no tiene pose guardada: es lo que se ve menos
@@ -301,9 +359,10 @@ export function useMovement({
   // reverts automáticos de quirks pendientes, y las transiciones de
   // huesos en curso (oscilación senoidal para animado=si, y el balanceo
   // ambiente de ±1.5° / el wiggle de dedos para gestos animados).
-  function updateMovement(now: number, _delta: number, elapsed: number) {
+  function updateMovement(now: number, delta: number, elapsed: number) {
     const chestBone = chestBoneRef.current;
     const headBone = headBoneRef.current;
+    const w = updateWeightShift(now, delta);
 
     // Respiración y vaivén de cabeza: se escriben tal cual en un hueso que
     // no tiene pose, y se SUMAN a la pose en uno que sí (en el bucle de
@@ -320,6 +379,15 @@ export function useMovement({
         y: Math.sin(elapsed * 0.4) * 0.08 + Math.sin(elapsed * 0.17) * 0.04 + headLookRef.current.yaw,
         x: Math.sin(elapsed * 0.3) * 0.03 + headLookRef.current.pitch,
       });
+    }
+    // Cambio de peso: la columna y el pecho compensan la cadera (se suman a
+    // la pose que tengan, igual que la respiración).
+    const spineBone = movementBonesRef.current.spine;
+    if (spineBone) {
+      breathing.set(spineBone, { ...breathing.get(spineBone), z: THREE.MathUtils.degToRad(w * WEIGHT_SPINE_DEG) });
+    }
+    if (chestBone) {
+      breathing.set(chestBone, { ...breathing.get(chestBone), z: THREE.MathUtils.degToRad(w * WEIGHT_CHEST_DEG) });
     }
     for (const [node, axes] of breathing) {
       for (const axis of Object.keys(axes) as ("x" | "y" | "z")[]) {
