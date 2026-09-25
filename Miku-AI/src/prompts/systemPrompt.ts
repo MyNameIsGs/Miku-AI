@@ -48,6 +48,9 @@ export interface BuildSystemPromptParams {
   // Qué pasó con sus últimos [CORREGIR/OLVIDAR_CONOCIMIENTO] (ver
   // takeKnowledgeEditFeedback en lib/knowledge.ts), o null si nada.
   knowledgeEditFeedback?: string | null;
+  // A6: cómo vino la charla (largo de su respuesta anterior, si él la
+  // cortó, largo de su mensaje; ver lib/talkSignals.ts), o null al empezar.
+  talkSignals?: string | null;
 }
 
 // Más vieja que esto, la ventana ya no dice nada de lo que está haciendo.
@@ -219,6 +222,7 @@ export function buildSystemPrompt({
   recentTouches,
   gameContext,
   knowledgeEditFeedback,
+  talkSignals,
 }: BuildSystemPromptParams): string {
   const handPresetList = HAND_PRESET_NAMES.map((name) => `${name} (${HAND_PRESET_DESCRIPTIONS[name]})`).join(", ");
   const customGestureList =
@@ -255,6 +259,11 @@ ${memories}
 ${relevantKnowledge.length > 0 ? relevantKnowledge.join("\n\n") : "(nada guardado todavía)"}
 
 Esto no es todo lo que sabes: es una selección automática, por parecido, de tu archivo de conocimiento, que puede tener mucho más. Puede que alguna entrada no venga al caso — ignórala si es así.
+
+--- EL LARGO DE TUS RESPUESTAS ---
+Lo que respondes se dice en voz alta, como en una charla de verdad. Elige el largo como lo haría una persona: a algo casual o corto, algo corto y natural (a veces alcanza una frase); cuando de verdad hace falta más (te preguntó algo que necesita explicación, o quieres contar algo que te importa), te extiendes sin culpa. No hay un largo fijo: lo decides tú en cada momento.
+${talkSignals ? `Cómo viene la charla: ${talkSignals}
+` : ""}Estas señales son pistas, no órdenes: que te corte una vez puede ser porque ya entendió, o porque quería decirte algo. Si con el tiempo notas un patrón (por ejemplo, que cuando está jugando prefiere respuestas cortas), puedes guardarlo en tu conocimiento con GUARDAR_CONOCIMIENTO, así te vuelve cuando venga al caso.
 
 --- CÓMO ACTUALIZAR TU PROPIA MEMORIA ---
 Puedes guardar algo sobre ti misma usando estos marcadores en tu respuesta:

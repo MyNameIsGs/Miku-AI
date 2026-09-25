@@ -38,6 +38,7 @@ import { usePerfMonitor } from "./hooks/usePerfMonitor";
 import { describeGameContext } from "./lib/gameSessions";
 import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge, takeKnowledgeEditFeedback } from "./lib/knowledge";
+import { beginReply, endReply, noteInterruption, noteRevealProgress, takeTalkSignals } from "./lib/talkSignals";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -644,6 +645,7 @@ function App() {
   // que hacer; si además está hablando, primero se la corta.
   function handleSpeechDuringPlayback() {
     if (speech.isSpeaking) {
+      noteInterruption("voz");
       speech.stopSpeaking();
     }
     speechRecognition.toggleListening();
@@ -736,6 +738,9 @@ function App() {
 
   async function askMiku(userMessage: string, imageDataUrl?: string | null) {
     if (!isVoiceReady) return;
+    // A6: cómo vino la charla (antes de cualquier await: si ella sigue
+    // hablando, cuenta que él le escribió encima).
+    const talkSignals = takeTalkSignals(userMessage);
     setIsThinking(true);
     idleQuirks.lastInteractionTimeRef.current = performance.now();
     // Tarea 8.7: fire-and-forget a propósito -- no se espera, para no
@@ -808,6 +813,7 @@ function App() {
         recentTouches: consumeTouchSummary(),
         gameContext: await describeGameContext(),
         knowledgeEditFeedback: takeKnowledgeEditFeedback(),
+        talkSignals,
       });
 
       // Aplana los turnos guardados a la forma plana que espera la API,
@@ -1019,13 +1025,16 @@ function App() {
       // solo hasta que el LLM responde -- includes el tiempo de síntesis de
       // voz, que también tarda.
       let revealStarted = false;
+      const liveReply = beginReply(reply, userMessage);
       await speech.speak(reply, messagePitch, messageRate, expression, (partial) => {
         if (!revealStarted) {
           revealStarted = true;
           setIsThinking(false);
         }
+        noteRevealProgress(liveReply, partial);
         setLlmResponse(partial);
       });
+      endReply(liveReply);
 
       // Tarea 8.1: solo tras una respuesta conversacional real (no un
       // quirk idle, ni el resumen agrupado, ni un recordatorio) se abre la
@@ -1489,7 +1498,10 @@ function App() {
           {speech.isSpeaking && (
             <button
               className="icon-btn"
-              onClick={speech.stopSpeaking}
+              onClick={() => {
+                noteInterruption("botón");
+                speech.stopSpeaking();
+              }}
               title="Cortar lo que está diciendo ahora"
             >
               ⏹
