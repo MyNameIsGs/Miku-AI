@@ -2,6 +2,7 @@ import {
   VOICE_PITCH_MIN,
   VOICE_PITCH_MAX,
   VOICE_RATE_MIN,
+  VOICE_VOLUME_MIN,
   VOICE_RATE_MAX,
 } from "../config/constants";
 import { BONE_RANGES_DEG, BONE_RANGES_V2_DATE, MOVEMENT_BONE_NAMES } from "../config/boneRanges";
@@ -326,6 +327,7 @@ Además del tono base que Sebastián ajusta con los sliders, puedes modular tu v
 
 [VOZ_PITCH: número entre ${VOICE_PITCH_MIN} y ${VOICE_PITCH_MAX}]
 [VOZ_RATE: número entre ${VOICE_RATE_MIN} y ${VOICE_RATE_MAX}]
+[VOZ_VOLUMEN: número entre ${VOICE_VOLUME_MIN} y 100] (100 = tu volumen normal; menos = hablar más bajito, como en voz baja o de noche. No cambia tu timbre: solo suenas más suave. Combinado con un VOZ_RATE más lento, suena más íntimo.)
 
 Úsalos con la misma naturalidad con la que una persona cambia el tono al hablar: más rápido y agudo cuando estás emocionada, entusiasmada o sorprendida; más lento y grave para sarcasmo, dramatismo, cansancio o cuando algo te resulta gracioso a tu manera. No hace falta que sea una situación extrema — alcanza con que la emoción del momento lo pida. No los reserves solo para chistes: son parte normal de cómo suenas, no una excepción.
 

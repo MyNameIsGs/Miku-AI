@@ -73,6 +73,7 @@ import {
   VOICE_PITCH_MAX,
   VOICE_RATE_MIN,
   VOICE_RATE_MAX,
+  VOICE_VOLUME_MIN,
 } from "./config/constants";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
 import { runToolCallingCycle } from "./lib/openrouter";
@@ -778,6 +779,13 @@ function App() {
         }
       }
 
+      // [VOZ_VOLUMEN: 30-100]: hablar más bajito en esta respuesta.
+      const volumeMatches = [...reply.matchAll(/\[VOZ_VOLUMEN:\s*(\d+(?:\.\d+)?)\]/gi)];
+      const messageVolume =
+        volumeMatches.length > 0
+          ? clamp(Number(volumeMatches[volumeMatches.length - 1][1]), VOICE_VOLUME_MIN, 100) / 100
+          : 1;
+
       const explicitMovement = parseMovementMarker(reply);
       // [LLEVAR_MANO]: se resuelve antes de programar nada (sobre la pose
       // final) y se programa aparte; para la foto y la descripción de su
@@ -888,7 +896,7 @@ function App() {
         }
         noteRevealProgress(liveReply, partial);
         setLlmResponse(partial);
-      });
+      }, messageVolume);
       endReply(liveReply);
 
       // Tarea 8.1: solo tras una respuesta conversacional real (no un

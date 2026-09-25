@@ -20,6 +20,9 @@ export const VOICE_PITCH_MIN = -24;
 export const VOICE_PITCH_MAX = 48;
 export const VOICE_RATE_MIN = -60;
 export const VOICE_RATE_MAX = 100;
+// [VOZ_VOLUMEN]: lo más bajo que puede hablar (en %), para que siempre se
+// la escuche.
+export const VOICE_VOLUME_MIN = 30;
 
 export const IDLE_QUIRK_INTERVAL_MS = 150000; // 2.5 minutos
 

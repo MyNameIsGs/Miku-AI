@@ -73,6 +73,7 @@ export function useSpeech({
     rate: number,
     expression: string,
     onReveal?: (revealedText: string) => void,
+    volume: number = 1,
   ) {
     try {
       const response = await fetch("http://127.0.0.1:8899/speak", {
@@ -98,6 +99,9 @@ export function useSpeech({
       const audioBlob = new Blob([audioBytes], { type: "audio/wav" });
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      // [VOZ_VOLUMEN]: hablar más bajito (0-1). Se baja acá, en el audio
+      // final, y no en Edge: RVC no respeta bien el volumen de entrada.
+      audio.volume = Math.max(0, Math.min(1, volume));
 
       let animationFrameId: number;
 
@@ -204,6 +208,8 @@ export function useSpeech({
     // askMiku en App.tsx para el response-box; los quirks idle y los
     // recordatorios no muestran texto, así que no lo necesitan.
     onReveal?: (revealedText: string) => void,
+    // [VOZ_VOLUMEN] de esta respuesta, 0-1 (1 = normal).
+    volume: number = 1,
   ): Promise<void> {
     // Silenciado: no se toca la cola en absoluto -- si se desmutea después,
     // no hay nada "pendiente" esperando a sonar de golpe. Igual se revela
@@ -220,7 +226,7 @@ export function useSpeech({
       return Promise.resolve();
     }
 
-    const run = () => speakImmediately(text, pitch, rate, expression, onReveal);
+    const run = () => speakImmediately(text, pitch, rate, expression, onReveal, volume);
     const result = speechQueueRef.current.then(run, run);
     speechQueueRef.current = result;
     return result;
