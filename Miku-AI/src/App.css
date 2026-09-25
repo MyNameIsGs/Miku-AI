@@ -780,3 +780,20 @@ button {
   cursor: not-allowed;
   filter: grayscale(0.5);
 }
+
+/* Punto 7: aviso mientras se arrastra un archivo sobre la ventana. */
+.file-drop-hint {
+  position: absolute;
+  inset: 40px 12px 12px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed rgba(57, 197, 187, 0.9);
+  border-radius: 16px;
+  background: rgba(57, 197, 187, 0.12);
+  color: #fff;
+  font-size: 18px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 20;
+}

@@ -43,6 +43,7 @@ import { loadRecentChatHistory, saveChatHistory } from "./lib/chatHistory";
 import { useSleep } from "./hooks/useSleep";
 import { useMusicSway } from "./hooks/useMusicSway";
 import { useWindowWind } from "./hooks/useWindowWind";
+import { readDroppedFile } from "./lib/droppedFile";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
 import { captureSelfView } from "./lib/selfView";
@@ -380,6 +381,8 @@ function App() {
 
   const [llmResponse, setLlmResponse] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  // Punto 7: un archivo arrastrándose sobre la ventana (ver handleFileDrop).
+  const [fileDragOver, setFileDragOver] = useState(false);
 
   // Idea #18: indicador visual de "escuchando/pensando/hablando" en el
   // avatar de desktop -- equivalente al ícono pulsante de la pantalla
@@ -432,6 +435,34 @@ function App() {
     } catch (err) {
       console.error("Error seleccionando imagen:", err);
     }
+  };
+
+  // Punto 7: soltar una imagen o un texto sobre Miku (ver lib/droppedFile.ts).
+  // Solo archivos de afuera: el arrastre interno del panel de apps no trae
+  // "Files" y sigue su camino.
+  const handleFileDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    if (!fileDragOver) setFileDragOver(true);
+  };
+  const handleFileDrop = async (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    setFileDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (isThinking || !isVoiceReady) {
+      console.log("[Archivo] Miku está ocupada; suéltalo de nuevo en un momento.");
+      return;
+    }
+    const content = await readDroppedFile(file).catch((err) => ({ error: String(err) }));
+    if ("error" in content) {
+      setLlmResponse(`No pude leer "${file.name}": ${content.error}.`);
+      return;
+    }
+    console.log(`[Archivo] Sebastián le soltó "${file.name}".`);
+    askMiku(content.message, content.imageDataUrl);
   };
 
   // Cadera y piernas para el cambio de peso (ver useMovement); se llena
@@ -1347,7 +1378,14 @@ function App() {
       className={`app-container ${gameMode.visual !== "shown" ? `game-${gameMode.visual}` : ""}`}
       onMouseEnter={() => setShowToolbar(true)}
       onMouseLeave={() => setShowToolbar(false)}
+      onDragOver={handleFileDragOver}
+      onDragLeave={(e) => {
+        // Pasar por encima de un elemento de adentro también dispara esto.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFileDragOver(false);
+      }}
+      onDrop={handleFileDrop}
     >
+      {fileDragOver && <div className="file-drop-hint">Suéltalo para que Miku lo vea</div>}
       {showToolbar && (
         <div
           className="toolbar"
