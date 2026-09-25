@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { MCP_SERVERS } from "../lib/mcp";
+import { describeTodayUsage } from "../lib/tokenUsage";
 import { Connections } from "../hooks/useConnections";
 import { useStreamMode } from "../hooks/useStreamMode";
 import { useGameMode } from "../hooks/useGameMode";
@@ -48,6 +50,11 @@ export function ConfigPanel({
     handleConnectCalendar,
     handleDisconnectCalendar,
   } = connections;
+  // Punto 4: cuánto va gastando hoy (se lee al abrir el panel).
+  const [usageToday, setUsageToday] = useState<string | null>(null);
+  useEffect(() => {
+    describeTodayUsage().then(setUsageToday).catch(() => setUsageToday(null));
+  }, []);
   return (
     <div className="config-panel">
       <label>
@@ -206,6 +213,11 @@ export function ConfigPanel({
           {gameMode.game.active && ` (ahora: ${gameMode.game.processName})`}
         </label>
       </div>
+      {usageToday && (
+        <div className="oauth-connect-row">
+          <span title="Tokens y costo de cada llamada al modelo (detalle por tipo en la terminal, [Tokens])">{usageToday}</span>
+        </div>
+      )}
     </div>
   );
 }

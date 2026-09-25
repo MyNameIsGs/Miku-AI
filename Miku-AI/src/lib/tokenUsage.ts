@@ -116,3 +116,32 @@ export function recordUsage(kind: CallKind, usage: unknown) {
   add((pending[localDay()] ??= {}), kind, prompt, completion, cost);
   scheduleSave();
 }
+
+// Punto 4 del plan: lo de hoy, en una línea, para el panel de Config. Suma
+// lo ya guardado y lo que todavía no se guardó.
+export async function describeTodayUsage(): Promise<string> {
+  const day = localDay();
+  const totals: DayUsage = {};
+  const merge = (usage: DayUsage | undefined) => {
+    for (const [kind, t] of Object.entries(usage ?? {}) as [CallKind, Totals][]) {
+      const d = (totals[kind] ??= { calls: 0, prompt: 0, completion: 0, cost: 0 });
+      d.calls += t.calls;
+      d.prompt += t.prompt;
+      d.completion += t.completion;
+      d.cost += t.cost;
+    }
+  };
+  try {
+    const store = await load(".settings.dat", { autoSave: false });
+    merge((await store.get<Record<string, DayUsage>>(STORE_KEY))?.[day]);
+  } catch {
+    // Sin lo guardado, al menos lo de esta sesión.
+  }
+  merge(pending[day]);
+  const entries = Object.entries(totals) as [CallKind, Totals][];
+  if (entries.length === 0) return "Hoy: todavía ninguna llamada al modelo.";
+  const calls = entries.reduce((sum, [, t]) => sum + t.calls, 0);
+  const cost = entries.reduce((sum, [, t]) => sum + t.cost, 0);
+  const [topKind] = entries.sort((a, b) => b[1].cost - a[1].cost || b[1].prompt - a[1].prompt)[0];
+  return `Hoy: ${calls} llamadas al modelo, US$${cost.toFixed(3)}; lo que más gasta: ${topKind}.`;
+}
