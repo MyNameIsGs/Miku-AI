@@ -10,7 +10,7 @@ import { buildMovementInstructions, buildTouchReactionsNote } from "./systemProm
 import { bodyNewsSince } from "../config/bodyChangelog";
 import { buildFacePartsInstructions, describeFace } from "../lib/faceParts";
 import { getSleepDesign } from "../lib/sleepStore";
-import { getDances } from "../lib/musicStore";
+import { describeCategoryDances } from "../lib/musicStore";
 import { getDesignedReaction, reactionsPendingReview } from "../lib/touchReactionsStore";
 
 export interface BuildIdlePromptParams {
@@ -176,13 +176,13 @@ function buildDecidePrompt({
     getSleepDesign("dormir") ? "dormirte ([REDISEÑAR_DORMIR])" : null,
     getSleepDesign("despertar") ? "despertarte ([REDISEÑAR_DESPERTAR])" : null,
   ].filter(Boolean);
-  const danceNames = Object.keys(getDances());
+  const danceCategories = describeCategoryDances();
   const sleepLine =
     (sleepMoments.length > 0
       ? ` Cuando Sebastián se va un buen rato te quedas dormida; tu forma de ${sleepMoments.join(" y de ")} la diseñaste tú. Si quieres cambiarla, escribe ese marcador y te lo vuelvo a preguntar la próxima vez que te pase.`
       : "") +
-    (danceNames.length > 0
-      ? ` Cuando suena música en la PC eliges con cuál de tus bailes moverte según la canción (tus bailes: ${danceNames.join(", ")}). Si quieres borrar uno: [OLVIDAR_BAILE: nombre]; para empezar de cero: [REDISEÑAR_MUSICA].`
+    (danceCategories.length > 0
+      ? ` Cuando suena música en la PC te mueves según el tipo de canción, con lo que diseñaste para cada tipo: ${danceCategories.join(", ")}. Si quieres cambiar uno: [REDISEÑAR_BAILE: tipo]; todos: [REDISEÑAR_MUSICA].`
       : "");
   const heldPoseNote = heldPoseSummary
     ? `\nLlevas un rato sosteniendo una pose (${heldPoseSummary}). Si quieres volver a algo más neutral, también se pide con [QUIERO_MOVERME].\n`

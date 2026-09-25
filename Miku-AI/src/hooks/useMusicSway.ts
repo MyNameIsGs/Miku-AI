@@ -2,38 +2,36 @@ import { RefObject, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { BoneTransition, ParsedMovement } from "../types";
-import { OPENROUTER_MODEL } from "../config/constants";
 import { loadMemoryContext } from "../lib/memory";
 import { isGameModeActive } from "../lib/gameMode";
 import { designWithSelfView } from "../lib/designMoment";
-import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { getNowPlaying } from "../lib/spotify/api";
 import {
+  CATEGORY_LABELS,
   Dance,
-  describeDances,
-  getDances,
-  getSongChoice,
+  MusicCategory,
+  getCategoryDance,
   loadMusicStore,
-  saveDance,
-  saveSongChoice,
+  saveCategoryDance,
 } from "../lib/musicStore";
-import { buildDanceChoicePrompt, buildDanceDesignPrompt } from "../prompts/musicPrompt";
+import { buildCategoryDancePrompt } from "../prompts/musicPrompt";
 
 // Punto 5b del plan: Miku se mueve con la música que suena en la PC. El
 // ritmo lo detecta Rust escuchando la salida de audio (ver
 // src-tauri/src/music_beat.rs), que manda "musica" ~4 veces por segundo con
 // { bpm, confidence, level, lastBeatMsAgo }.
 //
-// Segunda versión (pedido de Sebastián): elige su baile según la canción.
-// Tiene un repertorio que arma ella (ver lib/musicStore.ts); con cada
-// canción nueva elige uno, crea uno nuevo para ese tipo de canción o decide
-// no moverse. Con Spotify sabe qué canción es (título y artista) y lo que
-// eligió queda para esa canción. Un baile va al golpe o a su propio ritmo
-// (para canciones sin golpe marcado, como una balada: ahí el detector de
-// golpes no encuentra nada, y Spotify dice que igual es música).
+// Un baile por categoría de canción (pedido de Sebastián: elegir canción
+// por canción era demasiado). La categoría sale de lo medido, sin
+// consultar al modelo: sin golpe marcado, ritmo tranquilo o ritmo movido.
+// Ella diseña un baile por categoría la primera vez que suena algo de ese
+// tipo (o decide no moverse). Spotify (currently-playing) solo sirve para
+// saber que es música aunque no tenga golpe (una balada como "Voilà") y
+// para detectar el cambio de canción.
 
 type MusicBeat = { bpm: number; confidence: number; level: number; lastBeatMsAgo: number };
 type Song = { key: string | null; label: string | null; startedAt: number };
+type Reading = { at: number; trusted: boolean; bpm: number };
 
 // Pulso claro: más de esto, sostenido, es música con ritmo. Medido: bombo
 // sintético 0,89-0,95, una pista de prueba por el loopback 0,81-0,86, voz
@@ -70,10 +68,18 @@ const SPOTIFY_POLL_SOUND_MS = 5000;
 const SPOTIFY_POLL_QUIET_MS = 15000;
 const SPOTIFY_BACKOFF_MS = 5 * 60 * 1000;
 const SPOTIFY_FRESH_MS = 20000;
-// Se elige el baile un poco después de que empieza la canción, cuando ya
-// se midió el ritmo.
-const CHOOSE_AFTER_MS = 6000;
-const CHOOSE_RETRY_AFTER_MS = 2 * 60 * 1000;
+// Categoría: se decide a los 8 s de empezar la canción (ya medido el
+// ritmo) y se revisa cada 10 s con los últimos 20 s; cambia si sale otra
+// dos veces seguidas (una intro suave que después explota).
+const CLASSIFY_AFTER_MS = 8000;
+const RECLASSIFY_EVERY_MS = 10000;
+const CLASSIFY_WINDOW_MS = 20000;
+// Menos que esta proporción de lecturas con golpe claro: sin golpe.
+const ON_BEAT_SHARE = 0.3;
+// Tempo (los menores de 70 se duplican: suelen ser la mitad del real)
+// desde el que el ritmo es movido.
+const MOVIDO_FROM_BPM = 100;
+const DESIGN_RETRY_AFTER_MS = 30 * 60 * 1000;
 
 type UseMusicSwayParams = {
   scheduleMovement: (parsed: ParsedMovement, origin: "idle", autoRevertDelayMs?: number) => void;
@@ -85,7 +91,18 @@ type UseMusicSwayParams = {
   processMemoryMarkers: (reply: string) => Promise<void>;
 };
 
-const normalizeName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, "_");
+// La categoría de un tramo de lecturas.
+export function classifyReadings(readings: Reading[]): MusicCategory {
+  const onBeat = readings.filter((r) => r.trusted);
+  if (readings.length === 0 || onBeat.length / readings.length < ON_BEAT_SHARE) return "sin_golpe";
+  const bpms = onBeat.map((r) => r.bpm).sort((a, b) => a - b);
+  let bpm = bpms[Math.floor(bpms.length / 2)];
+  // Medir la mitad del tempo es un error típico; el doble casi no pasa
+  // (el detector prefiere ~115 BPM), y una canción rápida de verdad tiene
+  // que seguir siendo movida.
+  while (bpm < 70) bpm *= 2;
+  return bpm >= MOVIDO_FROM_BPM ? "ritmo_movido" : "ritmo_tranquilo";
+}
 
 export function useMusicSway({
   scheduleMovement,
@@ -111,14 +128,16 @@ export function useMusicSway({
   const spotifyInFlightRef = useRef(false);
   const spotifyBackoffUntilRef = useRef(0);
   const lastSoundAtRef = useRef(0);
-  // La canción en curso y el baile que eligió (undefined: todavía no
-  // eligió; null: con esta no se mueve).
+  // La canción en curso, sus lecturas y su categoría.
   const songRef = useRef<Song | null>(null);
-  const choiceRef = useRef<string | null | undefined>(undefined);
-  const choosingRef = useRef(false);
-  const chooseRetryAtRef = useRef(0);
+  const readingsRef = useRef<Reading[]>([]);
+  const categoryRef = useRef<MusicCategory | null>(null);
+  const pendingCategoryRef = useRef<MusicCategory | null>(null);
+  const lastClassifyRef = useRef(0);
+  const designingRef = useRef(false);
+  const designRetryAfterRef = useRef<Partial<Record<MusicCategory, number>>>({});
   // El vaivén en curso.
-  const swayRef = useRef<{ keys: string[]; bpm: number; cycleMs: number; dance: string } | null>(null);
+  const swayRef = useRef<{ keys: string[]; bpm: number; cycleMs: number; category: MusicCategory } | null>(null);
   const lastResyncRef = useRef(0);
 
   useEffect(() => {
@@ -166,13 +185,14 @@ export function useMusicSway({
       });
   }
 
-  // Lo que se escucha, en palabras (para que ella elija o diseñe).
+  // Lo que se escucha, en palabras (para que ella diseñe).
   function describeMeasured(): string {
     const trusted = trustedRef.current;
     const level = beatRef.current?.level ?? 0;
-    const rhythm = trusted
-      ? `un golpe claro, de unos ${Math.round(trusted.bpm)} golpes por minuto`
-      : "sin un golpe marcado (tempo libre o suave, como una balada)";
+    const rhythm =
+      categoryRef.current !== "sin_golpe" && trusted
+        ? `un golpe claro, de unos ${Math.round(trusted.bpm)} golpes por minuto`
+        : "sin un golpe marcado";
     const volume = level > 0.08 ? "fuerte" : level < 0.02 ? "suave" : "a volumen medio";
     return `${rhythm}; suena ${volume}`;
   }
@@ -188,8 +208,9 @@ export function useMusicSway({
     stopSway();
     const s = spotifyPlaying(now) ? spotifyRef.current : null;
     songRef.current = { key: s?.key ?? null, label: s?.label ?? null, startedAt: now };
-    choiceRef.current = undefined;
-    chooseRetryAtRef.current = 0;
+    readingsRef.current = [];
+    categoryRef.current = null;
+    pendingCategoryRef.current = null;
     log(`[Música] ${reason}${s?.label ? `: ${s.label}` : ""}.`);
   }
 
@@ -198,112 +219,68 @@ export function useMusicSway({
     aboveSinceRef.current = null;
     trustedRef.current = null;
     songRef.current = null;
-    choiceRef.current = undefined;
+    categoryRef.current = null;
     log(`[Música] Paró la música (${reason}).`);
     stopSway();
   }
 
-  async function ask(messages: object[], kind: "música (elegir)" | "diseñar música") {
-    const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages }, { kind });
-    const data = await response.json();
-    return String(data.choices?.[0]?.message?.content ?? "");
-  }
-
-  async function designDance(name: string, forWhat: string, song: Song): Promise<boolean> {
-    const { world, personality, memories } = await loadMemoryContext();
-    const now = new Date();
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const prompt = buildDanceDesignPrompt({
-      world,
-      personality,
-      memories,
-      todayIso,
-      name,
-      forWhat,
-      song: song.label,
-      measured: describeMeasured(),
-    });
-    const result = await designWithSelfView(prompt, "diseñar música");
-    if (!result) return false;
-    for (const reply of result.replies) await processMemoryMarkers(reply);
-    const { design, replies } = result;
-    if (!design.movement?.entries.length) {
-      log(`[Música] El baile nuevo "${name}" vino sin [MOVIMIENTO]; no se guardó.`);
-      return false;
-    }
-    const alGolpeMatches = replies.flatMap((r) => [...r.matchAll(/\[AL_GOLPE:\s*(s[ií]|no)\]/gi)]);
-    const alGolpe = alGolpeMatches.length > 0
-      ? !/no/i.test(alGolpeMatches[alGolpeMatches.length - 1][1])
-      : !!trustedRef.current;
-    await saveDance(name, {
-      descripcion: forWhat || "sin descripción",
-      alGolpe,
-      expression: design.expression,
-      entries: design.movement.entries,
-      durationMs: design.movement.durationMs,
-      createdAt: new Date().toISOString(),
-    });
-    log(`[Música] Miku creó el baile "${name}" (${alGolpe ? "al golpe" : "a su ritmo"}): ${forWhat}.`);
-    return true;
-  }
-
-  // Elige el baile para la canción en curso (o crea uno nuevo).
-  async function chooseDance(song: Song) {
-    choosingRef.current = true;
+  // La primera vez que suena algo de una categoría: ella diseña su baile
+  // para ese tipo de canciones (o decide no moverse).
+  async function designCategory(category: MusicCategory, song: Song) {
+    designingRef.current = true;
     try {
-      const { world, personality } = await loadMemoryContext();
-      const reply = await ask(
-        [
-          {
-            role: "system",
-            content: buildDanceChoicePrompt({
-              world,
-              personality,
-              song: song.label,
-              measured: describeMeasured(),
-              dances: describeDances(),
-              remembered: !!song.key,
-            }),
-          },
-        ],
-        "música (elegir)",
-      );
-      let choice: string | null | undefined;
-      const picked = reply.match(/\[BAILE:\s*([^\]]+)\]/i)?.[1];
-      const created = reply.match(/\[NUEVO_BAILE:\s*([^\]|]+)\|?\s*([^\]]*)\]/i);
-      if (/\[NO_BAILO\]/i.test(reply)) {
-        choice = null;
-      } else if (picked && getDances()[normalizeName(picked)]) {
-        choice = normalizeName(picked);
-      } else if (created) {
-        const name = normalizeName(created[1]);
-        if (await designDance(name, created[2].trim(), song)) choice = name;
-      }
-      if (choice === undefined) {
-        log(`[Música] No quedó claro qué baile eligió; se vuelve a preguntar en un rato. Respuesta: ${reply.slice(0, 160)}`);
-        chooseRetryAtRef.current = performance.now() + CHOOSE_RETRY_AFTER_MS;
+      const { world, personality, memories } = await loadMemoryContext();
+      const now = new Date();
+      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const prompt = buildCategoryDancePrompt({
+        world,
+        personality,
+        memories,
+        todayIso,
+        categoryLabel: CATEGORY_LABELS[category],
+        song: song.label,
+        measured: describeMeasured(),
+      });
+      const result = await designWithSelfView(prompt, "diseñar música");
+      if (!result) throw new Error("sin respuesta");
+      for (const reply of result.replies) await processMemoryMarkers(reply);
+      const { design, replies } = result;
+      if (!design.movement && !design.expression && /\[NO_BAILO\]/i.test(replies[0])) {
+        await saveCategoryDance(category, "no");
+        log(`[Música] Con ${CATEGORY_LABELS[category]}, Miku decidió no moverse.`);
         return;
       }
-      // Si mientras tanto cambió la canción, esto ya no corresponde.
-      if (songRef.current !== song) return;
-      choiceRef.current = choice;
-      if (song.key && song.label) await saveSongChoice(song.key, choice, song.label);
-      log(`[Música] Con ${song.label ?? "esta canción"}: ${choice ? `baila "${choice}"` : "no se mueve"}.`);
+      if (!design.movement?.entries.length) {
+        throw new Error(`respuesta sin [MOVIMIENTO] ni [NO_BAILO]: ${replies[0].slice(0, 160)}`);
+      }
+      const alGolpeMatches = replies.flatMap((r) => [...r.matchAll(/\[AL_GOLPE:\s*(s[ií]|no)\]/gi)]);
+      const alGolpe =
+        alGolpeMatches.length > 0
+          ? !/no/i.test(alGolpeMatches[alGolpeMatches.length - 1][1])
+          : category !== "sin_golpe";
+      await saveCategoryDance(category, {
+        alGolpe,
+        expression: design.expression,
+        entries: design.movement.entries,
+        durationMs: design.movement.durationMs,
+        createdAt: new Date().toISOString(),
+      });
+      log(`[Música] Miku diseñó su baile para ${category} (${alGolpe ? "al golpe" : "a su ritmo"}).`);
     } catch (err) {
-      console.warn("[Música] No se pudo elegir el baile; se reintenta en un rato:", err);
-      chooseRetryAtRef.current = performance.now() + CHOOSE_RETRY_AFTER_MS;
+      console.warn(`[Música] No se pudo diseñar el baile para "${category}"; se reintenta más tarde:`, err);
+      designRetryAfterRef.current[category] = Date.now() + DESIGN_RETRY_AFTER_MS;
     } finally {
-      choosingRef.current = false;
+      designingRef.current = false;
     }
   }
 
   // Programa el vaivén. Al golpe: el extremo del vaivén cae en un golpe
   // (con 2 golpes por vaivén, un extremo en cada golpe). A su ritmo: con la
   // duración que ella eligió.
-  function startSway(name: string, dance: Dance) {
+  function startSway(category: MusicCategory, dance: Dance) {
     const keys = dance.entries.map((e) => `${e.bone}.${e.axis}`);
     const trusted = trustedRef.current;
-    if (dance.alGolpe && trusted) {
+    if (dance.alGolpe && trusted && category !== "sin_golpe") {
       const beatMs = 60000 / trusted.bpm;
       const beatsPerCycle = BEATS_PER_CYCLE_OPTIONS.reduce((best, option) =>
         Math.abs(option * beatMs - dance.durationMs) < Math.abs(best * beatMs - dance.durationMs) ? option : best,
@@ -314,10 +291,10 @@ export function useMusicSway({
         const transition = boneTransitionsRef.current[key];
         if (transition) transition.startTime = trusted.lastBeatAt - cycleMs * 0.25;
       }
-      swayRef.current = { keys, bpm: trusted.bpm, cycleMs, dance: name };
+      swayRef.current = { keys, bpm: trusted.bpm, cycleMs, category };
     } else {
       scheduleMovement({ entries: dance.entries, durationMs: dance.durationMs, animated: true }, "idle", HOLD_WHILE_MUSIC_MS);
-      swayRef.current = { keys, bpm: 0, cycleMs: dance.durationMs, dance: name };
+      swayRef.current = { keys, bpm: 0, cycleMs: dance.durationMs, category };
     }
   }
 
@@ -345,6 +322,31 @@ export function useMusicSway({
     return [1, 2, 0.5].some((k) => Math.abs(a - b * k) / (b * k) <= TEMPO_CHANGE_RATIO);
   }
 
+  // Decide (o revisa) la categoría de la canción en curso.
+  function updateCategory(now: number, song: Song) {
+    if (now - song.startedAt < CLASSIFY_AFTER_MS || now - lastClassifyRef.current < RECLASSIFY_EVERY_MS) return;
+    lastClassifyRef.current = now;
+    const recent = readingsRef.current.filter((r) => now - r.at <= CLASSIFY_WINDOW_MS);
+    const category = classifyReadings(recent);
+    if (categoryRef.current === null) {
+      categoryRef.current = category;
+      log(`[Música] Tipo de canción: ${category}.`);
+      return;
+    }
+    if (category === categoryRef.current) {
+      pendingCategoryRef.current = null;
+      return;
+    }
+    if (pendingCategoryRef.current === category) {
+      log(`[Música] La canción cambió de carácter: ${categoryRef.current} -> ${category}.`);
+      categoryRef.current = category;
+      pendingCategoryRef.current = null;
+      stopSway();
+    } else {
+      pendingCategoryRef.current = category;
+    }
+  }
+
   // Se llama en cada cuadro; casi siempre no hace nada.
   function update(now: number) {
     pollSpotify(now);
@@ -358,7 +360,8 @@ export function useMusicSway({
       summaryRef.current.since = beat.at;
       const sound = beat.level >= LEVEL_MIN;
       if (sound) lastSoundAtRef.current = now;
-      if (beat.confidence >= CONFIDENCE_TRUST && sound) {
+      const trustedNow = beat.confidence >= CONFIDENCE_TRUST && sound;
+      if (trustedNow) {
         trustedRef.current = { bpm: beat.bpm, lastBeatAt: beat.at - beat.lastBeatMsAgo };
       }
       if (!musicOnRef.current) {
@@ -374,6 +377,12 @@ export function useMusicSway({
           newSong(now, `Suena música (${onSpotify ? "Spotify" : `~${Math.round(beat.bpm)} BPM, confianza ${beat.confidence.toFixed(2)}`})`);
         }
       } else {
+        if (sound) {
+          readingsRef.current.push({ at: now, trusted: trustedNow, bpm: beat.bpm });
+          while (readingsRef.current.length > 0 && now - readingsRef.current[0].at > CLASSIFY_WINDOW_MS) {
+            readingsRef.current.shift();
+          }
+        }
         silentSinceRef.current = sound ? null : (silentSinceRef.current ?? now);
         noPulseSinceRef.current = beat.confidence < NO_PULSE_CONFIDENCE ? (noPulseSinceRef.current ?? now) : null;
         const sum = summaryRef.current;
@@ -393,8 +402,8 @@ export function useMusicSway({
           const sway = swayRef.current;
           log(
             `[Música] Sigue: confianza media ${(sum.conf / sum.n).toFixed(2)}, nivel ${(sum.level / sum.n).toFixed(3)}, ` +
-              `${Math.round((sum.trusted / sum.n) * 100)} % de lecturas confiables, compás ${trustedRef.current ? `${Math.round(trustedRef.current.bpm)} BPM` : "ninguno"}` +
-              `${sway ? `, bailando "${sway.dance}"${sway.bpm ? ` (${Math.round(sway.bpm)} BPM)` : " (a su ritmo)"}` : ", sin moverse"}.`,
+              `${Math.round((sum.trusted / sum.n) * 100)} % de lecturas confiables, tipo ${categoryRef.current ?? "(midiendo)"}` +
+              `${sway ? `, bailando${sway.bpm ? ` al compás (${Math.round(sway.bpm)} BPM)` : " a su ritmo"}` : ", sin moverse"}.`,
           );
           lastSummaryAtRef.current = now;
           summaryRef.current = { since: beat.at, n: 0, conf: 0, level: 0, trusted: 0 };
@@ -421,22 +430,17 @@ export function useMusicSway({
       return;
     }
 
-    // Qué baile: el que ya eligió para esta canción, o se le pregunta.
-    const song = songRef.current;
-    if (choiceRef.current === undefined) {
-      if (choosingRef.current || now - song.startedAt < CHOOSE_AFTER_MS || now < chooseRetryAtRef.current) return;
-      const saved = song.key ? getSongChoice(song.key) : null;
-      if (saved && (saved.baile === null || getDances()[saved.baile])) {
-        choiceRef.current = saved.baile;
-        log(`[Música] ${song.label ?? "Esta canción"}: ${saved.baile ? `baila "${saved.baile}" (lo eligió antes)` : "con esta no se mueve (lo eligió antes)"}.`);
-      } else {
-        chooseDance(song);
-        return;
+    updateCategory(now, songRef.current);
+    const category = categoryRef.current;
+    if (!category) return;
+    const dance = getCategoryDance(category);
+    if (dance === null) {
+      if (!designingRef.current && Date.now() >= (designRetryAfterRef.current[category] ?? 0)) {
+        designCategory(category, songRef.current);
       }
+      return;
     }
-    const name = choiceRef.current;
-    const dance = name ? getDances()[name] : null;
-    if (!name || !dance) return;
+    if (dance === "no") return;
 
     if (now - lastResyncRef.current < RESYNC_EVERY_MS && swayRef.current) return;
     lastResyncRef.current = now;
@@ -446,10 +450,10 @@ export function useMusicSway({
     const sway = swayRef.current;
     const trusted = trustedRef.current;
     if (sway && swayIsIntact()) {
-      if (!dance.alGolpe || !trusted) return;
+      if (!dance.alGolpe || !trusted || category === "sin_golpe") return;
       if (!sway.bpm || !sameTempo(trusted.bpm, sway.bpm)) {
         log(`[Música] Cambió el tempo: ${sway.bpm ? Math.round(sway.bpm) : "a su ritmo"} -> ${Math.round(trusted.bpm)} BPM.`);
-        startSway(name, dance);
+        startSway(category, dance);
         return;
       }
       // Corrige la fase solo si se corrió de verdad (más de un 15 % de
@@ -476,10 +480,10 @@ export function useMusicSway({
     if (othersBusy(keys, now)) return;
     log(
       sway
-        ? `[Música] Retoma "${name}" (otro gesto había usado esos huesos).`
-        : `[Música] Empieza a bailar "${name}" ${dance.alGolpe && trusted ? `al compás (${Math.round(trusted.bpm)} BPM)` : "a su ritmo"}.`,
+        ? `[Música] Retoma el baile (otro gesto había usado esos huesos).`
+        : `[Música] Empieza a bailar (${category}, ${dance.alGolpe && trusted && category !== "sin_golpe" ? `al compás, ${Math.round(trusted.bpm)} BPM` : "a su ritmo"}).`,
     );
-    startSway(name, dance);
+    startSway(category, dance);
   }
 
   return { update, musicOnRef };

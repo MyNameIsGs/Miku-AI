@@ -3,17 +3,25 @@ import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { ParsedMovement } from "../types";
 import { BONE_RANGES_VERSION } from "../config/boneRanges";
 
-// Punto 5b del plan, segunda versión (pedido de Sebastián): Miku no tiene un
-// solo baile sino un repertorio que arma ella, y elige cuál según la
-// canción (ver useMusicSway.ts). Queda acá, en la carpeta de memoria,
-// sincronizado por GitHub: sus bailes y qué eligió para cada canción de
-// Spotify (la próxima vez que suene, se hace solo).
+// Punto 5b del plan, tercera versión (pedido de Sebastián: elegir por
+// canción era demasiado, que sea por categoría y más barato). Tres
+// categorías que salen de lo que se mide del audio, sin consultar al modelo
+// (ver useMusicSway.ts); Miku diseña un baile por categoría la primera vez
+// que suena algo de ese tipo, o decide no moverse con ese tipo. Queda acá,
+// en la carpeta de memoria, sincronizado por GitHub.
+
+export const MUSIC_CATEGORIES = ["sin_golpe", "ritmo_tranquilo", "ritmo_movido"] as const;
+export type MusicCategory = (typeof MUSIC_CATEGORIES)[number];
+
+export const CATEGORY_LABELS: Record<MusicCategory, string> = {
+  sin_golpe: "canciones sin un golpe marcado (baladas, tempo libre, algo suave o lento)",
+  ritmo_tranquilo: "canciones con ritmo tranquilo (un golpe claro pero pausado)",
+  ritmo_movido: "canciones con ritmo movido (un golpe claro y rápido)",
+};
 
 export type Dance = {
-  // Para qué tipo de canción lo hizo, en sus palabras.
-  descripcion: string;
-  // true: el vaivén se ajusta al golpe de la canción; false: a su propio
-  // ritmo (canciones sin golpe marcado, como una balada).
+  // true: el vaivén se ajusta al golpe (1, 2 o 4 golpes por vaivén);
+  // false: a su propio ritmo, con la duración que eligió.
   alGolpe: boolean;
   expression: string | null;
   entries: ParsedMovement["entries"];
@@ -22,19 +30,10 @@ export type Dance = {
   rangos: number;
 };
 
-type SongChoice = { baile: string | null; titulo: string; at: string };
+// "no": decidió no moverse con ese tipo de canción.
+type Store = { version: 3; bailes: Partial<Record<MusicCategory, Dance | "no">> };
 
-type Store = {
-  version: 2;
-  bailes: Record<string, Dance>;
-  porCancion: Record<string, SongChoice>;
-};
-
-// Las canciones recordadas (las más viejas se olvidan).
-const SONGS_MAX = 300;
-
-const empty = (): Store => ({ version: 2, bailes: {}, porCancion: {} });
-let cache: Store = empty();
+let cache: Store = { version: 3, bailes: {} };
 
 async function storePath() {
   return join(await appDataDir(), "memory", "musica.json");
@@ -49,85 +48,69 @@ export async function loadMusicStore() {
     const path = await storePath();
     if (!(await exists(path))) return;
     const loaded = JSON.parse(await readTextFile(path));
-    if (loaded && loaded.version === 2) {
+    if (loaded?.version === 3) {
       cache = loaded as Store;
-    } else if (loaded && loaded.choice === "bailo") {
-      // Versión 1: un solo baile, al golpe. Pasa a ser el primero del
-      // repertorio, con su nombre.
-      cache = empty();
-      cache.bailes.mi_baile = {
-        descripcion: "el primero que diseñaste, para canciones con ritmo",
-        alGolpe: true,
-        expression: loaded.expression ?? null,
-        entries: loaded.entries ?? [],
-        durationMs: loaded.durationMs ?? 1000,
-        createdAt: loaded.createdAt ?? new Date().toISOString(),
-        rangos: loaded.rangos ?? BONE_RANGES_VERSION,
-      };
-      await persist();
-    } else {
-      // Versión 1 con [NO_BAILO] (o vacía): se empieza de cero; ahora se le
-      // pregunta por canción, y puede decir que no con cada una.
-      cache = empty();
+      return;
     }
+    // Versiones anteriores: lo que ya había diseñado no se pierde. Su primer
+    // baile al golpe queda para el ritmo movido, y uno a su ritmo (si
+    // había) para lo que no tiene golpe; el resto lo diseña por categoría.
+    cache = { version: 3, bailes: {} };
+    const old: Array<Record<string, unknown>> =
+      loaded?.version === 2
+        ? Object.values(loaded.bailes ?? {})
+        : loaded?.choice === "bailo"
+          ? [{ ...loaded, alGolpe: true }]
+          : [];
+    const toDance = (d: Record<string, unknown>): Dance => ({
+      alGolpe: Boolean(d.alGolpe),
+      expression: (d.expression as string | null) ?? null,
+      entries: (d.entries as Dance["entries"]) ?? [],
+      durationMs: (d.durationMs as number) ?? 1000,
+      createdAt: (d.createdAt as string) ?? new Date().toISOString(),
+      rangos: (d.rangos as number) ?? BONE_RANGES_VERSION,
+    });
+    const onBeat = old.find((d) => d.alGolpe);
+    const free = old.find((d) => !d.alGolpe);
+    if (onBeat) cache.bailes.ritmo_movido = toDance(onBeat);
+    if (free) cache.bailes.sin_golpe = toDance(free);
+    await persist();
   } catch (err) {
-    console.error("[Música] No se pudo cargar el repertorio de Miku:", err);
+    console.error("[Música] No se pudieron cargar los bailes de Miku:", err);
   }
 }
 
-export function getDances(): Record<string, Dance> {
-  return cache.bailes;
+export function getCategoryDance(category: MusicCategory): Dance | "no" | null {
+  return cache.bailes[category] ?? null;
 }
 
-export function getSongChoice(songKey: string): SongChoice | null {
-  return cache.porCancion[songKey] ?? null;
-}
-
-export async function saveDance(name: string, dance: Omit<Dance, "rangos">) {
-  cache.bailes[name] = { ...dance, rangos: BONE_RANGES_VERSION };
+export async function saveCategoryDance(category: MusicCategory, dance: Omit<Dance, "rangos"> | "no") {
+  cache.bailes[category] = dance === "no" ? "no" : { ...dance, rangos: BONE_RANGES_VERSION };
   await persist();
 }
 
-export async function saveSongChoice(songKey: string, baile: string | null, titulo: string) {
-  cache.porCancion[songKey] = { baile, titulo, at: new Date().toISOString() };
-  const keys = Object.keys(cache.porCancion);
-  if (keys.length > SONGS_MAX) {
-    keys
-      .sort((a, b) => cache.porCancion[a].at.localeCompare(cache.porCancion[b].at))
-      .slice(0, keys.length - SONGS_MAX)
-      .forEach((key) => delete cache.porCancion[key]);
-  }
-  await persist();
+// Para el aviso del silencio: qué categorías ya tiene resueltas.
+export function describeCategoryDances(): string[] {
+  return MUSIC_CATEGORIES.filter((c) => cache.bailes[c]).map(
+    (c) => `${c} (${cache.bailes[c] === "no" ? "no te mueves" : "tu baile"})`,
+  );
 }
 
-// Sus bailes, en una línea cada uno (para los prompts).
-export function describeDances(): string {
-  const names = Object.keys(cache.bailes);
-  if (names.length === 0) return "(todavía ninguno)";
-  return names
-    .map((name) => `- ${name}: ${cache.bailes[name].descripcion} (${cache.bailes[name].alGolpe ? "sigue el golpe" : "a tu propio ritmo"})`)
-    .join("\n");
-}
-
-// [REDISEÑAR_MUSICA]: empieza de cero (bailes y elecciones).
-// [OLVIDAR_BAILE: nombre]: borra ese baile y las canciones que lo usaban
-// (la próxima vez que suenen, vuelve a elegir).
+// [REDISEÑAR_MUSICA]: todas de cero. [REDISEÑAR_BAILE: categoría]: solo
+// esa; la próxima vez que suene algo de ese tipo, lo diseña de nuevo.
 export async function processMusicRedesignMarkers(text: string) {
   let changed = false;
   if (/\[REDISE[ÑN]AR_M[UÚ]SICA\]/i.test(text)) {
-    cache = empty();
+    cache = { version: 3, bailes: {} };
     changed = true;
-    console.log("[Música] Miku decidió empezar de cero con sus bailes.");
+    console.log("[Música] Miku decidió rediseñar todos sus bailes.");
   }
-  for (const match of text.matchAll(/\[OLVIDAR_BAILE:\s*([^\]]+)\]/gi)) {
-    const name = match[1].trim().toLowerCase();
-    if (!cache.bailes[name]) continue;
-    delete cache.bailes[name];
-    for (const key of Object.keys(cache.porCancion)) {
-      if (cache.porCancion[key].baile === name) delete cache.porCancion[key];
-    }
+  for (const match of text.matchAll(/\[REDISE[ÑN]AR_BAILE:\s*([^\]]+)\]/gi)) {
+    const category = match[1].trim().toLowerCase().replace(/\s+/g, "_") as MusicCategory;
+    if (!MUSIC_CATEGORIES.includes(category) || !cache.bailes[category]) continue;
+    delete cache.bailes[category];
     changed = true;
-    console.log(`[Música] Miku olvidó su baile "${name}".`);
+    console.log(`[Música] Miku decidió rediseñar su baile para "${category}".`);
   }
   if (changed) await persist();
 }
