@@ -282,6 +282,7 @@ export function stripMarkers(text: string): string {
     .replace(/\[QUIERO_MOVERME:[\s\S]*?\]/gi, "")
     .replace(/\[REVISAR_REACCION:[\s\S]*?\]/gi, "")
     .replace(/\[ME_GUSTA_ASI\]/gi, "")
+    .replace(/\[IGUAL_QUE_SIEMPRE\]/gi, "")
     .replace(/\[QUIRK_LISTO:[\s\S]*?\]/gi, "")
     .trim();
 }

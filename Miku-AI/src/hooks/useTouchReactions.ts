@@ -6,14 +6,18 @@ import { detectTouchZone, TouchHit, TouchZone } from "../lib/touch";
 import { recordTouch } from "../lib/touchLog";
 import {
   TouchReactionKey,
+  describeReaction,
   getDesignedReaction,
+  getReactionForMood,
   loadTouchReactions,
   mirrorEntries,
   saveDesignedReaction,
+  saveReactionVariant,
 } from "../lib/touchReactionsStore";
 import { loadMemoryContext } from "../lib/memory";
+import { Mood, getCachedMood, getCurrentMood, setMood } from "../lib/mood";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
-import { parseMovementMarker } from "../lib/markers";
+import { parseMoodMarker, parseMovementMarker } from "../lib/markers";
 import { getReachResolver, getSelfViewCapturer } from "../lib/selfViewStore";
 import { parseFaceMarker } from "../lib/faceParts";
 import { OPENROUTER_MODEL } from "../config/constants";
@@ -48,6 +52,17 @@ type Reaction = {
   // Cuánto se sostiene la pose antes de volver sola (y la expresión).
   holdMs: number;
   description: string;
+  // A8: a qué ánimo la deja este tacto, si ella decidió que la afecta.
+  moodEffect?: string | null;
+};
+
+// Ánimo en palabras, para contárselo.
+const MOOD_WORDS: Record<Mood, string> = {
+  happy: "contenta",
+  angry: "enojada",
+  sad: "triste",
+  relaxed: "relajada",
+  neutral: "tranquila, sin un ánimo en particular",
 };
 
 // Reacciones de RESPALDO, escritas a mano: se usan solo mientras Miku no
@@ -181,7 +196,12 @@ function describeForDesign(key: TouchReactionKey, side: "left" | "right" | null)
 // Lo que propuso Miku para una reacción: [EXPRESION], [MOVIMIENTO] y
 // [LLEVAR_MANO] (este último ya resuelto en ángulos, se guarda junto con el
 // resto). Nada de eso = no propuso nada.
-export function interpretDesign(reply: string): { movement: ParsedMovement | null; expression: string | null } {
+export function interpretDesign(reply: string): {
+  movement: ParsedMovement | null;
+  expression: string | null;
+  // A8: si decidió que este tacto le cambia el ánimo ([ESTADO_ANIMO]).
+  moodEffect: string | null;
+} {
   const explicitMovement = parseMovementMarker(reply);
   const reachMovement = getReachResolver()?.(reply, explicitMovement) ?? null;
   const movement =
@@ -194,7 +214,11 @@ export function interpretDesign(reply: string): { movement: ParsedMovement | nul
       : null;
   const expressionMatch = reply.match(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/i);
   const face = parseFaceMarker(reply);
-  return { movement, expression: face ?? (expressionMatch ? expressionMatch[1].toLowerCase() : null) };
+  return {
+    movement,
+    expression: face ?? (expressionMatch ? expressionMatch[1].toLowerCase() : null),
+    moodEffect: parseMoodMarker(reply),
+  };
 }
 
 // Zonas con lado: la reacción se diseña de un lado y del otro se espeja.
@@ -264,10 +288,13 @@ export function useTouchReactions({
 }: UseTouchReactionsParams) {
   useEffect(() => {
     loadTouchReactions();
+    // Deja el ánimo leído, para decidir la reacción en el mismo clic.
+    getCurrentMood().catch(() => {});
   }, []);
 
-  const designInFlightRef = useRef(new Set<TouchReactionKey>());
-  const designRetryAfterRef = useRef<Partial<Record<TouchReactionKey, number>>>({});
+  // Por reacción y ánimo ("caricia" o "caricia@sad").
+  const designInFlightRef = useRef(new Set<string>());
+  const designRetryAfterRef = useRef<Record<string, number>>({});
 
   // Mientras una reacción está en curso (ida + pose + vuelta) no se
   // programa otra: scheduleMovement guarda "a dónde volver" con el valor
@@ -295,10 +322,13 @@ export function useTouchReactions({
   // Primera vez en esta zona (o situación): se le pide a Miku que diseñe su
   // reacción, en segundo plano. Mientras, se usa el respaldo -- desde el
   // próximo toque, la suya.
-  function requestDesign(key: TouchReactionKey, side: "left" | "right" | null) {
-    if (designInFlightRef.current.has(key)) return;
-    if (Date.now() < (designRetryAfterRef.current[key] ?? 0)) return;
-    designInFlightRef.current.add(key);
+  // A8: con un ánimo distinto de neutral, es la primera vez que le pasa
+  // ESTANDO ASÍ: diseña una variante, o dice que reacciona igual que siempre.
+  function requestDesign(key: TouchReactionKey, side: "left" | "right" | null, mood: Mood = "neutral") {
+    const flightKey = mood === "neutral" ? key : `${key}@${mood}`;
+    if (designInFlightRef.current.has(flightKey)) return;
+    if (Date.now() < (designRetryAfterRef.current[flightKey] ?? 0)) return;
+    designInFlightRef.current.add(flightKey);
 
     (async () => {
       try {
@@ -306,7 +336,8 @@ export function useTouchReactions({
         // primera carga de este archivo: si la reacción llegó recién ahora
         // (diseñada en otra sesión), se usa esa y no se pide otra.
         await loadTouchReactions();
-        if (getDesignedReaction(key)) return;
+        if (mood === "neutral" ? getDesignedReaction(key) : !getReactionForMood(key, mood)?.needsVariant) return;
+        const base = mood === "neutral" ? null : getDesignedReaction(key);
 
         const { world, personality, memories } = await loadMemoryContext();
         const today = new Date();
@@ -318,6 +349,8 @@ export function useTouchReactions({
           todayIso,
           what: describeForDesign(key, side),
           sustained: key === "caricia",
+          mood: MOOD_WORDS[mood],
+          baseReaction: base ? describeReaction(base) : null,
         });
         const ask = async (messages: object[]) => {
           const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages });
@@ -325,6 +358,24 @@ export function useTouchReactions({
           return String(data.choices?.[0]?.message?.content ?? "");
         };
         const firstReply = await ask([{ role: "system", content: prompt }]);
+
+        // Decidió que, aun estando así, reacciona como siempre.
+        // Si además dijo que, estando así, le cambia el ánimo, se guarda la
+        // misma reacción con ese efecto (con "igual" se perdería).
+        if (base && mood !== "neutral" && /\[IGUAL_QUE_SIEMPRE\]/i.test(firstReply)) {
+          const sameMoodEffect = parseMoodMarker(firstReply);
+          const { variantes: _omit, ...baseOnly } = base;
+          await saveReactionVariant(
+            key,
+            mood,
+            sameMoodEffect ? { ...baseOnly, moodEffect: sameMoodEffect, createdAt: new Date().toISOString() } : "igual",
+          );
+          console.log(`[Tacto] Estando ${mood}, Miku reacciona igual que siempre a "${key}"${sameMoodEffect ? ` (y la deja ${sameMoodEffect})` : ""}.`);
+          if (sameMoodEffect && sameMoodEffect !== getCachedMood()) await setMood(sameMoodEffect, "tacto");
+          await processMemoryMarkers(firstReply);
+          return;
+        }
+
         let design = interpretDesign(firstReply);
         if (!design.movement && !design.expression) {
           throw new Error(`respuesta sin [MOVIMIENTO] ni [EXPRESION]: ${firstReply.slice(0, 200)}`);
@@ -348,7 +399,11 @@ export function useTouchReactions({
             ]);
             const revised = interpretDesign(secondReply);
             if (revised.movement || revised.expression) {
-              design = { movement: revised.movement, expression: revised.expression ?? design.expression };
+              design = {
+                movement: revised.movement,
+                expression: revised.expression ?? design.expression,
+                moodEffect: revised.moodEffect ?? design.moodEffect,
+              };
               revisedReply = secondReply;
             }
           } catch (err) {
@@ -358,41 +413,52 @@ export function useTouchReactions({
 
         const [minMs, maxMs] =
           key === "caricia" ? DESIGN_PET_DURATION_RANGE_MS : DESIGN_DURATION_RANGE_MS;
-        await saveDesignedReaction(key, {
+        const designed = {
           expression: design.expression,
           entries: design.movement?.entries ?? [],
           durationMs: Math.min(maxMs, Math.max(minMs, design.movement?.durationMs ?? 400)),
           animated: design.movement?.animated ?? false,
           side: SIDED_KEYS.includes(key) ? side : null,
           createdAt: new Date().toISOString(),
-        });
+          moodEffect: design.moodEffect,
+        };
+        if (mood === "neutral") await saveDesignedReaction(key, designed);
+        else await saveReactionVariant(key, mood, designed);
+        // Lo diseñó para este toque: si decidió que le cambia el ánimo, ya
+        // la cambia (sin esperar al próximo).
+        if (design.moodEffect && design.moodEffect !== getCachedMood()) await setMood(design.moodEffect, "tacto");
         console.log(
-          `[Tacto] Miku diseñó su reacción para "${key}"${revisedReply ? " (y la ajustó al verse)" : ""}:`,
+          `[Tacto] Miku diseñó su reacción para "${key}"${mood !== "neutral" ? ` estando ${mood}` : ""}${revisedReply ? " (y la ajustó al verse)" : ""}:`,
           revisedReply ?? firstReply,
         );
         await processMemoryMarkers(firstReply);
         if (revisedReply) await processMemoryMarkers(revisedReply);
       } catch (err) {
-        console.warn(`[Tacto] No se pudo diseñar la reacción para "${key}"; se reintenta más tarde:`, err);
-        designRetryAfterRef.current[key] = Date.now() + DESIGN_RETRY_AFTER_MS;
+        console.warn(`[Tacto] No se pudo diseñar la reacción para "${flightKey}"; se reintenta más tarde:`, err);
+        designRetryAfterRef.current[flightKey] = Date.now() + DESIGN_RETRY_AFTER_MS;
       } finally {
-        designInFlightRef.current.delete(key);
+        designInFlightRef.current.delete(flightKey);
       }
     })();
   }
 
   // La reacción de Miku para esa zona si ya la diseñó (espejada si la
   // diseñó del otro lado); si no, el respaldo, y se le pide que la diseñe.
+  // A8: según su ánimo del momento. Si todavía no decidió cómo reacciona
+  // estando así, se usa la de siempre y se le pregunta (en segundo plano).
   function resolveReaction(
     key: TouchReactionKey,
     side: "left" | "right" | null,
     fallback: Reaction,
   ): Reaction {
-    const designed = getDesignedReaction(key);
-    if (!designed) {
+    const mood = getCachedMood();
+    const found = getReactionForMood(key, mood);
+    if (!found) {
       requestDesign(key, side);
       return fallback;
     }
+    if (found.needsVariant) requestDesign(key, side, mood);
+    const designed = found.reaction;
     const needsMirror = designed.side !== null && side !== null && designed.side !== side;
     return {
       expression: designed.expression,
@@ -401,7 +467,24 @@ export function useTouchReactions({
       animated: designed.animated,
       holdMs: fallback.holdMs,
       description: fallback.description,
+      moodEffect: designed.moodEffect ?? null,
     };
+  }
+
+  // Lo que se anota del toque (se lo cuento en la próxima charla), con el
+  // cambio de ánimo si lo hubo.
+  function touchNote(reaction: Reaction): string {
+    return reaction.moodEffect && reaction.moodEffect !== getCachedMood()
+      ? `${reaction.description} (y eso te dejó ${MOOD_WORDS[reaction.moodEffect as Mood] ?? reaction.moodEffect})`
+      : reaction.description;
+  }
+
+  // A8: el tacto le cambia el ánimo solo si ella lo decidió al diseñar la
+  // reacción (y solo si no está ya así).
+  function applyMoodEffect(reaction: Reaction) {
+    if (reaction.moodEffect && reaction.moodEffect !== getCachedMood()) {
+      setMood(reaction.moodEffect, "tacto").catch((err) => console.error("Error cambiando el ánimo:", err));
+    }
   }
 
   function detect(clientX: number, clientY: number): TouchHit | null {
@@ -432,6 +515,7 @@ export function useTouchReactions({
 
   function play(reaction: Reaction) {
     const now = performance.now();
+    applyMoodEffect(reaction);
     if (reaction.expression) {
       showExpression(reaction.expression, reaction.durationMs + reaction.holdMs);
     }
@@ -462,10 +546,11 @@ export function useTouchReactions({
     ];
     if (recentTapsRef.current.length >= ANNOYED_TAP_COUNT) {
       recentTapsRef.current = [];
-      recordTouch(ANNOYED_REACTION.description);
       // Hartazgo: gana aunque haya otra reacción en curso.
       movementBusyUntilRef.current = 0;
-      play(resolveReaction("harta", null, ANNOYED_REACTION));
+      const annoyed = resolveReaction("harta", null, ANNOYED_REACTION);
+      recordTouch(touchNote(annoyed));
+      play(annoyed);
       return true;
     }
 
@@ -475,7 +560,7 @@ export function useTouchReactions({
       SIDED_KEYS.includes(key) ? hit.side : null,
       reactionFor(hit.zone, hit.side),
     );
-    recordTouch(reaction.description);
+    recordTouch(touchNote(reaction));
     play(reaction);
     return true;
   }
@@ -525,8 +610,10 @@ export function useTouchReactions({
       isPettingRef.current = true;
       petReactionRef.current = resolveReaction("caricia", null, PET_REACTION);
       onInteraction();
-      // Una por caricia, no por cada ciclo de reacción.
-      recordTouch(PET_REACTION.description);
+      // Una por caricia, no por cada ciclo de reacción (el anotado y el
+      // cambio de ánimo, si ella lo decidió).
+      recordTouch(touchNote(petReactionRef.current));
+      applyMoodEffect(petReactionRef.current);
     }
 
     // Mientras dure: la expresión se sostiene (cada movimiento del mouse

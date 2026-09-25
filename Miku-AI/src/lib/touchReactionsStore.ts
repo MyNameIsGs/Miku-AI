@@ -3,6 +3,8 @@ import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { ParsedMovement } from "../types";
 import { BONE_RANGES_VERSION } from "../config/boneRanges";
 import { BODY_TOOLS_VERSION } from "../config/bodyChangelog";
+import { Mood } from "./mood";
+import { decodeFace } from "./faceParts";
 import { migrateEntriesV1toV2 } from "./boneRangesMigration";
 
 // Tarea 8.12, segunda parte: las reacciones al tacto las decide Miku, no
@@ -46,6 +48,13 @@ export type DesignedTouchReaction = {
   // por última vez (ver config/bodyChangelog.ts). Menor que la actual (o
   // sin el campo): puede revisarla con lo nuevo, si ella quiere.
   cuerpo?: number;
+  // A8: si ella decidió que este tacto (con este ánimo) le cambia el ánimo,
+  // a cuál. Sin el campo o null: no la afecta.
+  moodEffect?: string | null;
+  // A8: cómo reacciona según su ánimo, diseñado por ella la primera vez que
+  // le pasa estando así. "igual" = decidió que reacciona como siempre.
+  // Solo en la reacción de base (la de neutral), no dentro de otra variante.
+  variantes?: Partial<Record<Exclude<Mood, "neutral">, DesignedTouchReaction | "igual">>;
 };
 
 type Store = Partial<Record<TouchReactionKey, DesignedTouchReaction>>;
@@ -87,7 +96,55 @@ export function getDesignedReaction(key: TouchReactionKey): DesignedTouchReactio
 }
 
 export async function saveDesignedReaction(key: TouchReactionKey, reaction: DesignedTouchReaction) {
-  cache = { ...cache, [key]: { ...reaction, rangos: BONE_RANGES_VERSION, cuerpo: BODY_TOOLS_VERSION } };
+  // Rediseñar la de base no borra las variantes por ánimo que ya tenía.
+  const variantes = reaction.variantes ?? cache[key]?.variantes;
+  cache = {
+    ...cache,
+    [key]: { ...reaction, rangos: BONE_RANGES_VERSION, cuerpo: BODY_TOOLS_VERSION, ...(variantes ? { variantes } : {}) },
+  };
+  await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
+}
+
+// Cómo es una reacción, en palabras y valores (para mostrársela a ella).
+export function describeReaction(reaction: DesignedTouchReaction): string {
+  const face = reaction.expression ? decodeFace(reaction.expression) : null;
+  const faceText = face
+    ? `cara por partes: ${Object.entries(face).map(([part, w]) => `${part}=${Math.round(w * 100)}`).join(", ")}`
+    : reaction.expression
+      ? `expresión: ${reaction.expression}`
+      : "sin cambio de expresión";
+  const movementText =
+    reaction.entries.length > 0
+      ? `movimiento: ${reaction.entries.map((e) => `${e.bone}.${e.axis}=${e.intensity}`).join(", ")}, duracion=${(reaction.durationMs / 1000).toFixed(1)}s${reaction.animated ? ", animado=si" : ""}`
+      : "sin movimiento";
+  const sideText = reaction.side ? ` (la diseñaste del lado ${reaction.side === "left" ? "izquierdo" : "derecho"}; del otro se espeja)` : "";
+  const moodText = reaction.moodEffect ? `\n- te cambia el ánimo a: ${reaction.moodEffect}` : "";
+  return `- ${faceText}\n- ${movementText}${sideText}${moodText}`;
+}
+
+// A8: la reacción para un ánimo. `needsVariant` = todavía no decidió cómo
+// reacciona estando así (se usa la de siempre mientras tanto).
+export function getReactionForMood(
+  key: TouchReactionKey,
+  mood: Mood,
+): { reaction: DesignedTouchReaction; needsVariant: boolean } | null {
+  const base = cache[key];
+  if (!base) return null;
+  if (mood === "neutral") return { reaction: base, needsVariant: false };
+  const variant = base.variantes?.[mood];
+  if (variant === undefined) return { reaction: base, needsVariant: true };
+  return { reaction: variant === "igual" ? base : variant, needsVariant: false };
+}
+
+export async function saveReactionVariant(
+  key: TouchReactionKey,
+  mood: Exclude<Mood, "neutral">,
+  variant: DesignedTouchReaction | "igual",
+) {
+  const base = cache[key];
+  if (!base) return;
+  const stored = variant === "igual" ? "igual" : { ...variant, rangos: BONE_RANGES_VERSION, cuerpo: BODY_TOOLS_VERSION };
+  cache = { ...cache, [key]: { ...base, variantes: { ...base.variantes, [mood]: stored } } };
   await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
 }
 

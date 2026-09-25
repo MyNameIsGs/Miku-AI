@@ -1,12 +1,12 @@
 import { OPENROUTER_MODEL } from "../config/constants";
 import { bodyNewsSince } from "../config/bodyChangelog";
-import { decodeFace } from "./faceParts";
 import { loadMemoryContext } from "./memory";
 import { fetchOpenRouterWithRetry } from "./openrouter";
 import { getSelfViewCapturer } from "./selfViewStore";
 import {
   TOUCH_REACTION_LABELS,
   TouchReactionKey,
+  describeReaction,
   getDesignedReaction,
   markReactionReviewed,
   saveDesignedReaction,
@@ -27,27 +27,10 @@ import { buildTouchReviewPrompt } from "../prompts/touchReactionPrompt";
 
 export type ReviewOutcome = "mejorada" | "igual" | "sin respuesta clara" | "no existe";
 
-function describeCurrent(key: TouchReactionKey): string | null {
-  const reaction = getDesignedReaction(key);
-  if (!reaction) return null;
-  const face = reaction.expression ? decodeFace(reaction.expression) : null;
-  const faceText = face
-    ? `cara por partes: ${Object.entries(face).map(([part, w]) => `${part}=${Math.round(w * 100)}`).join(", ")}`
-    : reaction.expression
-      ? `expresión: ${reaction.expression}`
-      : "sin cambio de expresión";
-  const movementText =
-    reaction.entries.length > 0
-      ? `movimiento: ${reaction.entries.map((e) => `${e.bone}.${e.axis}=${e.intensity}`).join(", ")}, duracion=${(reaction.durationMs / 1000).toFixed(1)}s${reaction.animated ? ", animado=si" : ""}`
-      : "sin movimiento";
-  const sideText = reaction.side ? ` (la diseñaste del lado ${reaction.side === "left" ? "izquierdo" : "derecho"}; del otro se espeja)` : "";
-  return `- ${faceText}\n- ${movementText}${sideText}`;
-}
-
 export async function reviewTouchReaction(key: TouchReactionKey): Promise<ReviewOutcome> {
   const reaction = getDesignedReaction(key);
-  const current = describeCurrent(key);
-  if (!reaction || !current) return "no existe";
+  if (!reaction) return "no existe";
+  const current = describeReaction(reaction);
 
   const { world, personality, memories } = await loadMemoryContext();
   const prompt = buildTouchReviewPrompt({
@@ -95,6 +78,8 @@ export async function reviewTouchReaction(key: TouchReactionKey): Promise<Review
       animated: design.movement?.animated ?? false,
       side: reaction.side,
       createdAt: new Date().toISOString(),
+      // Si no dijo nada del ánimo al revisarla, se conserva lo que tenía.
+      moodEffect: design.moodEffect ?? reaction.moodEffect ?? null,
     });
     console.log(`[Tacto] Miku mejoró su reacción a "${key}":`, reply);
     return "mejorada";
