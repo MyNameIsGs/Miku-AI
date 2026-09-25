@@ -11,6 +11,7 @@ import { bodyNewsSince } from "../config/bodyChangelog";
 import { buildFacePartsInstructions, describeFace } from "../lib/faceParts";
 import { getSleepDesign } from "../lib/sleepStore";
 import { describeCategoryDances } from "../lib/musicStore";
+import { MOODS_WITH_FACE, getMoodFace } from "../lib/moodFaceStore";
 import { getDesignedReaction, reactionsPendingReview } from "../lib/touchReactionsStore";
 
 export interface BuildIdlePromptParams {
@@ -177,12 +178,16 @@ function buildDecidePrompt({
     getSleepDesign("despertar") ? "despertarte ([REDISEÑAR_DESPERTAR])" : null,
   ].filter(Boolean);
   const danceCategories = describeCategoryDances();
+  const moodFaces = MOODS_WITH_FACE.filter((m) => getMoodFace(m));
   const sleepLine =
     (sleepMoments.length > 0
       ? ` Cuando Sebastián se va un buen rato te quedas dormida; tu forma de ${sleepMoments.join(" y de ")} la diseñaste tú. Si quieres cambiarla, escribe ese marcador y te lo vuelvo a preguntar la próxima vez que te pase.`
       : "") +
     (danceCategories.length > 0
       ? ` Cuando suena música en la PC te mueves según el tipo de canción, con lo que diseñaste para cada tipo: ${danceCategories.join(", ")}. Si quieres cambiar uno: [REDISEÑAR_BAILE: tipo]; todos: [REDISEÑAR_MUSICA].`
+      : "") +
+    (moodFaces.length > 0
+      ? ` La cara que pones en reposo según tu ánimo también la elegiste tú (${moodFaces.join(", ")}); para cambiar una: [REDISEÑAR_CARA_ANIMO: ánimo].`
       : "");
   const heldPoseNote = heldPoseSummary
     ? `\nLlevas un rato sosteniendo una pose (${heldPoseSummary}). Si quieres volver a algo más neutral, también se pide con [QUIERO_MOVERME].\n`

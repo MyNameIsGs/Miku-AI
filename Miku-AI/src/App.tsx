@@ -43,6 +43,7 @@ import { loadRecentChatHistory, saveChatHistory } from "./lib/chatHistory";
 import { useSleep } from "./hooks/useSleep";
 import { useMusicSway } from "./hooks/useMusicSway";
 import { useWindowWind } from "./hooks/useWindowWind";
+import { useMoodFaceDesign } from "./hooks/useMoodFaceDesign";
 import { readDroppedFile } from "./lib/droppedFile";
 import { recordLatency } from "./lib/latencyLog";
 import { useTouchReactions } from "./hooks/useTouchReactions";
@@ -1001,6 +1002,7 @@ function App() {
     sleep.check(now);
     musicSway.update(now);
     windowWind.update(delta);
+    moodFaceDesign.check(now);
 
     // poner_recordatorio: chequeo liviano (solo timestamps en memoria) de
     // recordatorios vencidos, independiente del intervalo de 2.5 minutos
@@ -1264,6 +1266,15 @@ function App() {
     processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
 
+  // Su cara de reposo para cada ánimo, diseñada por ella (ver useMoodFaceDesign).
+  const moodFaceDesign = useMoodFaceDesign({
+    previewFaceRef: face.previewFaceRef,
+    getExpression: face.getExpression,
+    isSpeakingRef: face.isSpeakingRef,
+    asleepRef: sleep.asleepRef,
+    processMemoryMarkers: memoryFiles.processMemoryMarkers,
+  });
+
   // Punto 6: el pelo y la falda reaccionan al arrastrar la ventana.
   // Agitarla con la ventana es una reacción al tacto más (ver useTouchReactions).
   const windowWind = useWindowWind(vrmRef, () => touch.handleShake());
@@ -1273,7 +1284,7 @@ function App() {
     scheduleMovement: movement.scheduleMovement,
     releaseQuirkRevertsNow: movement.releaseQuirkRevertsNow,
     boneTransitionsRef: movement.boneTransitionsRef,
-    showExpressionFor: face.showExpressionFor,
+    backgroundFaceRef: face.backgroundFaceRef,
     isSpeakingRef: face.isSpeakingRef,
     asleepRef: sleep.asleepRef,
     processMemoryMarkers: memoryFiles.processMemoryMarkers,

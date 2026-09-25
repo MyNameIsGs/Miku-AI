@@ -85,7 +85,10 @@ type UseMusicSwayParams = {
   scheduleMovement: (parsed: ParsedMovement, origin: "idle", autoRevertDelayMs?: number) => void;
   releaseQuirkRevertsNow: (keys: string[]) => void;
   boneTransitionsRef: RefObject<Record<string, BoneTransition>>;
-  showExpressionFor: (expression: string, forMs: number) => void;
+  // La cara del baile va en la capa de fondo de useFace: se ve en reposo
+  // y no pisa las caras de una respuesta o de una reacción al tacto (antes
+  // se reponía cada 4 s como expresión y borraba la de agitarla).
+  backgroundFaceRef: RefObject<string | null>;
   isSpeakingRef: RefObject<boolean>;
   asleepRef: RefObject<boolean>;
   processMemoryMarkers: (reply: string) => Promise<void>;
@@ -108,7 +111,7 @@ export function useMusicSway({
   scheduleMovement,
   releaseQuirkRevertsNow,
   boneTransitionsRef,
-  showExpressionFor,
+  backgroundFaceRef,
   isSpeakingRef,
   asleepRef,
   processMemoryMarkers,
@@ -198,6 +201,7 @@ export function useMusicSway({
   }
 
   function stopSway() {
+    backgroundFaceRef.current = null;
     const sway = swayRef.current;
     if (!sway) return;
     swayRef.current = null;
@@ -442,10 +446,10 @@ export function useMusicSway({
     }
     if (dance === "no") return;
 
+    // La cara del baile, de fondo mientras suene.
+    backgroundFaceRef.current = dance.expression;
     if (now - lastResyncRef.current < RESYNC_EVERY_MS && swayRef.current) return;
     lastResyncRef.current = now;
-    // La cara, mientras suene (se renueva en cada revisión).
-    if (dance.expression) showExpressionFor(dance.expression, RESYNC_EVERY_MS + 1500);
 
     const sway = swayRef.current;
     const trusted = trustedRef.current;

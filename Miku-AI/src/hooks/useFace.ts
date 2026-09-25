@@ -8,6 +8,7 @@ import {
 } from "../config/constants";
 import { FACE_PARTS, decodeFace, faceExpressionName, registerFaceParts } from "../lib/faceParts";
 import { getCachedMood } from "../lib/mood";
+import { getMoodFace } from "../lib/moodFaceStore";
 
 const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
   lookUp: { x: 0, y: 0.7 },
@@ -30,7 +31,9 @@ const VISEME_SHAPES = ["aa", "ih", "ou", "ee", "oh"];
 const VISEME_HALF_LIFE_MS = 30;
 
 // Su ánimo de fondo, visible en la cara cuando está en reposo (pedido de
-// Sebastián: no había forma de saber cómo estaba sin preguntarle). No son
+// Sebastián: no había forma de saber cómo estaba sin preguntarle). Estas
+// son solo el RESPALDO: la cara de cada ánimo la diseña ella (ver
+// lib/moodFaceStore.ts); se usan mientras todavía no la diseñó. No son
 // las expresiones enteras a baja intensidad: "sad" trae lágrimas y
 // "happy"/"relaxed" cierran los ojos (>< y ^^), que durante horas se ven
 // mal y pelean con el parpadeo. Es una cara propia para cada ánimo, con
@@ -99,6 +102,10 @@ export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getCache
   // después vuelve la que había. Si mientras tanto empezó a hablar o
   // alguien puso otra cara, no se pisa.
   const momentRef = useRef<{ base: string; expression: string; timer: number } | null>(null);
+  // Capas de fondo (ver updateFace): la cara del baile mientras suena
+  // música, y la vista previa mientras diseña su cara de un ánimo.
+  const backgroundFaceRef = useRef<string | null>(null);
+  const previewFaceRef = useRef<string | null>(null);
   function showExpressionFor(expression: string, forMs: number) {
     const base = momentRef.current ? momentRef.current.base : activeExpressionRef.current;
     if (momentRef.current) clearTimeout(momentRef.current.timer);
@@ -208,7 +215,27 @@ export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getCache
     }
     // Una cara hecha de partes ([CARA]) reemplaza a la expresión armada.
     const faceParts = decodeFace(activeExpressionRef.current);
-    const targetExpression = faceParts ? "neutral" : activeExpressionRef.current;
+    let targetExpression = faceParts ? "neutral" : activeExpressionRef.current;
+    // Cara de fondo: se ve solo en reposo (cara "neutral", sin [CARA] y sin
+    // hablar). Cualquier otra cara -- una respuesta, una reacción al
+    // tacto -- queda por encima, y al terminar vuelve esta. Prioridad: la
+    // vista previa mientras diseña una, la del baile si suena música, y la
+    // de su ánimo (la que diseñó ella, o la de respaldo).
+    let restingFace: Record<string, number> | undefined;
+    if (!faceParts && targetExpression === "neutral" && !isSpeakingRef.current) {
+      const background =
+        previewFaceRef.current ??
+        backgroundFaceRef.current ??
+        getMoodFace(getRestingMood()) ??
+        null;
+      if (background && background !== "ninguna") {
+        const parts = decodeFace(background);
+        if (parts) restingFace = parts;
+        else targetExpression = background;
+      } else if (!background) {
+        restingFace = RESTING_MOOD_FACES[getRestingMood()];
+      }
+    }
     for (const shape of Object.keys(expressionWeights)) {
       const target = shape === targetExpression ? 1 : 0;
       expressionWeights[shape] +=
@@ -226,12 +253,6 @@ export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getCache
       }
       facePartsRegisteredRef.current = true;
     }
-    // En reposo (cara "neutral", sin [CARA] y sin hablar) se le nota el
-    // ánimo, suave.
-    const restingFace =
-      !faceParts && activeExpressionRef.current === "neutral" && !isSpeakingRef.current
-        ? RESTING_MOOD_FACES[getRestingMood()]
-        : undefined;
     const partWeights = facePartWeightsRef.current;
     for (const part of Object.keys(partWeights)) {
       const target = faceParts?.[part] ?? restingFace?.[part] ?? 0;
@@ -290,6 +311,8 @@ export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getCache
     setExpression,
     getExpression,
     showExpressionFor,
+    backgroundFaceRef,
+    previewFaceRef,
     setViseme,
     resetVisemes,
     updateFace,

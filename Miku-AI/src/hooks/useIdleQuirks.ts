@@ -13,6 +13,7 @@ import { parseMarkers } from "../lib/markers";
 import { parseRequestedFace } from "../lib/faceParts";
 import { processSleepRedesignMarkers } from "../lib/sleepStore";
 import { processMusicRedesignMarkers } from "../lib/musicStore";
+import { processMoodFaceRedesignMarkers } from "../lib/moodFaceStore";
 import { loadMemoryContext } from "../lib/memory";
 import { describeSelfMovement } from "../lib/proprioception";
 import {
@@ -385,6 +386,7 @@ export function useIdleQuirks({
         await processRedesignMarkers(r);
         await processSleepRedesignMarkers(r);
         await processMusicRedesignMarkers(r);
+        await processMoodFaceRedesignMarkers(r);
       }
 
       const spoken = replies
