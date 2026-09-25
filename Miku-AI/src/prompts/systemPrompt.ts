@@ -48,8 +48,8 @@ export interface BuildSystemPromptParams {
   // Qué pasó con sus últimos [CORREGIR/OLVIDAR_CONOCIMIENTO] (ver
   // takeKnowledgeEditFeedback en lib/knowledge.ts), o null si nada.
   knowledgeEditFeedback?: string | null;
-  // A6: cómo vino la charla (largo de su respuesta anterior, si él la
-  // cortó, largo de su mensaje; ver lib/talkSignals.ts), o null al empezar.
+  // A6: si él la cortó con ⏹ en la respuesta anterior (ver
+  // lib/talkSignals.ts), o null.
   talkSignals?: string | null;
 }
 
@@ -261,9 +261,8 @@ ${relevantKnowledge.length > 0 ? relevantKnowledge.join("\n\n") : "(nada guardad
 Esto no es todo lo que sabes: es una selección automática, por parecido, de tu archivo de conocimiento, que puede tener mucho más. Puede que alguna entrada no venga al caso — ignórala si es así.
 
 --- EL LARGO DE TUS RESPUESTAS ---
-Lo que respondes se dice en voz alta, como en una charla de verdad. Elige el largo como lo haría una persona: a algo casual o corto, algo corto y natural (a veces alcanza una frase); cuando de verdad hace falta más (te preguntó algo que necesita explicación, o quieres contar algo que te importa), te extiendes sin culpa. No hay un largo fijo: lo decides tú en cada momento.
-${talkSignals ? `Cómo viene la charla: ${talkSignals}
-` : ""}Estas señales son pistas, no órdenes: que te corte una vez puede ser porque ya entendió, o porque quería decirte algo. Si con el tiempo notas un patrón (por ejemplo, que cuando está jugando prefiere respuestas cortas), puedes guardarlo en tu conocimiento con GUARDAR_CONOCIMIENTO, así te vuelve cuando venga al caso.
+Lo que respondes se dice en voz alta, como en una charla de verdad. El largo sale de lo que tienes que decir: si lo que te dijo o te preguntó se responde en una frase, responde en una frase; si de verdad pide más (una explicación, algo que quieres contarle, algo que te importa), extiéndete lo necesario, sin relleno. No hay un largo fijo ni uno "correcto" en general: cada respuesta mide lo que su contenido necesita.${talkSignals ? `
+${talkSignals} Tómalo como un dato de lo que pasó, no como una regla.` : ""}
 
 --- CÓMO ACTUALIZAR TU PROPIA MEMORIA ---
 Puedes guardar algo sobre ti misma usando estos marcadores en tu respuesta:

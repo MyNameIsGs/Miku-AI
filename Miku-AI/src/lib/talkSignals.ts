@@ -1,16 +1,14 @@
 import { load } from "@tauri-apps/plugin-store";
 
-// A6 del plan (idea de Sebastián): charla corta. Que Miku sepa cuándo
-// contestar corto y cuándo largo, y que lo aprenda ella. La app no decide
-// el largo: le pasa señales reales de cómo vino la charla (cuánto habló
-// ella, si él la cortó y en qué punto, cuánto escribió él) y ella saca sus
-// conclusiones (y si quiere, las guarda en su conocimiento).
+// A6 del plan (idea de Sebastián): charla corta. El largo de cada
+// respuesta lo decide ella según lo que tiene que decir (ver la guía en
+// systemPrompt.ts); acá solo se le avisa si él la cortó con ⏹.
 //
 // También queda un registro local, para comparar antes y después con
 // datos: largo de cada respuesta y si la cortaron. En .settings.dat
 // (local, no se sincroniza), los últimos 500.
 
-type Interruption = "voz" | "botón" | "mensaje";
+type Interruption = "botón" | "mensaje";
 
 type ReplyRecord = {
   at: string;
@@ -79,7 +77,7 @@ export async function endReply(live: LiveReply) {
   live.done = true;
   const record = live.record;
   console.log(
-    `[Charla] respuesta de ${record.words} palabras (a un mensaje de ${record.userWords})${
+    `[Charla] respuesta de ${record.words} ${record.words === 1 ? "palabra" : "palabras"} (a un mensaje de ${record.userWords})${
       record.interrupted ? `; cortada por ${record.interrupted} al ${record.heardPct ?? "?"} %` : ""
     }`,
   );
@@ -94,19 +92,15 @@ export async function endReply(live: LiveReply) {
   }
 }
 
-// Para el prompt del turno nuevo: cómo vino la charla. Si él escribió
-// mientras ella seguía hablando, eso también cuenta (no esperó a que
-// terminara).
-export function takeTalkSignals(userMessage: string): string | null {
+// Para el prompt del turno nuevo: solo si él la cortó con ⏹ en la
+// respuesta anterior (un hecho concreto, no un patrón de largo). El largo
+// lo decide ella según lo que tiene que decir (pedido de Sebastián): no se
+// le pasan conteos de palabras. Si él escribió mientras ella seguía
+// hablando, queda en el registro local pero no se le dice.
+export function takeTalkSignals(): string | null {
   noteInterruption("mensaje");
   const last = current?.record;
-  if (!last) return null;
-  const words = (n: number) => `${n} ${n === 1 ? "palabra" : "palabras"}`;
-  const lines = [`Tu respuesta anterior tuvo ${words(last.words)}, a un mensaje suyo de ${words(last.userWords)}.`];
-  const pct = last.heardPct !== null ? ` (ibas por el ${last.heardPct} % de lo que decías)` : "";
-  if (last.interrupted === "voz") lines.push(`Sebastián te habló encima y te cortó${pct}.`);
-  if (last.interrupted === "botón") lines.push(`Sebastián apretó el botón para cortarte${pct}.`);
-  if (last.interrupted === "mensaje") lines.push(`Sebastián te escribió de nuevo antes de que terminaras de hablar${pct}.`);
-  lines.push(`Su mensaje de ahora tiene ${words(countWords(userMessage))}.`);
-  return lines.join(" ");
+  if (!last || last.interrupted !== "botón") return null;
+  const pct = last.heardPct !== null ? `, cuando ibas por el ${last.heardPct} % de lo que decías` : "";
+  return `En tu respuesta anterior, Sebastián apretó el botón para cortarte${pct}.`;
 }

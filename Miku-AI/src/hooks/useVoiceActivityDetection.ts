@@ -15,16 +15,14 @@ type UseVoiceActivityDetectionParams = {
   // true mientras se está grabando (botón de mic o wake-word ya activo) --
   // en ese modo, VAD busca SILENCIO sostenido para cortar sola.
   listening: boolean;
-  // true mientras suena el audio de una respuesta -- en ese modo (y
-  // durante la ventana de seguimiento, ver armFollowUpWindow), VAD busca
-  // VOZ sostenida para saber que Sebastián quiere hablar.
+  // true mientras suena el audio de una respuesta -- ahí el VAD se apaga
+  // (no la corta); solo busca voz en la ventana de seguimiento.
   isSpeaking: boolean;
   // Silencio sostenido detectado mientras se grababa -- reemplaza soltar
   // el botón de mic a mano.
   onAutoStopRecording: () => void;
-  // Voz sostenida detectada mientras Miku hablaba (barge-in real) o
-  // durante la ventana de seguimiento tras su respuesta (sin repetir
-  // "Hey Miku"). Quien llama decide qué hacer en cada caso -- acá solo se
+  // Voz sostenida detectada durante la ventana de seguimiento tras su
+  // respuesta (sin repetir "Hey Miku"). Quien llama decide qué hacer en cada caso -- acá solo se
   // avisa que "Sebastián empezó a hablar ahora".
   onSpeechDuringPlayback: () => void;
 };
@@ -55,9 +53,14 @@ export function useVoiceActivityDetection({
   // mitad de respuesta y la puso a escuchar). Ahí, a Miku se le habla con
   // "Hey Miku", que tiene su propio modelo. isGameModeActive() se lee en
   // cada render: App se vuelve a dibujar cuando cambia el modo juego.
+  //
+  // Mientras Miku habla, el micrófono NO la corta (pedido de Sebastián: puede
+  // estar hablando con alguien o escuchando otra cosa, y eso la callaba a
+  // mitad de respuesta). Para cortarla está el botón ⏹. Solo se escucha
+  // voz en la ventana de seguimiento, cuando ya terminó.
   const mode: "off" | "recording" | "speech_onset" = listening
     ? "recording"
-    : (isSpeaking || followUpActive) && !isGameModeActive()
+    : followUpActive && !isSpeaking && !isGameModeActive()
       ? "speech_onset"
       : "off";
 

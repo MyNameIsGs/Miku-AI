@@ -481,15 +481,10 @@ function App() {
     handleSendTranscript(text);
   }
 
-  // Tarea 8.1: voz sostenida detectada mientras Miku habla (barge-in) o
-  // durante la ventana de seguimiento tras su respuesta (sin repetir
-  // "Hey Miku") -- en los dos casos, arrancar a escuchar es lo que hay
-  // que hacer; si además está hablando, primero se la corta.
+  // Tarea 8.1: voz sostenida en la ventana de seguimiento tras su
+  // respuesta (sin repetir "Hey Miku"): arranca a escuchar. Ya no la corta
+  // mientras habla (ver useVoiceActivityDetection).
   function handleSpeechDuringPlayback() {
-    if (speech.isSpeaking) {
-      noteInterruption("voz");
-      speech.stopSpeaking();
-    }
     speechRecognition.toggleListening();
   }
 
@@ -581,9 +576,9 @@ function App() {
 
   async function askMiku(userMessage: string, imageDataUrl?: string | null) {
     if (!isVoiceReady) return;
-    // A6: cómo vino la charla (antes de cualquier await: si ella sigue
-    // hablando, cuenta que él le escribió encima).
-    const talkSignals = takeTalkSignals(userMessage);
+    // A6: si la cortó con ⏹ (antes de cualquier await: si ella sigue
+    // hablando, queda registrado que él le escribió encima).
+    const talkSignals = takeTalkSignals();
     setIsThinking(true);
     idleQuirks.lastInteractionTimeRef.current = performance.now();
     // Tarea 8.7: fire-and-forget a propósito -- no se espera, para no
