@@ -63,3 +63,6 @@ Miku-Voice-Service/embeddings/
 # Perfiles de onnxruntime (enable_profiling) y modelos de prueba sueltos
 Miku-Voice-Service/onnxruntime_profile_*.json
 Miku-Voice-Service/smoke_test*.onnx
+
+# Fotos del banco de pruebas (bench.html)
+Miku-AI/bench-shots/

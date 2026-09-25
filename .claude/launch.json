@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "miku-vite",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "Miku-AI", "dev"],
+      "port": 1420
+    }
+  ]
+}
