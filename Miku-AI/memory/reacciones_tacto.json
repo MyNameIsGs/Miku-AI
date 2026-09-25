@@ -5,12 +5,12 @@
       {
         "bone": "head",
         "axis": "z",
-        "intensity": 14
+        "intensity": 20.2
       },
       {
         "bone": "head",
         "axis": "x",
-        "intensity": 7
+        "intensity": 9.3
       },
       {
         "bone": "neck",
@@ -36,7 +36,8 @@
     "durationMs": 1800,
     "animated": true,
     "side": null,
-    "createdAt": "2026-09-24T04:34:32.335Z"
+    "createdAt": "2026-09-24T04:34:32.335Z",
+    "rangos": 2
   },
   "cara": {
     "expression": "happy",
@@ -44,17 +45,17 @@
       {
         "bone": "head",
         "axis": "y",
-        "intensity": -16
+        "intensity": -25.6
       },
       {
         "bone": "head",
         "axis": "z",
-        "intensity": -13
+        "intensity": -18.7
       },
       {
         "bone": "neck",
         "axis": "y",
-        "intensity": -8
+        "intensity": -13.3
       },
       {
         "bone": "neck",
@@ -64,7 +65,7 @@
       {
         "bone": "chest",
         "axis": "y",
-        "intensity": -6
+        "intensity": -6.2
       },
       {
         "bone": "chest",
@@ -79,38 +80,39 @@
       {
         "bone": "rightUpperArm",
         "axis": "z",
-        "intensity": 22
+        "intensity": 23.4
       },
       {
         "bone": "rightUpperArm",
         "axis": "y",
-        "intensity": 26
+        "intensity": 19.5
       },
       {
         "bone": "rightUpperArm",
         "axis": "x",
-        "intensity": -18
+        "intensity": -24
       },
       {
         "bone": "rightLowerArm",
         "axis": "x",
-        "intensity": -52
+        "intensity": 0
       },
       {
         "bone": "rightLowerArm",
         "axis": "z",
-        "intensity": 18
+        "intensity": 100
       },
       {
         "bone": "rightHand",
         "axis": "z",
-        "intensity": 10
+        "intensity": 2.9
       }
     ],
     "durationMs": 1300,
     "animated": false,
     "side": "right",
-    "createdAt": "2026-09-24T04:35:56.486Z"
+    "createdAt": "2026-09-24T04:35:56.486Z",
+    "rangos": 2
   },
   "mano": {
     "expression": "happy",
@@ -123,43 +125,44 @@
       {
         "bone": "rightUpperArm",
         "axis": "z",
-        "intensity": 14
+        "intensity": 14.9
       },
       {
         "bone": "rightUpperArm",
         "axis": "y",
-        "intensity": 6
+        "intensity": 4.5
       },
       {
         "bone": "rightLowerArm",
         "axis": "x",
-        "intensity": -12
+        "intensity": 0
       },
       {
         "bone": "rightLowerArm",
         "axis": "z",
-        "intensity": 10
+        "intensity": 100
       },
       {
         "bone": "rightHand",
         "axis": "x",
-        "intensity": -10
+        "intensity": -13.3
       },
       {
         "bone": "rightHand",
         "axis": "z",
-        "intensity": 18
+        "intensity": 5.1
       },
       {
         "bone": "head",
         "axis": "z",
-        "intensity": -5
+        "intensity": -7.2
       }
     ],
     "durationMs": 1100,
     "animated": false,
     "side": "right",
-    "createdAt": "2026-09-24T04:38:15.013Z"
+    "createdAt": "2026-09-24T04:38:15.013Z",
+    "rangos": 2
   },
   "coletas": {
     "expression": "happy",
@@ -167,22 +170,22 @@
       {
         "bone": "head",
         "axis": "y",
-        "intensity": -22
+        "intensity": -35.2
       },
       {
         "bone": "head",
         "axis": "z",
-        "intensity": -14
+        "intensity": -20.2
       },
       {
         "bone": "head",
         "axis": "x",
-        "intensity": 6
+        "intensity": 8
       },
       {
         "bone": "neck",
         "axis": "y",
-        "intensity": -10
+        "intensity": -16.7
       },
       {
         "bone": "neck",
@@ -192,7 +195,7 @@
       {
         "bone": "chest",
         "axis": "y",
-        "intensity": -7
+        "intensity": -7.2
       },
       {
         "bone": "chest",
@@ -207,38 +210,39 @@
       {
         "bone": "rightUpperArm",
         "axis": "z",
-        "intensity": 38
+        "intensity": 40.4
       },
       {
         "bone": "rightUpperArm",
         "axis": "y",
-        "intensity": 22
+        "intensity": 16.5
       },
       {
         "bone": "rightUpperArm",
         "axis": "x",
-        "intensity": 10
+        "intensity": 1.7
       },
       {
         "bone": "rightLowerArm",
         "axis": "z",
-        "intensity": 32
+        "intensity": 100
       },
       {
         "bone": "rightLowerArm",
         "axis": "x",
-        "intensity": 10
+        "intensity": 15.6
       },
       {
         "bone": "leftShoulder",
         "axis": "z",
-        "intensity": 4
+        "intensity": 12
       }
     ],
     "durationMs": 500,
     "animated": false,
     "side": "right",
-    "createdAt": "2026-09-24T04:39:33.235Z"
+    "createdAt": "2026-09-24T04:39:33.235Z",
+    "rangos": 2
   },
   "brazo": {
     "expression": "happy",
@@ -251,58 +255,59 @@
       {
         "bone": "rightUpperArm",
         "axis": "z",
-        "intensity": 12
+        "intensity": 12.8
       },
       {
         "bone": "rightUpperArm",
         "axis": "y",
-        "intensity": 12
+        "intensity": 9
       },
       {
         "bone": "rightUpperArm",
         "axis": "x",
-        "intensity": -8
+        "intensity": -10.7
       },
       {
         "bone": "rightLowerArm",
         "axis": "x",
-        "intensity": -18
+        "intensity": 0
       },
       {
         "bone": "rightHand",
         "axis": "z",
-        "intensity": 10
+        "intensity": 2.9
       },
       {
         "bone": "chest",
         "axis": "y",
-        "intensity": -5
+        "intensity": -5.1
       },
       {
         "bone": "neck",
         "axis": "y",
-        "intensity": -10
+        "intensity": -16.7
       },
       {
         "bone": "head",
         "axis": "x",
-        "intensity": -12
+        "intensity": -20
       },
       {
         "bone": "head",
         "axis": "y",
-        "intensity": -15
+        "intensity": -24
       },
       {
         "bone": "head",
         "axis": "z",
-        "intensity": -8
+        "intensity": -11.5
       }
     ],
     "durationMs": 1200,
     "animated": false,
     "side": "right",
-    "createdAt": "2026-09-24T06:33:22.574Z"
+    "createdAt": "2026-09-24T06:33:22.574Z",
+    "rangos": 2
   },
   "falda": {
     "expression": "happy",
@@ -310,22 +315,22 @@
       {
         "bone": "head",
         "axis": "x",
-        "intensity": -28
+        "intensity": -46.7
       },
       {
         "bone": "head",
         "axis": "y",
-        "intensity": -8
+        "intensity": -12.8
       },
       {
         "bone": "head",
         "axis": "z",
-        "intensity": 10
+        "intensity": 14.4
       },
       {
         "bone": "chest",
         "axis": "x",
-        "intensity": -10
+        "intensity": -8
       },
       {
         "bone": "leftShoulder",
@@ -335,7 +340,7 @@
       {
         "bone": "leftShoulder",
         "axis": "x",
-        "intensity": -6
+        "intensity": -27
       },
       {
         "bone": "rightShoulder",
@@ -345,53 +350,54 @@
       {
         "bone": "rightShoulder",
         "axis": "x",
+        "intensity": -27
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "x",
+        "intensity": -20
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "y",
         "intensity": -6
       },
       {
-        "bone": "leftUpperArm",
-        "axis": "x",
-        "intensity": -15
-      },
-      {
-        "bone": "leftUpperArm",
-        "axis": "y",
-        "intensity": -8
-      },
-      {
         "bone": "rightUpperArm",
         "axis": "x",
-        "intensity": -15
+        "intensity": -20
       },
       {
         "bone": "rightUpperArm",
         "axis": "y",
-        "intensity": 8
+        "intensity": 6
       },
       {
         "bone": "leftLowerArm",
         "axis": "z",
-        "intensity": 22
+        "intensity": 100
       },
       {
         "bone": "rightLowerArm",
         "axis": "z",
-        "intensity": -22
+        "intensity": -100
       },
       {
         "bone": "leftHand",
         "axis": "z",
-        "intensity": 12
+        "intensity": 2.3
       },
       {
         "bone": "rightHand",
         "axis": "z",
-        "intensity": -12
+        "intensity": -2.2
       }
     ],
     "durationMs": 1000,
     "animated": false,
     "side": null,
-    "createdAt": "2026-09-24T06:34:07.784Z"
+    "createdAt": "2026-09-24T06:34:07.784Z",
+    "rangos": 2
   },
   "cabeza": {
     "expression": "happy",
@@ -399,17 +405,17 @@
       {
         "bone": "head",
         "axis": "x",
-        "intensity": -9
+        "intensity": -15
       },
       {
         "bone": "head",
         "axis": "z",
-        "intensity": -7
+        "intensity": -10.1
       },
       {
         "bone": "head",
         "axis": "y",
-        "intensity": -5
+        "intensity": -8
       },
       {
         "bone": "neck",
@@ -429,23 +435,24 @@
       {
         "bone": "chest",
         "axis": "x",
-        "intensity": 4
+        "intensity": 4.3
       },
       {
         "bone": "leftHand",
         "axis": "x",
-        "intensity": -8
+        "intensity": -10.7
       },
       {
         "bone": "rightHand",
         "axis": "x",
-        "intensity": -8
+        "intensity": -10.7
       }
     ],
     "durationMs": 500,
     "animated": false,
     "side": null,
-    "createdAt": "2026-09-24T08:11:47.004Z"
+    "createdAt": "2026-09-24T08:11:47.004Z",
+    "rangos": 2
   },
   "torso": {
     "expression": "relaxed",
@@ -453,22 +460,22 @@
       {
         "bone": "chest",
         "axis": "x",
-        "intensity": -9
+        "intensity": -7.2
       },
       {
         "bone": "spine",
         "axis": "x",
-        "intensity": -6
+        "intensity": -2.4
       },
       {
         "bone": "head",
         "axis": "x",
-        "intensity": -14
+        "intensity": -23.3
       },
       {
         "bone": "head",
         "axis": "y",
-        "intensity": 10
+        "intensity": 16
       },
       {
         "bone": "leftShoulder",
@@ -483,17 +490,17 @@
       {
         "bone": "leftShoulder",
         "axis": "x",
-        "intensity": 18
+        "intensity": 81
       },
       {
         "bone": "leftUpperArm",
         "axis": "x",
-        "intensity": 10
+        "intensity": 1.7
       },
       {
         "bone": "leftLowerArm",
         "axis": "y",
-        "intensity": -42
+        "intensity": -39.2
       },
       {
         "bone": "leftHand",
@@ -504,6 +511,7 @@
     "durationMs": 1400,
     "animated": false,
     "side": null,
-    "createdAt": "2026-09-24T18:37:45.498Z"
+    "createdAt": "2026-09-24T18:37:45.498Z",
+    "rangos": 2
   }
 }
