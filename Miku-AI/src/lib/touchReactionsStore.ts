@@ -17,8 +17,9 @@ import { migrateEntriesV1toV2 } from "./boneRangesMigration";
 // Vive en la carpeta de memoria y se sincroniza por GitHub como el resto
 // (ver sync_memory_to_github en lib.rs): es parte de quién es ella.
 
-// "caricia" y "harta" no son zonas del cuerpo sino situaciones (acariciar
-// la cabeza, muchos toques seguidos), pero se guardan igual.
+// "caricia", "harta" y "agitar" no son zonas del cuerpo sino situaciones
+// (acariciar la cabeza, muchos toques seguidos, sacudir la ventana), pero
+// se guardan igual.
 export type TouchReactionKey =
   | "cabeza"
   | "cara"
@@ -29,7 +30,8 @@ export type TouchReactionKey =
   | "falda"
   | "pierna"
   | "caricia"
-  | "harta";
+  | "harta"
+  | "agitar";
 
 export type DesignedTouchReaction = {
   // null = no cambia la expresión.
@@ -193,6 +195,7 @@ export const TOUCH_REACTION_LABELS: Record<TouchReactionKey, string> = {
   pierna: "que te toque la pierna",
   caricia: "que te acaricie la cabeza",
   harta: "muchos toques seguidos",
+  agitar: "que te agite con la ventana",
 };
 
 // Las que ya diseñó (del caché: loadTouchReactions ya corrió al arrancar).

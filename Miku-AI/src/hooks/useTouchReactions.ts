@@ -190,6 +190,8 @@ function describeForDesign(key: TouchReactionKey, side: "left" | "right" | null)
       return "te está acariciando la cabeza, de un lado a otro, y sigue haciéndolo";
     case "harta":
       return "te tocó muchas veces seguidas, un toque detrás de otro";
+    case "agitar":
+      return "agarró tu ventana y te sacudió de un lado a otro, rápido, varias veces seguidas";
   }
 }
 
@@ -246,6 +248,22 @@ const ANNOYED_REACTION: Reaction = {
   holdMs: 1500,
   description: "te tocó muchas veces seguidas hasta hartarte",
 };
+
+// Agitar la ventana: se marea (ojos apretados, la cabeza se bambolea).
+// Respaldo hasta que ella diseñe la suya.
+const SHAKE_REACTION: Reaction = {
+  expression: "cara:ojos_apretados=0.9,boca_puchero=0.5",
+  entries: [
+    { bone: "head", axis: "z", intensity: 45 },
+    { bone: "neck", axis: "z", intensity: 30 },
+  ],
+  durationMs: 600,
+  animated: true,
+  holdMs: 1800,
+  description: "agarró la ventana y te sacudió de un lado a otro",
+};
+// Una sacudida larga no dispara una reacción tras otra.
+const SHAKE_COOLDOWN_MS = 3000;
 
 // Caricia: se apoya en la mano y cierra un poco los ojos, y se queda así
 // MIENTRAS dure la caricia -- vuelve recién cuando se suelta (antes se
@@ -534,6 +552,20 @@ export function useTouchReactions({
 
   // Clic sin arrastrar sobre el modelo (ver App.tsx: el arrastre mueve la
   // ventana). Devuelve si tocó a Miku, por si hace falta saberlo.
+  // Sebastián agitó la ventana (ver useWindowWind): gana aunque haya otra
+  // reacción en curso, como el hartazgo.
+  const lastShakeAtRef = useRef(0);
+  function handleShake() {
+    const now = performance.now();
+    if (now - lastShakeAtRef.current < SHAKE_COOLDOWN_MS) return;
+    lastShakeAtRef.current = now;
+    onInteraction();
+    movementBusyUntilRef.current = 0;
+    const reaction = resolveReaction("agitar", null, SHAKE_REACTION);
+    recordTouch(touchNote(reaction));
+    play(reaction);
+  }
+
   function handleTap(clientX: number, clientY: number): boolean {
     const hit = detect(clientX, clientY);
     if (!hit) return false;
@@ -635,5 +667,5 @@ export function useTouchReactions({
     }
   }
 
-  return { handleTap, handleHover };
+  return { handleTap, handleHover, handleShake };
 }

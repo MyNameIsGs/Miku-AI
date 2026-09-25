@@ -20,6 +20,35 @@ const WIND_EPSILON = 0.01;
 
 type JointOriginal = { dir: THREE.Vector3; power: number };
 
+// Agitar la ventana (idea de Sebastián): moverla rápido cambiando de
+// dirección varias veces seguidas. Un arrastre normal, aunque sea rápido,
+// va en una sola dirección y no cuenta.
+const SHAKE_MIN_SPEED = 900; // px/s
+const SHAKE_REVERSALS = 3;
+const SHAKE_WINDOW_MS = 1500;
+
+export class ShakeDetector {
+  private lastDir = { x: 0, y: 0 };
+  private reversals: number[] = [];
+
+  // Una muestra de velocidad (px/s) en el instante t (ms). true = agitó.
+  push(vx: number, vy: number, t: number): boolean {
+    for (const [axis, v] of [["x", vx], ["y", vy]] as const) {
+      if (Math.abs(v) < SHAKE_MIN_SPEED) continue;
+      const dir = Math.sign(v);
+      if (this.lastDir[axis] !== 0 && dir !== this.lastDir[axis]) this.reversals.push(t);
+      this.lastDir[axis] = dir;
+    }
+    this.reversals = this.reversals.filter((r) => t - r <= SHAKE_WINDOW_MS);
+    if (this.reversals.length >= SHAKE_REVERSALS) {
+      this.reversals = [];
+      this.lastDir = { x: 0, y: 0 };
+      return true;
+    }
+    return false;
+  }
+}
+
 // Aplica `wind` a todas las articulaciones (exportada para el banco).
 export function applyWind(
   vrm: VRM,
@@ -47,8 +76,11 @@ export function applyWind(
   }
 }
 
-export function useWindowWind(vrmRef: RefObject<VRM | null>) {
+export function useWindowWind(vrmRef: RefObject<VRM | null>, onShake?: () => void) {
   const windRef = useRef(new THREE.Vector3());
+  const shakeRef = useRef(new ShakeDetector());
+  const onShakeRef = useRef(onShake);
+  onShakeRef.current = onShake;
   const lastPosRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const originalsRef = useRef(new Map<object, JointOriginal>());
   const activeRef = useRef(false);
@@ -63,6 +95,7 @@ export function useWindowWind(vrmRef: RefObject<VRM | null>) {
       if (dt <= 0 || dt > 0.25) return;
       const vx = (payload.x - last.x) / dt;
       const vy = (payload.y - last.y) / dt;
+      if (shakeRef.current.push(vx, vy, t)) onShakeRef.current?.();
       // La cámara mira a Miku de frente: derecha de la pantalla = +x del
       // mundo, abajo = -y. El pelo queda atrás del movimiento: al revés.
       const target = new THREE.Vector3(-vx, vy, 0).multiplyScalar(WIND_PER_PX_PER_S);

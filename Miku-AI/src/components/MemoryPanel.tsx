@@ -202,6 +202,7 @@ const TOUCH_LABELS: Record<TouchReactionKey, string> = {
   pierna: "Pierna",
   caricia: "Caricia en la cabeza",
   harta: "Muchos toques seguidos",
+  agitar: "Agitar la ventana",
 };
 
 const BONE_LABELS: Record<string, string> = {

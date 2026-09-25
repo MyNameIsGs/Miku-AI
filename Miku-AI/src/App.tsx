@@ -1265,7 +1265,8 @@ function App() {
   });
 
   // Punto 6: el pelo y la falda reaccionan al arrastrar la ventana.
-  const windowWind = useWindowWind(vrmRef);
+  // Agitarla con la ventana es una reacción al tacto más (ver useTouchReactions).
+  const windowWind = useWindowWind(vrmRef, () => touch.handleShake());
 
   // Punto 5b: se mueve con la música que suena en la PC (ver useMusicSway.ts).
   const musicSway = useMusicSway({
