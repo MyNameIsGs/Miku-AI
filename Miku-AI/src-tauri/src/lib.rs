@@ -260,6 +260,7 @@ pub fn run() {
             mcp_client::mcp_disconnect,
             mcp_client::mcp_is_connected,
             active_window::ventana_activa,
+            active_window::segundos_sin_usar_pc,
             obs_status::obs_estado,
             click_through::set_click_through,
             click_through::cursor_position,

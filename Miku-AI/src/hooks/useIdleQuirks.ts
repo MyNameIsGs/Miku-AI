@@ -1,4 +1,5 @@
 import { useRef, RefObject } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   IDLE_QUIRK_INTERVAL_MS,
   OPENROUTER_MODEL,
@@ -75,6 +76,11 @@ type UseIdleQuirksParams = {
   resolveReach: (text: string, base: ParsedMovement | null) => ParsedMovement | null;
 };
 
+// B3: cuánto sin teclado ni mouse (y sin hablarle) para darlo por ausente,
+// y cada cuánto se revisa.
+const AWAY_AFTER_MS = 10 * 60 * 1000;
+const AWAY_CHECK_EVERY_MS = 30 * 1000;
+
 export function useIdleQuirks({
   boneTransitionsRef,
   boneRestRotationRef,
@@ -95,6 +101,11 @@ export function useIdleQuirks({
   const lastInteractionTimeRef = useRef(performance.now());
   const lastQuirkTimeRef = useRef(performance.now());
   const isQuirkPendingRef = useRef(false);
+  // B3: Sebastián no está (ni teclado ni mouse en toda la PC, ni le habló
+  // a Miku) -> no se consulta al modelo en los silencios: nadie lo ve y
+  // cuesta tokens. Se revisa cada tanto, no en cada cuadro.
+  const awayRef = useRef(false);
+  const lastAwayCheckRef = useRef(0);
 
   // Fase 7: corre un quirk propio ya guardado, sin pasar por el LLM. Si
   // todavía está "evaluando", dispara la foto + descripción numérica que se
@@ -366,7 +377,27 @@ export function useIdleQuirks({
   // suficiente silencio (sin interacción ni quirk previo) y no hay ya un
   // quirk en curso, dispara uno nuevo -- es una llamada real al LLM, por
   // eso el intervalo es largo y no se dispara si ya hay uno pendiente.
+  function refreshAway(now: number) {
+    if (now - lastAwayCheckRef.current < AWAY_CHECK_EVERY_MS) return;
+    lastAwayCheckRef.current = now;
+    invoke<number>("segundos_sin_usar_pc")
+      .then((idleSeconds) => {
+        const sinceTalkMs = performance.now() - lastInteractionTimeRef.current;
+        const away = idleSeconds * 1000 > AWAY_AFTER_MS && sinceTalkMs > AWAY_AFTER_MS;
+        if (away === awayRef.current) return;
+        awayRef.current = away;
+        console.log(
+          away
+            ? `[Silencio] Sebastián no está (${Math.round(idleSeconds / 60)} min sin teclado ni mouse): se pausan las consultas de silencio.`
+            : "[Silencio] Sebastián volvió: siguen las consultas de silencio.",
+        );
+      })
+      .catch(() => {});
+  }
+
   function checkIdleQuirk(now: number) {
+    refreshAway(now);
+    if (awayRef.current) return;
     const silenceBase = Math.max(
       lastInteractionTimeRef.current,
       lastQuirkTimeRef.current,

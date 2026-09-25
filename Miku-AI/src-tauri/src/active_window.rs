@@ -113,3 +113,24 @@ pub fn ventana_activa() -> Option<ActiveWindowInfo> {
         seconds_ago: t.last_seen.elapsed().as_secs(),
     })
 }
+
+// B3 del plan: cuántos segundos lleva la PC sin teclado ni mouse (en todo
+// Windows, no solo en la ventana de Miku). Si Sebastián no está, las
+// consultas de silencio se pausan: nadie las ve y cuestan tokens.
+#[tauri::command]
+pub fn segundos_sin_usar_pc() -> u64 {
+    use windows::Win32::System::SystemInformation::GetTickCount;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    let mut info = LASTINPUTINFO {
+        cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+        dwTime: 0,
+    };
+    // SAFETY: info es un LASTINPUTINFO válido con cbSize puesto.
+    if !unsafe { GetLastInputInfo(&mut info) }.as_bool() {
+        return 0;
+    }
+    // Ambos son milisegundos desde el arranque en u32 (dan la vuelta cada
+    // ~49 días): la resta con vuelta da bien igual.
+    let now = unsafe { GetTickCount() };
+    (now.wrapping_sub(info.dwTime) / 1000) as u64
+}
