@@ -14,7 +14,7 @@ import {
   listDesignedReactions,
   TouchReactionKey,
 } from "../lib/touchReactionsStore";
-import { IconClose, IconSearch } from "./Icons";
+import { IconClose, IconMemory, IconSearch } from "./Icons";
 import { ConfirmDialog } from "./ConfirmDialog";
 import type { MotionPhase } from "../hooks/usePresenceMotion";
 
@@ -225,8 +225,26 @@ function KnowledgeSection() {
       <div className="m-panel-body">
         {error && <p className="mem-error">{error}</p>}
         {shown === null && !error && <p className="mem-empty">Cargando…</p>}
-        {entries?.length === 0 && <p className="mem-empty">Todavía no guardó nada.</p>}
-        {results?.length === 0 && entries?.length !== 0 && <p className="mem-empty">Nada parecido.</p>}
+        {entries?.length === 0 && (
+          <div className="m-empty">
+            <span className="m-empty-icon" aria-hidden="true">
+              <IconMemory size={26} />
+            </span>
+            <p className="m-empty-title">Todavía no sabe nada práctico</p>
+            <p className="m-empty-text">
+              Cuando le cuentes algo útil («mi GPU es…», «prefiero…»), lo anota sola y aparece aquí.
+            </p>
+          </div>
+        )}
+        {results?.length === 0 && entries?.length !== 0 && (
+          <div className="m-empty">
+            <p className="m-empty-title">Nada cercano a «{query.trim()}»</p>
+            <p className="m-empty-text">La búsqueda es por significado: prueba con otras palabras.</p>
+            <button className="m-btn m-btn-small" onClick={() => setQuery("")}>
+              Borrar búsqueda
+            </button>
+          </div>
+        )}
         {searchByText && results && results.length > 0 && (
           <p className="mem-empty">El buscador por significado no responde; filtré por texto.</p>
         )}

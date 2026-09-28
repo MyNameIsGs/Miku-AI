@@ -9,7 +9,7 @@ import { isQuietHours } from "../lib/quietHours";
 import { Connections } from "../hooks/useConnections";
 import { useStreamMode } from "../hooks/useStreamMode";
 import { useGameMode } from "../hooks/useGameMode";
-import { IconClose } from "./Icons";
+import { IconAlert, IconClose, IconPlus } from "./Icons";
 import type { MotionPhase } from "../hooks/usePresenceMotion";
 
 // Panel de Configuración, diseño v1 (docs/diseno-ui-v1/README.md §4):
@@ -59,51 +59,83 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (next: boolean
   );
 }
 
-function Status({ tone, children }: { tone: "ok" | "off" | "busy" | "warn"; children: ReactNode }) {
+function Status({ tone, children }: { tone: "ok" | "off" | "busy" | "warn" | "error"; children: ReactNode }) {
   return (
-    <span className="cfg-status">
+    <span className={`cfg-status cfg-status-${tone}`}>
       <span className={`cfg-led cfg-led-${tone}`} />
       {children}
     </span>
   );
 }
 
+// Motivo legible de un error de conexión (ronda 2 §3.1). El caso más común:
+// Google corta la sesión cada 7 días mientras la app está en modo prueba.
+function describeConnectionError(raw: string): { reason: string; expired: boolean } {
+  if (/invalid_grant|expired|revoked|vencid/i.test(raw)) {
+    return { reason: "Sesión vencida: Google la corta cada 7 días en modo prueba.", expired: true };
+  }
+  if (/cancel|closed|cerr|denied|access_denied/i.test(raw)) {
+    return { reason: "No se pudo conectar: se cerró la ventana antes de terminar.", expired: false };
+  }
+  const short = raw.length > 90 ? `${raw.slice(0, 90)}…` : raw;
+  return { reason: `No se pudo conectar: ${short}`, expired: false };
+}
+
 // Una fila de conexión: nombre + estado a la izquierda, acción a la
-// derecha; opcionalmente un error y un submenú desplegable (las cuentas).
+// derecha; opcionalmente un submenú desplegable (las cuentas). Si la última
+// conexión falló, el estado pasa a rosa con el motivo y el botón reintenta.
 function ConnectionRow({
   name,
   status,
   action,
   error,
+  onRetry,
+  retrying = false,
+  keepAction = false,
   children,
 }: {
   name: string;
   status: ReactNode;
   action: ReactNode;
   error?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
+  // Con cuentas ya conectadas se deja el botón «Cuentas» (si no, no habría
+  // cómo quitar una mientras dure el error); reintentar es «Agregar otra».
+  keepAction?: boolean;
   children?: ReactNode;
 }) {
+  const failure = error && !retrying ? describeConnectionError(error) : null;
   return (
     <div className="cfg-connection">
       <div className="cfg-connection-main">
         <div className="cfg-connection-text">
           <span className="cfg-connection-name">{name}</span>
-          {status}
+          {failure ? (
+            <span className="cfg-status cfg-status-error" title={error ?? undefined}>
+              <span className="cfg-led cfg-led-error" />
+              {failure.reason}
+            </span>
+          ) : (
+            status
+          )}
         </div>
-        {action}
+        {failure && onRetry && !keepAction ? (
+          <button className="cfg-btn cfg-btn-accent" onClick={onRetry}>
+            {failure.expired ? "Reconectar" : "Reintentar"}
+          </button>
+        ) : (
+          action
+        )}
       </div>
-      {error && (
-        <div className="cfg-error" title={error}>
-          {error}
-        </div>
-      )}
       {children}
     </div>
   );
 }
 
-// Submenú de cuentas (Gmail, Calendar): la lista con "Quitar" y el botón
-// para sumar otra.
+// Submenú de cuentas (Gmail, Calendar), con la misma caja que el menú de
+// cámara: cada correo en una línea (completo al pasar el mouse) con ✕ para
+// quitarlo, y al final «Agregar otra cuenta».
 function AccountsList({
   accounts,
   onRemove,
@@ -116,17 +148,21 @@ function AccountsList({
   adding: boolean;
 }) {
   return (
-    <div className="cfg-accounts">
+    <div className="cfg-accounts" role="group" aria-label="Cuentas conectadas">
       {accounts.map((email) => (
         <div key={email} className="cfg-account">
-          <span className="cfg-account-email">{email}</span>
-          <button className="cfg-btn cfg-btn-small" onClick={() => onRemove(email)}>
-            Quitar
+          <span className="cfg-account-email" title={email}>
+            {email}
+          </span>
+          <button className="cfg-account-remove" onClick={() => onRemove(email)} aria-label={`Quitar ${email}`} title="Quitar esta cuenta">
+            <IconClose size={14} />
           </button>
         </div>
       ))}
-      <button className="cfg-btn cfg-btn-accent cfg-btn-small" onClick={onAdd} disabled={adding}>
-        {adding ? "Conectando..." : "Otra cuenta"}
+      <div className="cfg-accounts-sep" />
+      <button className="cfg-accounts-add" onClick={onAdd} disabled={adding}>
+        <IconPlus size={14} />
+        {adding ? "Conectando…" : "Agregar otra cuenta"}
       </button>
     </div>
   );
@@ -172,13 +208,17 @@ export function ConfigPanel(props: ConfigPanelProps) {
   const [audioOutput, setAudioOutput] = useState("");
   const [audioError, setAudioError] = useState<string | null>(null);
   const changeAudioOutput = async (deviceId: string) => {
+    const previous = audioOutput;
     setAudioOutput(deviceId);
     setAudioError(null);
     if (!deviceId) return;
     try {
       await invoke("set_default_audio_output", { deviceId });
     } catch (err) {
-      setAudioError(`No se pudo cambiar la salida: ${err instanceof Error ? err.message : String(err)}`);
+      console.error("Error cambiando la salida de audio:", err);
+      const name = audioDevices.find((d) => d.id === deviceId)?.name ?? "esa salida";
+      setAudioOutput(previous);
+      setAudioError(`No pude cambiar a «${name}». Sigue sonando por la salida anterior.`);
     }
   };
 
@@ -246,7 +286,9 @@ export function ConfigPanel(props: ConfigPanelProps) {
               <label htmlFor="cfg-output">Salida de audio</label>
               <select
                 id="cfg-output"
-                className="cfg-select"
+                className={`cfg-select ${audioError ? "invalid" : ""}`}
+                aria-invalid={!!audioError}
+                aria-describedby={audioError ? "cfg-output-error" : undefined}
                 value={audioOutput}
                 onChange={(e) => changeAudioOutput(e.target.value)}
               >
@@ -257,7 +299,12 @@ export function ConfigPanel(props: ConfigPanelProps) {
                   </option>
                 ))}
               </select>
-              {audioError && <div className="cfg-error">{audioError}</div>}
+              {audioError && (
+                <div id="cfg-output-error" className="cfg-error cfg-error-inline">
+                  <IconAlert size={14} />
+                  {audioError}
+                </div>
+              )}
             </div>
           </Module>
 
@@ -330,7 +377,9 @@ export function ConfigPanel(props: ConfigPanelProps) {
                   {spotifyConnected ? "Reconectar" : "Conectar"}
                 </button>
               }
-              error={spotifyError ? "Error al conectar Spotify" : null}
+              error={spotifyError}
+              onRetry={handleConnectSpotify}
+              retrying={spotifyConnecting}
             />
 
             <ConnectionRow
@@ -359,7 +408,10 @@ export function ConfigPanel(props: ConfigPanelProps) {
                   </button>
                 )
               }
-              error={gmailError ? "Error al conectar Gmail" : null}
+              error={gmailError}
+              onRetry={handleConnectGmail}
+              retrying={gmailConnecting}
+              keepAction={gmailAccounts.length > 0}
             >
               {openAccounts === "gmail" && gmailAccounts.length > 0 && (
                 <AccountsList
@@ -397,7 +449,10 @@ export function ConfigPanel(props: ConfigPanelProps) {
                   </button>
                 )
               }
-              error={calendarError ? "Error al conectar Calendar" : null}
+              error={calendarError}
+              onRetry={handleConnectCalendar}
+              retrying={calendarConnecting}
+              keepAction={calendarAccounts.length > 0}
             >
               {openAccounts === "calendar" && calendarAccounts.length > 0 && (
                 <AccountsList
@@ -418,7 +473,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
                   name={`${server.label.replace(/\s*\(.*\)$/, "")} · MCP`}
                   status={
                     <Status tone={connecting ? "busy" : connected ? "ok" : "off"}>
-                      {connecting ? "Conectando..." : connected ? "Conectado" : "Sin conectar"}
+                      {connecting ? "Conectando..." : connected ? "Conectado" : "Apagado"}
                     </Status>
                   }
                   action={

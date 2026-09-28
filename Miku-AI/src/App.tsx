@@ -67,7 +67,7 @@ import { isQuietHours } from "./lib/quietHours";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { FileDropHint } from "./components/FileDropHint";
-import { Caption, CaptionMode } from "./components/Caption";
+import { Caption, CaptionMode, RetryInfo } from "./components/Caption";
 import { useConnections } from "./hooks/useConnections";
 import {
   loadQuirks,
@@ -378,7 +378,9 @@ function App() {
   // reintento; mientras revela su respuesta, la última palabra va resaltada.
   const [userEcho, setUserEcho] = useState("");
   const [toolTrail, setToolTrail] = useState<ToolEvent[]>([]);
-  const [thinkingNote, setThinkingNote] = useState<string | null>(null);
+  const [retryInfo, setRetryInfo] = useState<RetryInfo | null>(null);
+  // El modelo no respondió (ronda 2 §3.1): la caja pasa a modo error.
+  const [replyError, setReplyError] = useState<string | null>(null);
   const [replyRevealing, setReplyRevealing] = useState(false);
   // La charla en curso (mientras piensa), para poder cancelarla desde el
   // botón principal del panel de controles. Una cancelada no habla ni se
@@ -639,7 +641,8 @@ function App() {
     askAbortRef.current = abort;
     setUserEcho(userMessage);
     setToolTrail([]);
-    setThinkingNote(null);
+    setRetryInfo(null);
+    setReplyError(null);
     setIsThinking(true);
     idleQuirks.lastInteractionTimeRef.current = performance.now();
     // Tarea 8.7: fire-and-forget a propósito -- no se espera, para no
@@ -769,11 +772,11 @@ function App() {
           { role: "user", content: userContent },
         ],
         (attempt, max, delay) => {
-          setThinkingNote(
-            `Miku está saturada del lado del proveedor, reintentando en ${delay / 1000}s... (intento ${attempt}/${max})`,
-          );
+          setRetryInfo({ attempt, max, retryAt: Date.now() + delay });
         },
         (event) => {
+          // Si hubo reintento, ya respondió: el aviso sobra.
+          setRetryInfo(null);
           setToolTrail((trail) =>
             trail.some((t) => t.id === event.id)
               ? trail.map((t) => (t.id === event.id ? event : t))
@@ -975,7 +978,8 @@ function App() {
         return;
       }
       console.error("Error al consultar el LLM:", err);
-      setLlmResponse("Hubo un error al conectar con el modelo.");
+      setLlmResponse("");
+      setReplyError("El modelo no contestó. Prueba a enviarlo de nuevo en un momento.");
     } finally {
       // Si se canceló (o ya empezó otra charla), el estado lo maneja quien
       // canceló o la charla nueva.
@@ -1476,9 +1480,11 @@ function App() {
         ? "thinking"
         : replyRevealing
           ? "speaking"
-          : llmResponse
-            ? "reply"
-            : null;
+          : replyError
+            ? "error"
+            : llmResponse
+              ? "reply"
+              : null;
 
   return (
     <div
@@ -1627,8 +1633,8 @@ function App() {
           confirmedWordCount={speechRecognition.confirmedWordCount}
           userEcho={userEcho}
           tools={toolTrail}
-          note={thinkingNote}
-          text={llmResponse}
+          retry={retryInfo}
+          text={captionMode === "error" ? (replyError ?? "") : llmResponse}
           // Sube y baja junto con el panel de controles.
           raised={controlsMotion.mounted && controlsMotion.phase === "enter"}
         />

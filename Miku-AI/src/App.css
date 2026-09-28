@@ -2633,3 +2633,196 @@ a:hover {
   letter-spacing: 0.12em;
   color: var(--m-teal);
 }
+
+/* ==========================================================================
+   Errores y extremos (ronda 2, DISENO.md §3.1-3.2).
+   ========================================================================== */
+
+/* Subtítulo: el modelo no respondió. */
+.caption.caption-error {
+  border-color: rgba(240, 80, 143, 0.55);
+}
+.caption-label-error {
+  color: var(--m-pink-text);
+}
+.caption-error-text {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Subtítulo: proveedor saturado, dentro del rastro de tools. */
+.caption-retry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  margin: 0 -10px;
+  background: rgba(240, 80, 143, 0.08);
+  border-radius: 10px;
+}
+.caption-retry-icon {
+  display: flex;
+  color: var(--m-pink-text);
+  animation: spin 1.6s linear infinite;
+}
+.caption-retry-label {
+  flex: 1;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--m-pink-text);
+}
+.caption-retry-count {
+  font-family: var(--m-font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-text);
+}
+
+/* Subtítulo: muchas tools, las anteriores juntas en un botón. */
+.caption .caption-more {
+  align-self: flex-start;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--m-muted);
+  background: rgba(234, 244, 243, 0.05);
+  border: 1px solid var(--m-line-soft);
+  border-radius: 999px;
+  box-shadow: none;
+  cursor: pointer;
+}
+.caption .caption-more:hover {
+  color: var(--m-text);
+  border-color: rgba(57, 197, 187, 0.45);
+}
+
+/* Subtítulo: respuesta muy larga. Arriba se desvanece y la barra de
+   desplazamiento aparece solo con el mouse encima. */
+.caption {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.caption:hover {
+  scrollbar-color: rgba(57, 197, 187, 0.5) transparent;
+}
+.caption.is-overflowing {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 56px);
+}
+
+/* Configuración: estados de conexión. */
+.cfg-led-off {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--m-dim);
+}
+.cfg-led-error {
+  background: var(--m-pink);
+}
+.cfg-status.cfg-status-error {
+  color: var(--m-pink-text);
+  white-space: normal;
+  line-height: 1.35;
+}
+.cfg-status-error .cfg-led {
+  align-self: flex-start;
+  margin-top: 5px;
+}
+.m-panel .cfg-select.invalid {
+  border-color: var(--m-pink);
+}
+.cfg-error-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 0 0;
+  line-height: 1.4;
+}
+.cfg-error-inline svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Submenú de cuentas: misma caja que el menú de cámara. */
+.cfg-accounts {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin: 0 0 10px;
+  padding: 6px;
+  background: rgba(9, 20, 23, 0.97);
+  border: 1px solid rgba(57, 197, 187, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  animation: m-drop-in 140ms var(--m-ease-out) both;
+}
+.cfg-account {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+}
+.cfg-account:hover {
+  background: rgba(234, 244, 243, 0.05);
+}
+.cfg-account-email {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--m-text);
+}
+.m-panel .cfg-account-remove {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--m-muted);
+  cursor: pointer;
+}
+.m-panel .cfg-account-remove:hover {
+  background: var(--m-hover-fill);
+  color: var(--m-pink-text);
+}
+.cfg-accounts-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: rgba(157, 185, 182, 0.14);
+}
+.m-panel .cfg-accounts-add {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--m-teal);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.m-panel .cfg-accounts-add:hover {
+  background: rgba(57, 197, 187, 0.1);
+}
+.m-panel .cfg-accounts-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
