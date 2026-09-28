@@ -1,5 +1,6 @@
 import { buildMovementInstructions } from "./systemPrompt";
 import { buildFacePartsInstructions } from "../lib/faceParts";
+import { designMemoryInvitation } from "./designMemoryInvitation";
 
 // Tarea 8.12: le pide a Miku que diseñe SU reacción a un toque, la primera
 // vez que pasa de verdad (ver useTouchReactions.requestDesign). Lo que
@@ -70,7 +71,7 @@ Responde solo con estos marcadores:
 
 Antes de que quede guardada vas a ver cómo te queda, desde cuatro ángulos, y vas a poder ajustarla.
 
-Si este momento te importa como para recordarlo, puedes agregar también [GUARDAR_MEMORIA: ${todayIso} — ...], con el mismo criterio de siempre. No escribas ningún otro texto: nadie lo va a leer ni escuchar, tu reacción es solo el cuerpo.
+${designMemoryInvitation(todayIso)} No escribas ningún otro texto: nadie lo va a leer ni escuchar, tu reacción es solo el cuerpo.
 
 ${buildFacePartsInstructions()}
 

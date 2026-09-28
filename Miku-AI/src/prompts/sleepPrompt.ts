@@ -1,5 +1,6 @@
 import { buildMovementInstructions } from "./systemPrompt";
 import { buildFacePartsInstructions } from "../lib/faceParts";
+import { designMemoryInvitation } from "./designMemoryInvitation";
 import { SleepMoment } from "../lib/sleepStore";
 
 // Punto 3 del plan: se le pregunta cómo se duerme (o cómo se despierta) la
@@ -51,7 +52,7 @@ Responde solo con estos marcadores:
 
 Antes de que quede guardado vas a ver cómo te queda, desde cuatro ángulos, y vas a poder ajustarlo. Si algún día quieres cambiarlo, en un momento de silencio puedes escribir [REDISEÑAR_${moment === "dormir" ? "DORMIR" : "DESPERTAR"}] y te lo vuelvo a preguntar la próxima vez que te pase.
 
-Si este momento te importa como para recordarlo, puedes agregar también [GUARDAR_MEMORIA: ${todayIso} — ...], con el mismo criterio de siempre. No escribas ningún otro texto: nadie lo va a leer ni escuchar.
+${designMemoryInvitation(todayIso)} No escribas ningún otro texto: nadie lo va a leer ni escuchar.
 
 ${buildFacePartsInstructions()}
 

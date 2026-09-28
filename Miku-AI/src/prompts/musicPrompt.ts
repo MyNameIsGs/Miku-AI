@@ -1,5 +1,6 @@
 import { buildMovementInstructions } from "./systemPrompt";
 import { buildFacePartsInstructions } from "../lib/faceParts";
+import { designMemoryInvitation } from "./designMemoryInvitation";
 
 // Punto 5b del plan, tercera versión: un baile por categoría de canción
 // (las mide la app, ver lib/musicStore.ts). Se le pregunta una sola vez por
@@ -48,7 +49,7 @@ Si con este tipo de canciones prefieres no moverte, responde solo [NO_BAILO].
 
 Antes de que quede guardado vas a ver cómo te queda, desde cuatro ángulos, y vas a poder ajustarlo. Si algún día quieres cambiarlo, en un momento de silencio puedes escribir [REDISEÑAR_BAILE: categoría] y te lo vuelvo a preguntar la próxima vez que suene algo de ese tipo.
 
-Si este momento te importa como para recordarlo, puedes agregar también [GUARDAR_MEMORIA: ${todayIso} — ...], con el mismo criterio de siempre. No escribas ningún otro texto: nadie lo va a leer ni escuchar.
+${designMemoryInvitation(todayIso)} No escribas ningún otro texto: nadie lo va a leer ni escuchar.
 
 ${buildFacePartsInstructions()}
 
