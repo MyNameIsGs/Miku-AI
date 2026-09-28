@@ -134,15 +134,32 @@ class OpenRouterApi(private val apiKey: String) {
             delay(1500L * attempt)
             return@withContext webSearch(systemPrompt, consulta, maxResults, attempt + 1)
         }
-        if (!response.isSuccessful) throw IOException("OpenRouter ${response.code}")
+        // El motivo real viaja en el error (el cuerpo de OpenRouter): antes
+        // solo decía el código, o reventaba en "No value for choices", y
+        // así no había cómo saber por qué fallaba la búsqueda en el celular.
+        val raw = response.body?.string().orEmpty()
+        if (!response.isSuccessful) throw IOException("OpenRouter ${response.code}: ${errorDetail(raw)}")
+        val json = JSONObject(raw)
+        // OpenRouter a veces contesta 200 con un objeto "error" en vez de
+        // "choices" (falla del proveedor a mitad de camino).
+        if (!json.has("choices")) throw IOException("OpenRouter sin respuesta: ${errorDetail(raw)}")
 
-        val message = JSONObject(response.body!!.string())
+        val message = json
             .getJSONArray("choices")
             .getJSONObject(0)
             .getJSONObject("message")
         // isNull primero: en Android, optString sobre un null de JSON
         // devuelve el texto "null", no el fallback.
         if (message.isNull("content")) "" else message.getString("content")
+    }
+
+    // El mensaje de error de un cuerpo de OpenRouter ({"error": {"message": ...}}),
+    // o el comienzo del cuerpo si no tiene esa forma.
+    private fun errorDetail(raw: String): String = try {
+        val error = JSONObject(raw).optJSONObject("error")
+        error?.optString("message")?.takeIf { it.isNotBlank() } ?: raw.trim().take(200)
+    } catch (e: Exception) {
+        raw.trim().take(200)
     }
 
     // Primer paso de tool calling en Android -- mismo protocolo nativo de

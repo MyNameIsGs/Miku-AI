@@ -1,5 +1,7 @@
 package com.sebas.mikuai.data
 
+import android.util.Log
+
 // Tarea 6.3 en Android: mismo comportamiento que lib/tools/buscarEnWeb.ts
 // del lado desktop -- misma instrucción de sistema, mismo MAX_RESULTS y
 // mismos textos de vuelta, para que Miku reciba lo mismo desde los dos
@@ -30,7 +32,8 @@ object BuscarEnWeb {
                 content
             }
         } catch (e: Exception) {
-            "Error al buscar en la web: ${e.message}"
+            Log.w("BuscarEnWeb", "Falló la búsqueda \"$consulta\"", e)
+            "Error al buscar en la web: ${e.message}. Si Sebastián te pregunta por el error, dile este mensaje tal cual."
         }
     }
 }
