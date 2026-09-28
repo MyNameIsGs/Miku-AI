@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Miku · Pantalla de carga</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=Dela+Gothic+One&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif;color:#EAF4F3;background:#0d1013}
+a{color:#39C5BB}a:hover{color:#7FE3DA}
+input::placeholder{color:#5E7C79}
+.lbl{font-family:'Chakra Petch','Bahnschrift',monospace;font-size:11px;font-weight:600;letter-spacing:.12em}
+.desk{position:relative;width:750px;height:720px;overflow:hidden;background-color:#12161a;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:24px 24px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+<div style="width: 1580px; height: 780px; display: flex; gap: 80px; background: #0d1013">
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<span class="lbl" style="height: 16px; color: #9DB9B6"><span style="color: #F0508F">1</span> · PRIMERA VEZ: SE DESCARGA EL SERVIDOR DE VOZ</span>
+<div class="desk">
+<div style="position: absolute; left: 175px; top: 210px; width: 400px; box-sizing: border-box; padding: 28px 28px 24px 28px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: rgba(9,20,23,0.94); border: 1px solid rgba(57,197,187,0.3); border-radius: 22px; box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 16px 40px rgba(0,0,0,0.35)">
+<svg width="56" height="56" viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="30" fill="#0E1D20" stroke="rgba(57,197,187,0.35)" stroke-width="2"></rect><g transform="translate(54 54) rotate(-30) scale(0.85) translate(-54 -54)"><rect x="47" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(-16 54 56)"></rect><rect x="52" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(16 54 56)"></rect><rect x="49" y="20" width="10" height="38" rx="5" fill="#39C5BB"></rect><rect x="48" y="54" width="12" height="30" rx="6" fill="#EAF4F3"></rect><rect x="46.5" y="52" width="15" height="6" rx="3" fill="#F0508F"></rect></g></svg>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center">
+<h1 style="margin: 0; font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 19px; font-weight: 400">Preparando su voz</h1>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #9DB9B6">Es la primera vez: falta descargar el servidor de voz. Solo pasa una vez.</p>
+</div>
+<div style="width: 100%; display: flex; flex-direction: column; gap: 8px">
+<div role="progressbar" aria-label="Descarga del servidor de voz" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" style="display: flex; align-items: flex-end; gap: 3px; height: 14px">
+<sc-for list="{{keys}}" as="k" hint-placeholder-count="36">
+<span style="flex: 1 1 0; height: {{k.h}}px; border-radius: 2px; background: {{k.bg}}"></span>
+</sc-for>
+</div>
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<span class="lbl" style="color: #9DB9B6">DESCARGANDO</span>
+<span style="font-family: 'Chakra Petch','Bahnschrift',monospace; font-size: 20px; font-weight: 600">62 %</span>
+</div>
+</div>
+<ol style="margin: 0; padding: 0; list-style: none; width: 100%; display: flex; gap: 6px">
+<li class="lbl" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; font-size: 10px; color: #06221F; background: #39C5BB; border-radius: 8px">1 DESCARGAR</li>
+<li class="lbl" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; font-size: 10px; color: #7E9B98; border: 1px solid rgba(157,185,182,0.25); border-radius: 8px">2 VERIFICAR</li>
+<li class="lbl" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; font-size: 10px; color: #7E9B98; border: 1px solid rgba(157,185,182,0.25); border-radius: 8px">3 ARRANCAR</li>
+</ol>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<span class="lbl" style="height: 16px; color: #9DB9B6"><span style="color: #F0508F">2</span> · CADA ARRANQUE: FRASES CADA 3 s, AL FINAL «CARGANDO A MIKU…»</span>
+<div class="desk">
+<div style="position: absolute; left: 215px; top: 110px; width: 320px; height: 620px; box-sizing: border-box; border: 1.5px dashed rgba(157,185,182,0.22); border-bottom: 0; border-radius: 160px 160px 0 0; display: flex; align-items: center; justify-content: center">
+<span class="lbl" style="color: #5E7C79">AVATAR 3D · CARGANDO</span>
+</div>
+
+<div role="status" style="position: absolute; left: 50%; top: 520px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 14px; background: rgba(9,20,23,0.92); border: 1px solid rgba(57,197,187,0.3); border-radius: 999px; box-shadow: 0 0 0 1px rgba(0,0,0,0.35); white-space: nowrap">
+<span style="width: 14px; height: 14px; box-sizing: border-box; border: 2px solid rgba(57,197,187,0.25); border-top-color: #39C5BB; border-radius: 50%; animation: spin 0.9s linear infinite"></span>
+<span style="font-size: 14px">Afinando la voz de Miku…</span>
+</div>
+
+<section aria-label="Hablar con Miku" style="position: absolute; left: 20px; top: 596px; width: 710px; height: 104px; box-sizing: border-box; padding: 12px 14px 14px 14px; display: flex; flex-direction: column; gap: 10px; background: rgba(9,20,23,0.92); border: 1px solid rgba(57,197,187,0.3); border-radius: 22px">
+<div aria-hidden="true" style="display: flex; align-items: flex-end; gap: 3px; height: 12px; padding: 0 4px; opacity: 0.5">
+<sc-for list="{{offKeys}}" as="k" hint-placeholder-count="36">
+<span style="flex: 1 1 0; height: {{k.h}}px; border-radius: 2px; background: {{k.bg}}"></span>
+</sc-for>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<button disabled aria-label="Adjuntar imagen o archivo" style="width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 1px solid rgba(157,185,182,0.12); border-radius: 14px; color: #3F5654"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"></path></svg></button>
+<button aria-label="Ocultar el texto" style="width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 1px solid rgba(157,185,182,0.25); border-radius: 14px; color: #9DB9B6"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+<label for="m2" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Mensaje para Miku</label>
+<input id="m2" type="text" disabled placeholder="Iniciando sistema de voz…" style="flex-grow: 1; height: 44px; box-sizing: border-box; padding: 0 16px; font-family: 'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif; font-size: 15px; background: rgba(234,244,243,0.02); border: 1px dashed rgba(157,185,182,0.18); border-radius: 14px">
+<button disabled aria-label="Hablar" style="width: 52px; height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; background: rgba(157,185,182,0.14); border: 0; border-radius: 50%; color: #4E6866"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button>
+</div>
+</section>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1580,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const pat = [0,1,0,1,0,0,1,0,1,0,1,0];
+    const keys = [];
+    const offKeys = [];
+    for (let i = 0; i < 36; i++) {
+      const black = pat[i % 12] === 1;
+      const off = black ? 'rgba(157,185,182,0.22)' : 'rgba(234,244,243,0.12)';
+      const on = i < 22;
+      keys.push({ h: black ? 9 : 14, bg: on ? (black ? '#2A8F88' : '#39C5BB') : off });
+      offKeys.push({ h: black ? 7 : 11, bg: off });
+    }
+    return { keys, offKeys };
+  }
+}
+</script>
+</body>
+</html>

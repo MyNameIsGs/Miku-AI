@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Miku · Vacíos y extremos</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=Dela+Gothic+One&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif;color:#EAF4F3;background:#0d1013}
+a{color:#39C5BB}a:hover{color:#7FE3DA}
+input::placeholder{color:#7E9B98}
+.lbl{font-family:'Chakra Petch','Bahnschrift',monospace;font-size:11px;font-weight:600;letter-spacing:.12em}
+.crop{position:relative;height:410px;box-sizing:border-box;padding:20px;display:flex;flex-direction:column;justify-content:center;gap:12px;overflow:hidden;border-radius:18px;background-color:#12161a;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:24px 24px}
+.cap{box-sizing:border-box;padding:14px 18px 16px 18px;display:flex;flex-direction:column;gap:8px;background:rgba(9,20,23,.88);border:1px solid rgba(57,197,187,.3);border-radius:18px}
+.b2{height:32px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:13px;color:#9DB9B6;background:transparent;border:1px solid rgba(157,185,182,.25);border-radius:8px}
+.bt{color:#39C5BB;border-color:rgba(57,197,187,.45)}
+.mod{box-sizing:border-box;padding:14px;display:flex;flex-direction:column;gap:4px;background:rgba(9,20,23,.96);border:1px solid rgba(57,197,187,.22);border-radius:16px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:46px;border-bottom:1px solid rgba(157,185,182,.12)}
+.led{width:6px;height:6px;border-radius:50%}
+.tool{display:flex;align-items:center;gap:8px;font-size:13px}
+.ok{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(57,197,187,.18);color:#39C5BB}
+.cat{width:74px;flex-shrink:0;font-family:'Chakra Petch','Bahnschrift',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;color:#7E9B98}
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:26px 18px;text-align:center;background:rgba(9,20,23,.96);border:1px solid rgba(57,197,187,.22);border-radius:16px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1000px; box-sizing: border-box; padding: 36px 40px; display: flex; flex-direction: column; gap: 18px; background: #0d1013">
+<h1 style="margin: 0; font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 28px; font-weight: 400">Vacíos y extremos</h1>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="lbl" style="color: #9DB9B6"><span style="color: #F0508F">A</span> · SIN CUENTAS CONECTADAS</span>
+<div class="crop">
+<div class="mod">
+<div class="lbl" style="display: flex; gap: 8px; margin-bottom: 4px"><span style="color: #F0508F">02</span><span style="color: #39C5BB">CONEXIONES</span></div>
+<div class="row"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Spotify</span><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7E9B98"><span class="led" style="border: 1px solid #7E9B98"></span>Sin conectar</span></div><button class="b2 bt">Conectar</button></div>
+<div class="row"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Gmail</span><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7E9B98"><span class="led" style="border: 1px solid #7E9B98"></span>Sin conectar</span></div><button class="b2 bt">Conectar</button></div>
+<div class="row"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Google Calendar</span><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7E9B98"><span class="led" style="border: 1px solid #7E9B98"></span>Sin conectar</span></div><button class="b2 bt">Conectar</button></div>
+<div class="row" style="border-bottom: 0"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Playwright · MCP</span><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7E9B98"><span class="led" style="border: 1px solid #7E9B98"></span>Apagado</span></div><button class="b2 bt">Conectar</button></div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="lbl" style="color: #9DB9B6"><span style="color: #F0508F">B</span> · MUCHAS TOOLS EN UN CICLO</span>
+<div class="crop" style="justify-content: flex-end">
+<div class="cap">
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #9DB9B6"><span class="lbl" style="color: #F58AB3">TÚ · </span>Prepara todo para el stream</p>
+<div style="height: 1px; background: rgba(57,197,187,0.18)"></div>
+<button class="b2" style="align-self: flex-start; height: 26px; font-size: 12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>4 pasos más, ya hechos</button>
+<div class="tool"><span class="ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="cat">APPS</span><span>Abrió la carpeta de apps</span></div>
+<div class="tool"><span class="ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="cat">SONIDO</span><span>Cambió la salida de audio</span></div>
+<div class="tool"><span style="width: 20px; height: 20px; flex-shrink: 0; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(57,197,187,0.25); border-top-color: #39C5BB"></span><span class="cat">SPOTIFY</span><span>Reproduciendo playlist…</span></div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="lbl" style="color: #9DB9B6"><span style="color: #F0508F">C</span> · RESPUESTA MUY LARGA (MÁX. 300 PX)</span>
+<div class="crop" style="justify-content: flex-end">
+<div class="cap" style="position: relative; height: 300px; padding-right: 22px; overflow: hidden">
+<span class="lbl" style="color: #39C5BB">MIKU</span>
+<p style="margin: 0; font-size: 16px; line-height: 1.45; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px); mask-image: linear-gradient(to bottom, transparent 0, #000 56px)">Mañana tienes tres cosas. A las diez, la reunión con el equipo de diseño; te recomiendo llevar las capturas de la ventana nueva. A las dos, la cita que anotaste la semana pasada. Y en la noche, el stream: ya dejé lista la carpeta con OBS y VTube Studio para que no se te olvide nada. Si quieres, te aviso veinte minutos antes de cada una, y en la mañana te hago un resumen para que empieces el día tranquilo y con tiempo de <span style="color: #39C5BB; border-bottom: 3px solid #F0508F">sobra.</span></p>
+<span aria-hidden="true" style="position: absolute; right: 8px; top: 48px; width: 3px; height: 70px; border-radius: 2px; background: rgba(57,197,187,0.5)"></span>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="lbl" style="color: #9DB9B6"><span style="color: #F0508F">D</span> · CORREOS LARGOS EN EL SUBMENÚ</span>
+<div class="crop" style="justify-content: flex-start">
+<div class="mod">
+<div class="row" style="border-bottom: 0"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Gmail</span><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9DB9B6"><span class="led" style="background: #39C5BB"></span>3 cuentas</span></div><button class="b2" aria-expanded="true" style="color: #EAF4F3; border-color: rgba(57,197,187,0.45)">Cuentas<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"></path></svg></button></div>
+</div>
+<div role="menu" aria-label="Cuentas de Gmail" style="margin-top: -6px; box-sizing: border-box; padding: 6px; display: flex; flex-direction: column; gap: 2px; background: rgba(9,20,23,0.97); border: 1px solid rgba(57,197,187,0.35); border-radius: 14px; box-shadow: 0 14px 32px rgba(0,0,0,0.45)">
+<div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 4px 0 10px"><span title="una.cuenta.con.un.nombre.muy.largo.para.probar@gmail.com" style="flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px">una.cuenta.con.un.nombre.muy.largo.para.probar@gmail.com</span><button class="b2" aria-label="Quitar cuenta" style="width: 30px; height: 30px; padding: 0; justify-content: center; border-color: transparent"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 4px 0 10px"><span style="flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px">trabajo@ejemplo.com</span><button class="b2" aria-label="Quitar cuenta" style="width: 30px; height: 30px; padding: 0; justify-content: center; border-color: transparent"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 4px 0 10px"><span style="flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px">otra.cuenta.personal.bastante.larga@gmail.com</span><button class="b2" aria-label="Quitar cuenta" style="width: 30px; height: 30px; padding: 0; justify-content: center; border-color: transparent"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div style="height: 1px; margin: 2px 6px; background: rgba(157,185,182,0.14)"></div>
+<button style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 13px; color: #39C5BB; background: transparent; border: 0; border-radius: 10px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Agregar otra cuenta</button>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="lbl" style="color: #9DB9B6"><span style="color: #F0508F">E</span> · CONOCIMIENTO SIN ENTRADAS</span>
+<div class="crop">
+<div class="empty">
+<span style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 16px; background: rgba(57,197,187,0.12); color: #39C5BB"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5V18c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V4.5c-3-.5-6 0-8 1.5z"></path><path d="M12 6v13.5"></path></svg></span>
+<span style="font-size: 15px; font-weight: 700">Todavía no sabe nada práctico</span>
+<span style="font-size: 13px; line-height: 1.5; color: #9DB9B6">Cuando le cuentes algo útil («mi GPU es…», «prefiero…»), lo anota sola y aparece aquí.</span>
+</div>
+<div class="empty" style="padding: 18px">
+<span style="font-size: 14px; font-weight: 700">Sin gestos propios todavía</span>
+<span style="font-size: 12px; line-height: 1.5; color: #9DB9B6">Quirks: los inventa en sus momentos de silencio.</span>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="lbl" style="color: #9DB9B6"><span style="color: #F0508F">F</span> · BÚSQUEDA SIN RESULTADOS</span>
+<div class="crop" style="justify-content: flex-start">
+<div style="position: relative">
+<label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Buscar por significado</label>
+<span style="position: absolute; left: 12px; top: 11px; color: #7E9B98"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg></span>
+<input id="q" type="search" value="recetas de cocina" style="width: 100%; height: 38px; box-sizing: border-box; padding: 0 12px 0 36px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; color: #EAF4F3; background: rgba(234,244,243,0.05); border: 1px solid #39C5BB; border-radius: 10px; outline: none; box-shadow: 0 0 0 3px rgba(57,197,187,0.2)">
+</div>
+<div class="empty" style="padding: 24px 18px">
+<span style="font-size: 15px; font-weight: 700">Nada cercano a «recetas de cocina»</span>
+<span style="font-size: 13px; color: #9DB9B6">La búsqueda es por significado: prueba con otras palabras.</span>
+<button class="b2 bt">Borrar búsqueda</button>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

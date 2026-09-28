@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Miku · Estados de los controles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=Dela+Gothic+One&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif;color:#EAF4F3;background:#12161a}
+a{color:#39C5BB}a:hover{color:#7FE3DA}
+input::placeholder{color:#7E9B98}
+.lbl{font-family:'Chakra Petch','Bahnschrift',monospace;font-size:11px;font-weight:600;letter-spacing:.12em}
+.grid{display:grid;grid-template-columns:210px repeat(5,minmax(0,1fr));column-gap:10px;row-gap:8px;align-items:center}
+.cell{height:74px;display:flex;align-items:center;justify-content:center;background:rgba(9,20,23,.92);border:1px solid rgba(57,197,187,.14);border-radius:14px}
+.rl{display:flex;flex-direction:column;gap:3px}
+.rl b{font-size:14px;font-weight:700}
+.rl span{font-size:12px;color:#7E9B98}
+.ib{width:40px;height:40px;display:flex;align-items:center;justify-content:center;padding:0;background:transparent;border:0;border-radius:10px;color:#9DB9B6}
+.main{width:52px;height:52px;display:flex;align-items:center;justify-content:center;padding:0;background:#39C5BB;border:0;border-radius:50%;color:#06221F;box-shadow:0 0 0 4px rgba(57,197,187,.15)}
+.b2{height:32px;padding:0 12px;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:13px;color:#9DB9B6;background:transparent;border:1px solid rgba(157,185,182,.25);border-radius:8px}
+.b1{height:32px;padding:0 12px;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:13px;font-weight:700;color:#06221F;background:#39C5BB;border:1px solid #39C5BB;border-radius:8px}
+.sw{width:44px;height:26px;box-sizing:border-box;padding:3px;display:flex;align-items:center;justify-content:flex-end;background:#39C5BB;border:0;border-radius:999px}
+.sw span{width:20px;height:20px;border-radius:50%;background:#06221F}
+.in{width:150px;height:36px;box-sizing:border-box;padding:0 12px;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:13px;color:#EAF4F3;background:rgba(234,244,243,.05);border:1px solid rgba(157,185,182,.22);border-radius:10px;outline:none}
+.tab{height:32px;padding:0 14px;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:13px;color:#9DB9B6;background:transparent;border:1px solid rgba(157,185,182,.22);border-radius:999px}
+.mi{width:160px;height:40px;padding:0 12px;text-align:left;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:13px;color:#EAF4F3;background:transparent;border:0;border-radius:10px}
+.focus{outline:2px solid #7FE3DA;outline-offset:2px}
+.var{display:flex;flex-direction:column;align-items:center;gap:10px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 960px; box-sizing: border-box; padding: 36px 40px; display: flex; flex-direction: column; gap: 18px; background: #12161a">
+
+<div style="display: flex; align-items: baseline; gap: 14px">
+<h1 style="margin: 0; font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 28px; font-weight: 400">Estados de los controles</h1>
+<span class="lbl" style="color: #F0508F">FOCO = ANILLO #7FE3DA, 2 PX, SEPARADO 2 PX</span>
+</div>
+
+<div class="grid">
+<span></span>
+<span class="lbl" style="text-align: center; color: #7E9B98">REPOSO</span>
+<span class="lbl" style="text-align: center; color: #7E9B98">HOVER</span>
+<span class="lbl" style="text-align: center; color: #7E9B98">FOCO (TECLADO)</span>
+<span class="lbl" style="text-align: center; color: #7E9B98">PRESIONADO</span>
+<span class="lbl" style="text-align: center; color: #7E9B98">DESHABILITADO</span>
+
+<div class="rl"><b>Botón de la barra</b><span>40 × 40, icono 18</span></div>
+<div class="cell"><button class="ib" aria-label="Memoria"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5V18c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V4.5c-3-.5-6 0-8 1.5z"></path><path d="M12 6v13.5"></path></svg></button></div>
+<div class="cell"><button class="ib" aria-label="Memoria" style="color: #EAF4F3; background: rgba(234,244,243,0.08)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5V18c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V4.5c-3-.5-6 0-8 1.5z"></path><path d="M12 6v13.5"></path></svg></button></div>
+<div class="cell"><button class="ib focus" aria-label="Memoria" style="color: #EAF4F3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5V18c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V4.5c-3-.5-6 0-8 1.5z"></path><path d="M12 6v13.5"></path></svg></button></div>
+<div class="cell"><button class="ib" aria-label="Memoria" style="color: #39C5BB; background: rgba(57,197,187,0.24); transform: scale(0.94)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5V18c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V4.5c-3-.5-6 0-8 1.5z"></path><path d="M12 6v13.5"></path></svg></button></div>
+<div class="cell"><button class="ib" disabled aria-label="Memoria" style="opacity: 0.35"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5V18c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V4.5c-3-.5-6 0-8 1.5z"></path><path d="M12 6v13.5"></path></svg></button></div>
+
+<div class="rl"><b>Botón principal</b><span>52 × 52, redondo</span></div>
+<div class="cell"><button class="main" aria-label="Hablar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button></div>
+<div class="cell"><button class="main" aria-label="Hablar" style="background: #5AD3CA; box-shadow: 0 0 0 6px rgba(57,197,187,0.22)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button></div>
+<div class="cell"><button class="main" aria-label="Hablar" style="outline: 2px solid #7FE3DA; outline-offset: 4px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button></div>
+<div class="cell"><button class="main" aria-label="Hablar" style="background: #2FA99F; box-shadow: none; transform: scale(0.94)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button></div>
+<div class="cell"><button class="main" disabled aria-label="Hablar" style="background: rgba(157,185,182,0.14); color: #4E6866; box-shadow: none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button></div>
+
+<div class="rl"><b>Botón secundario</b><span>alto 32, borde gris</span></div>
+<div class="cell"><button class="b2">Cancelar</button></div>
+<div class="cell"><button class="b2" style="color: #EAF4F3; border-color: rgba(57,197,187,0.45); background: rgba(234,244,243,0.04)">Cancelar</button></div>
+<div class="cell"><button class="b2 focus" style="color: #EAF4F3">Cancelar</button></div>
+<div class="cell"><button class="b2" style="color: #39C5BB; background: rgba(57,197,187,0.14); border-color: rgba(57,197,187,0.45)">Cancelar</button></div>
+<div class="cell"><button class="b2" disabled style="opacity: 0.35">Cancelar</button></div>
+
+<div class="rl"><b>Botón primario</b><span>Guardar, Confirmar, Crear</span></div>
+<div class="cell"><button class="b1">Guardar</button></div>
+<div class="cell"><button class="b1" style="background: #5AD3CA; border-color: #5AD3CA">Guardar</button></div>
+<div class="cell"><button class="b1 focus">Guardar</button></div>
+<div class="cell"><button class="b1" style="background: #2FA99F; border-color: #2FA99F; transform: scale(0.97)">Guardar</button></div>
+<div class="cell"><button class="b1" disabled style="color: #4E6866; background: rgba(157,185,182,0.18); border-color: transparent">Guardar</button></div>
+
+<div class="rl"><b>Interruptor</b><span>44 × 26, encendido</span></div>
+<div class="cell"><button class="sw" aria-pressed="true" aria-label="Ejemplo"><span></span></button></div>
+<div class="cell"><button class="sw" aria-pressed="true" aria-label="Ejemplo" style="background: #5AD3CA"><span></span></button></div>
+<div class="cell"><button class="sw focus" aria-pressed="true" aria-label="Ejemplo"><span></span></button></div>
+<div class="cell"><button class="sw" aria-pressed="true" aria-label="Ejemplo" style="background: #2FA99F"><span style="width: 24px; border-radius: 10px"></span></button></div>
+<div class="cell"><button class="sw" disabled aria-pressed="true" aria-label="Ejemplo" style="opacity: 0.35"><span></span></button></div>
+
+<div class="rl"><b>Campo de texto</b><span>alto 36–44, radio 10–14</span></div>
+<div class="cell"><input class="in" aria-label="Ejemplo" placeholder="Buscar"></div>
+<div class="cell"><input class="in" aria-label="Ejemplo" placeholder="Buscar" style="border-color: rgba(157,185,182,0.4)"></div>
+<div class="cell"><input class="in" aria-label="Ejemplo" value="mejilla" style="border-color: #39C5BB; box-shadow: 0 0 0 3px rgba(57,197,187,0.2)"></div>
+<div class="cell"><span class="lbl" style="color: #5E7C79">— NO APLICA —</span></div>
+<div class="cell"><input class="in" disabled aria-label="Ejemplo" placeholder="Iniciando…" style="border-style: dashed; border-color: rgba(157,185,182,0.18); background: rgba(234,244,243,0.02)"></div>
+
+<div class="rl"><b>Pestaña / píldora</b><span>sin seleccionar</span></div>
+<div class="cell"><button class="tab">Diario</button></div>
+<div class="cell"><button class="tab" style="color: #EAF4F3; border-color: rgba(57,197,187,0.45)">Diario</button></div>
+<div class="cell"><button class="tab focus" style="color: #EAF4F3">Diario</button></div>
+<div class="cell"><button class="tab" style="color: #39C5BB; background: rgba(57,197,187,0.14); border-color: rgba(57,197,187,0.45)">Diario</button></div>
+<div class="cell"><button class="tab" disabled style="opacity: 0.35">Diario</button></div>
+
+<div class="rl"><b>Ítem de menú</b><span>alto mín. 40</span></div>
+<div class="cell"><button class="mi">Guardar posición</button></div>
+<div class="cell"><button class="mi" style="background: rgba(234,244,243,0.06)">Guardar posición</button></div>
+<div class="cell"><button class="mi" style="outline: 2px solid #7FE3DA; outline-offset: -2px; background: rgba(234,244,243,0.06)">Guardar posición</button></div>
+<div class="cell"><button class="mi" style="color: #39C5BB; background: rgba(57,197,187,0.14)">Guardar posición</button></div>
+<div class="cell"><button class="mi" disabled style="color: #5E7C79">Guardar posición</button></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding-top: 8px; border-top: 1px solid rgba(57,197,187,0.18)">
+<span class="lbl" style="color: #39C5BB">BOTÓN PRINCIPAL · SUS 5 CARAS</span>
+<div style="display: flex; gap: 56px; padding-left: 8px">
+<div class="var"><button class="main" aria-label="Hablar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button><span class="lbl" style="color: #9DB9B6">MICRÓFONO</span></div>
+<div class="var"><button class="main" aria-label="Dejar de escuchar" style="background: #F0508F; color: #2A0714; box-shadow: 0 0 0 5px rgba(240,80,143,0.22), 0 0 0 11px rgba(240,80,143,0.08)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button><span class="lbl" style="color: #9DB9B6">ESCUCHANDO</span></div>
+<div class="var"><button class="main" aria-label="Enviar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button><span class="lbl" style="color: #9DB9B6">ENVIAR</span></div>
+<div class="var"><button class="main" aria-label="Cancelar respuesta" style="background: #EAF4F3; color: #12161a; box-shadow: 0 0 0 4px rgba(234,244,243,0.12)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button><span class="lbl" style="color: #9DB9B6">CANCELAR</span></div>
+<div class="var"><button class="main" aria-label="Detener" style="background: #EAF4F3; color: #12161a; box-shadow: 0 0 0 4px rgba(234,244,243,0.12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg></button><span class="lbl" style="color: #9DB9B6">DETENER</span></div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

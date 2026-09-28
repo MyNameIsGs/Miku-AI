@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Android · Chat con foto y pensando</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=Dela+Gothic+One&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif;color:#EAF4F3;background:#0B1517}
+a{color:#39C5BB}a:hover{color:#7FE3DA}
+.lbl{font-family:'Chakra Petch','Bahnschrift',monospace;font-size:11px;font-weight:600;letter-spacing:.12em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;padding:0;background:transparent;border:0;border-radius:14px;color:#9DB9B6}
+.me{align-self:flex-end;max-width:78%;padding:10px 14px;font-size:15px;line-height:1.45;background:rgba(240,80,143,.14);border:1px solid rgba(240,80,143,.32);border-radius:18px 18px 6px 18px}
+.her{max-width:82%;padding:10px 14px;font-size:15px;line-height:1.45;background:rgba(234,244,243,.06);border:1px solid rgba(57,197,187,.24);border-radius:18px 18px 18px 6px}
+.dot{width:7px;height:7px;border-radius:50%;background:#39C5BB;animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; display: flex; flex-direction: column; background: #0B1517">
+
+<header style="flex-shrink: 0; height: 68px; margin-top: 40px; box-sizing: border-box; padding: 0 8px 0 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(57,197,187,0.18)">
+<svg width="40" height="40" viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="54" fill="#0E1D20" stroke="rgba(57,197,187,0.45)" stroke-width="3"></rect><g transform="translate(54 54) rotate(-30) scale(0.85) translate(-54 -54)"><rect x="47" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(-16 54 56)"></rect><rect x="52" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(16 54 56)"></rect><rect x="49" y="20" width="10" height="38" rx="5" fill="#39C5BB"></rect><rect x="48" y="54" width="12" height="30" rx="6" fill="#EAF4F3"></rect><rect x="46.5" y="52" width="15" height="6" rx="3" fill="#F0508F"></rect></g></svg>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 19px; letter-spacing: 0.04em">Miku</span>
+<span class="lbl" style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: #39C5BB"><span style="width: 6px; height: 6px; border-radius: 50%; background: #39C5BB"></span>PENSANDO…</span>
+</div>
+<button class="ib" aria-label="Historial de voz"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg></button>
+<button class="ib" aria-label="Configuración"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
+</header>
+
+<div style="flex-grow: 1; box-sizing: border-box; padding: 16px 16px 12px 16px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden">
+<div class="me">¿Tengo algo pendiente esta semana?</div>
+<div class="her" style="display: flex; flex-direction: column; gap: 10px; min-width: 230px">
+<div style="display: flex; gap: 5px"><span class="dot"></span><span class="dot" style="animation-delay: 0.2s"></span><span class="dot" style="animation-delay: 0.4s"></span></div>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<div style="display: flex; align-items: center; gap: 8px"><span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(57,197,187,0.18); color: #39C5BB"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="lbl" style="width: 84px; font-size: 10px; color: #7E9B98">PENDIENTES</span><span style="color: #9DB9B6">Los revisó</span></div>
+<div style="display: flex; align-items: center; gap: 8px"><span style="width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(57,197,187,0.25); border-top-color: #39C5BB"></span><span class="lbl" style="width: 84px; font-size: 10px; color: #7E9B98">CALENDARIO</span><span>Revisando…</span></div>
+</div>
+</div>
+</div>
+
+<div style="flex-shrink: 0; box-sizing: border-box; padding: 10px 12px 30px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(57,197,187,0.18)">
+<div style="display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 6px; background: rgba(57,197,187,0.08); border: 1px solid rgba(57,197,187,0.35); border-radius: 14px">
+<div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: #1C3134; border-radius: 10px; color: #5E7C79"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"></rect><circle cx="9" cy="10" r="1.8"></circle><path d="M4 17l5-4.5 4 3.5 3-2.5 4.5 4"></path></svg></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Foto lista para enviar</span><span class="lbl" style="font-size: 10px; color: #7E9B98">SE MANDA CON TU MENSAJE</span></div>
+<button class="ib" aria-label="Quitar foto" style="width: 40px; height: 40px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<div style="display: flex; align-items: flex-end; gap: 8px">
+<button class="ib" aria-label="Adjuntar foto" aria-pressed="true" style="color: #39C5BB; background: rgba(57,197,187,0.14)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"></rect><circle cx="9" cy="10" r="1.8"></circle><path d="M4 17l5-4.5 4 3.5 3-2.5 4.5 4"></path></svg></button>
+<label for="msg" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Mensaje</label>
+<input id="msg" type="text" value="¿Qué planta es esta?" style="flex-grow: 1; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 14px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 15px; color: #EAF4F3; background: rgba(234,244,243,0.05); border: 1px solid #39C5BB; border-radius: 22px; outline: none">
+<button aria-label="Enviar" style="width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; background: #39C5BB; border: 0; border-radius: 50%; color: #06221F"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

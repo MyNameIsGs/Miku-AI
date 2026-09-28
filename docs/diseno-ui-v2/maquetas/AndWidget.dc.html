@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Android · Widget y acceso rápido</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=Dela+Gothic+One&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif;color:#EAF4F3;background:#0d1013}
+a{color:#39C5BB}a:hover{color:#7FE3DA}
+.lbl{font-family:'Chakra Petch','Bahnschrift',monospace;font-size:11px;font-weight:600;letter-spacing:.12em}
+.wg{display:flex;align-items:center;gap:12px;height:76px;box-sizing:border-box;padding:0 10px 0 12px;background:rgba(9,20,23,.94);border:1px solid rgba(57,197,187,.35);border-radius:26px;box-shadow:0 8px 20px rgba(0,0,0,.3);text-decoration:none;color:#EAF4F3}
+.mic{width:52px;height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.icon{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:#EAF4F3}
+.gen{width:56px;height:56px;border-radius:50%;background:rgba(234,244,243,.16)}
+.tile{display:flex;align-items:center;gap:12px;width:168px;height:68px;box-sizing:border-box;padding:0 14px;border-radius:22px;border:0;text-align:left;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif}
+.tile b{display:block;font-size:14px}
+.tile small{display:block;font-size:12px}
+</style>
+</helmet>
+<div style="width: 820px; height: 880px; display: flex; gap: 40px; background: #0d1013">
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<span class="lbl" style="height: 16px; color: #9DB9B6">PANTALLA DE INICIO · WIDGET 4 × 1</span>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; box-sizing: border-box; padding: 90px 16px 40px 16px; display: flex; flex-direction: column; gap: 22px; background-color: #1D2A2F; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 30px 30px">
+
+<a href="#" class="wg" aria-label="Hablar con Miku">
+<svg width="48" height="48" viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="54" fill="#0E1D20" stroke="rgba(57,197,187,0.45)" stroke-width="3"></rect><g transform="translate(54 54) rotate(-30) scale(0.85) translate(-54 -54)"><rect x="47" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(-16 54 56)"></rect><rect x="52" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(16 54 56)"></rect><rect x="49" y="20" width="10" height="38" rx="5" fill="#39C5BB"></rect><rect x="48" y="54" width="12" height="30" rx="6" fill="#EAF4F3"></rect><rect x="46.5" y="52" width="15" height="6" rx="3" fill="#F0508F"></rect></g></svg>
+<span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16px; font-weight: 700">Hablar con Miku</span><span class="lbl" style="font-size: 10px; color: #39C5BB">«HEY MIKU» ACTIVO</span></span>
+<span class="mic" style="background: #39C5BB; color: #06221F"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></span>
+</a>
+
+<a href="#" class="wg" aria-label="Hablar con Miku (prende Hey Miku)" style="border-color: rgba(157,185,182,0.3)">
+<svg width="48" height="48" viewBox="0 0 108 108" aria-hidden="true" style="opacity: 0.7"><rect width="108" height="108" rx="54" fill="#0E1D20" stroke="rgba(157,185,182,0.4)" stroke-width="3"></rect><g transform="translate(54 54) rotate(-30) scale(0.85) translate(-54 -54)"><rect x="47" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(-16 54 56)"></rect><rect x="52" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(16 54 56)"></rect><rect x="49" y="20" width="10" height="38" rx="5" fill="#39C5BB"></rect><rect x="48" y="54" width="12" height="30" rx="6" fill="#EAF4F3"></rect><rect x="46.5" y="52" width="15" height="6" rx="3" fill="#F0508F"></rect></g></svg>
+<span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16px; font-weight: 700">Hablar con Miku</span><span class="lbl" style="font-size: 10px; color: #9DB9B6">TOCAR PRENDE «HEY MIKU»</span></span>
+<span class="mic" style="background: transparent; border: 1.5px solid rgba(57,197,187,0.6); box-sizing: border-box; color: #39C5BB"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></span>
+</a>
+
+<div style="margin-top: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 20px">
+<div class="icon"><span class="gen"></span>Fotos</div>
+<div class="icon"><span class="gen"></span>Música</div>
+<div class="icon"><svg width="56" height="56" viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="54" fill="#0E1D20"></rect><g transform="translate(54 54) rotate(-30) scale(0.85) translate(-54 -54)"><rect x="47" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(-16 54 56)"></rect><rect x="52" y="26" width="9" height="32" rx="4.5" fill="#2A9D95" transform="rotate(16 54 56)"></rect><rect x="49" y="20" width="10" height="38" rx="5" fill="#39C5BB"></rect><rect x="48" y="54" width="12" height="30" rx="6" fill="#EAF4F3"></rect><rect x="46.5" y="52" width="15" height="6" rx="3" fill="#F0508F"></rect></g></svg>Miku</div>
+<div class="icon"><span class="gen"></span>Correo</div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<span class="lbl" style="height: 16px; color: #9DB9B6">ACCESO RÁPIDO · LA FICHA LA DIBUJA ANDROID</span>
+<div style="width: 390px; box-sizing: border-box; padding: 20px; display: flex; flex-direction: column; gap: 18px; background: #16191C; border-radius: 28px">
+<div style="display: flex; gap: 14px">
+<button class="tile" aria-pressed="true" style="color: #06221F; background: #39C5BB"><svg width="22" height="22" viewBox="0 0 108 108" aria-hidden="true"><g transform="translate(54 54) rotate(-30) scale(1.3) translate(-54 -54)" fill="#06221F"><rect x="47" y="26" width="9" height="25" rx="4.5" transform="rotate(-16 54 56)"></rect><rect x="52" y="26" width="9" height="25" rx="4.5" transform="rotate(16 54 56)"></rect><rect x="49" y="20" width="10" height="31" rx="5"></rect><rect x="48" y="59" width="12" height="25" rx="6"></rect></g></svg><span><b>Hey Miku</b><small>Escuchando</small></span></button>
+<button class="tile" aria-pressed="false" style="color: #C9D3D2; background: #2A3033"><svg width="22" height="22" viewBox="0 0 108 108" aria-hidden="true"><g transform="translate(54 54) rotate(-30) scale(1.3) translate(-54 -54)" fill="#C9D3D2"><rect x="47" y="26" width="9" height="25" rx="4.5" transform="rotate(-16 54 56)"></rect><rect x="52" y="26" width="9" height="25" rx="4.5" transform="rotate(16 54 56)"></rect><rect x="49" y="20" width="10" height="31" rx="5"></rect><rect x="48" y="59" width="12" height="25" rx="6"></rect></g></svg><span><b>Hey Miku</b><small>Apagado</small></span></button>
+</div>
+<div style="display: flex; gap: 14px">
+<span class="lbl" style="width: 168px; text-align: center; font-size: 10px; color: #7E9B98">ENCENDIDA</span>
+<span class="lbl" style="width: 168px; text-align: center; font-size: 10px; color: #7E9B98">APAGADA</span>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":880}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

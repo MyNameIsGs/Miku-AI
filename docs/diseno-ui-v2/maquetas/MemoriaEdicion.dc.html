@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Miku · Memoria: corregir y confirmar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=Dela+Gothic+One&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif;color:#EAF4F3;background:#0d1013}
+a{color:#39C5BB}a:hover{color:#7FE3DA}
+.lbl{font-family:'Chakra Petch','Bahnschrift',monospace;font-size:11px;font-weight:600;letter-spacing:.12em}
+.desk{position:relative;width:750px;height:720px;overflow:hidden;background-color:#12161a;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:24px 24px}
+.panel{position:absolute;left:12px;top:52px;width:726px;height:656px;box-sizing:border-box;padding:18px 20px 20px 20px;display:flex;flex-direction:column;gap:14px;background:rgba(9,20,23,.96);border:1px solid rgba(57,197,187,.3);border-radius:22px}
+.ttl{margin:0;font-family:'Dela Gothic One','Arial Black',sans-serif;font-size:24px;font-weight:400}
+.tab{height:34px;padding:0 14px;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:14px;color:#9DB9B6;background:transparent;border:1px solid rgba(157,185,182,.22);border-radius:999px;cursor:pointer}
+.tab[aria-selected="true"]{font-weight:700;color:#06221F;background:#39C5BB;border-color:#39C5BB}
+.item{display:flex;align-items:center;gap:14px;padding:12px 14px;background:rgba(234,244,243,.035);border:1px solid rgba(157,185,182,.14);border-radius:12px}
+.num{font-family:'Chakra Petch','Bahnschrift',monospace;font-size:11px;font-weight:600;letter-spacing:.1em;color:#F0508F;width:20px}
+.btn2{height:32px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font-family:'Zen Kaku Gothic New','Yu Gothic',sans-serif;font-size:13px;color:#9DB9B6;background:transparent;border:1px solid rgba(157,185,182,.25);border-radius:8px;cursor:pointer}
+.btnT{color:#39C5BB;border-color:rgba(57,197,187,.4)}
+.scrim{position:absolute;inset:0;background:rgba(5,10,12,.62)}
+.dialog{position:absolute;left:155px;top:230px;width:440px;box-sizing:border-box;padding:22px 22px 18px 22px;display:flex;flex-direction:column;gap:14px;background:#0B1719;border:1px solid rgba(57,197,187,.35);border-radius:20px;box-shadow:0 20px 48px rgba(0,0,0,.55)}
+</style>
+</helmet>
+<div style="width: 2410px; height: 780px; display: flex; gap: 80px; background: #0d1013">
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<span class="lbl" style="height: 16px; color: #9DB9B6"><span style="color: #F0508F">1</span> · CORREGIR: LA FILA SE VUELVE EDITABLE AHÍ MISMO</span>
+<div class="desk">
+<section class="panel" aria-labelledby="t1">
+<div style="display: flex; align-items: baseline; gap: 12px"><h1 id="t1" class="ttl">Memoria</h1><span class="lbl" style="color: #F0508F">ARCHIVO</span></div>
+<div role="tablist" aria-label="Secciones de memoria" style="display: flex; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid rgba(57,197,187,0.18)"><button role="tab" class="tab" aria-selected="true">Conocimiento</button><button role="tab" class="tab" aria-selected="false">Recuerdos</button><button role="tab" class="tab" aria-selected="false">Personalidad</button><button role="tab" class="tab" aria-selected="false">Diario</button><button role="tab" class="tab" aria-selected="false">Tacto</button></div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div class="item" style="opacity: 0.45"><span class="num">01</span><span style="flex-grow: 1; font-size: 14px; line-height: 1.5">Sebastián usa varias cuentas de Gmail: al revisar el correo, mirar todas.</span></div>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: rgba(57,197,187,0.06); border: 1px solid #39C5BB; border-radius: 12px; box-shadow: 0 0 0 3px rgba(57,197,187,0.15)">
+<div style="display: flex; align-items: center; gap: 8px"><span class="num">02</span><span class="lbl" style="color: #39C5BB">CORRIGIENDO</span></div>
+<label for="ed" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Texto de la entrada</label>
+<textarea id="ed" rows="3" style="width: 100%; box-sizing: border-box; padding: 10px 12px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; line-height: 1.5; color: #EAF4F3; background: rgba(9,20,23,0.7); border: 1px solid rgba(57,197,187,0.5); border-radius: 10px; resize: none; outline: none">Prefiere la voz de Edge (es-MX-DaliaNeural); Piper y Kokoro quedaron descartadas con pruebas A/B.</textarea>
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span class="lbl" style="font-size: 10px; color: #7E9B98">ENTER GUARDA · ESC CANCELA · SHIFT+ENTER SALTO</span>
+<div style="display: flex; gap: 6px"><button class="btn2">Cancelar</button><button class="btn2" style="color: #06221F; background: #39C5BB; border-color: #39C5BB; font-weight: 700">Guardar</button></div>
+</div>
+</div>
+
+<div class="item" style="opacity: 0.45"><span class="num">03</span><span style="flex-grow: 1; font-size: 14px; line-height: 1.5">Su GPU es una RTX 5070 Ti de 16 GB.</span></div>
+<div class="item" style="opacity: 0.45"><span class="num">04</span><span style="flex-grow: 1; font-size: 14px; line-height: 1.5">Su teléfono es un Redmagic 11 Pro.</span></div>
+</div>
+</section>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<span class="lbl" style="height: 16px; color: #9DB9B6"><span style="color: #F0508F">2</span> · OLVIDAR: DIÁLOGO PROPIO EN VEZ DEL DE WINDOWS</span>
+<div class="desk">
+<section class="panel" aria-labelledby="t2">
+<div style="display: flex; align-items: baseline; gap: 12px"><h1 id="t2" class="ttl">Memoria</h1><span class="lbl" style="color: #F0508F">ARCHIVO</span></div>
+<div role="tablist" aria-label="Secciones de memoria" style="display: flex; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid rgba(57,197,187,0.18)"><button role="tab" class="tab" aria-selected="true">Conocimiento</button><button role="tab" class="tab" aria-selected="false">Recuerdos</button><button role="tab" class="tab" aria-selected="false">Personalidad</button><button role="tab" class="tab" aria-selected="false">Diario</button><button role="tab" class="tab" aria-selected="false">Tacto</button></div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div class="item"><span class="num">01</span><span style="flex-grow: 1; font-size: 14px; line-height: 1.5">Sebastián usa varias cuentas de Gmail: al revisar el correo, mirar todas.</span><button class="btn2 btnT">Corregir</button><button class="btn2">Olvidar</button></div>
+<div class="item"><span class="num">02</span><span style="flex-grow: 1; font-size: 14px; line-height: 1.5">Prefiere la voz de Edge (es-MX-DaliaNeural); Piper y Kokoro quedaron descartadas.</span><button class="btn2 btnT">Corregir</button><button class="btn2">Olvidar</button></div>
+<div class="item" style="border-color: rgba(240,80,143,0.5)"><span class="num">03</span><span style="flex-grow: 1; font-size: 14px; line-height: 1.5">Su GPU es una RTX 5070 Ti de 16 GB.</span><button class="btn2 btnT">Corregir</button><button class="btn2">Olvidar</button></div>
+</div>
+</section>
+<div class="scrim"></div>
+<div role="dialog" aria-modal="true" aria-labelledby="d1" class="dialog">
+<h2 id="d1" style="margin: 0; font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 19px; font-weight: 400">¿Olvidar esto?</h2>
+<p style="margin: 0; padding: 10px 12px; font-size: 14px; line-height: 1.5; background: rgba(234,244,243,0.05); border-radius: 10px">Su GPU es una RTX 5070 Ti de 16 GB.</p>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #9DB9B6">Miku deja de usarlo en sus charlas. No se puede deshacer.</p>
+<div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px"><button class="btn2" style="height: 40px; padding: 0 16px; font-size: 14px">Cancelar</button><button class="btn2" style="height: 40px; padding: 0 16px; font-size: 14px; font-weight: 700; color: #2A0714; background: #F0508F; border-color: #F0508F">Olvidar</button></div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<span class="lbl" style="height: 16px; color: #9DB9B6"><span style="color: #F0508F">3</span> · PESTAÑA TACTO + «QUE LA REDISEÑE»</span>
+<div class="desk">
+<section class="panel" aria-labelledby="t3">
+<div style="display: flex; align-items: baseline; gap: 12px"><h1 id="t3" class="ttl">Memoria</h1><span class="lbl" style="color: #F0508F">ARCHIVO</span></div>
+<div role="tablist" aria-label="Secciones de memoria" style="display: flex; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid rgba(57,197,187,0.18)"><button role="tab" class="tab" aria-selected="false">Conocimiento</button><button role="tab" class="tab" aria-selected="false">Recuerdos</button><button role="tab" class="tab" aria-selected="false">Personalidad</button><button role="tab" class="tab" aria-selected="false">Diario</button><button role="tab" class="tab" aria-selected="true">Tacto</button></div>
+<p style="margin: 0; font-size: 13px; color: #9DB9B6">Cómo reacciona cuando la tocas. Cada reacción la diseñó ella.</p>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{zones}}" as="z" hint-placeholder-count="10">
+<div class="item" style="padding: 10px 12px; gap: 10px"><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">{{z.name}}</span><span class="lbl" style="font-size: 10px; color: {{z.color}}">{{z.state}}</span></div><button class="btn2 btnT" style="height: 30px; font-size: 12px">Que la rediseñe</button></div>
+</sc-for>
+</div>
+</section>
+<div class="scrim"></div>
+<div role="dialog" aria-modal="true" aria-labelledby="d2" class="dialog">
+<h2 id="d2" style="margin: 0; font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 19px; font-weight: 400">¿Que rediseñe «mejilla»?</h2>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #9DB9B6">Miku va a diseñar una reacción nueva para esta zona. La actual se reemplaza cuando termine.</p>
+<div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px"><button class="btn2" style="height: 40px; padding: 0 16px; font-size: 14px">Cancelar</button><button class="btn2" style="height: 40px; padding: 0 16px; font-size: 14px; font-weight: 700; color: #06221F; background: #39C5BB; border-color: #39C5BB">Que la rediseñe</button></div>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2410,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const names = ['Cabeza', 'Mejilla', 'Coletas', 'Mano', 'Brazo', 'Torso', 'Falda', 'Pierna', 'Caricia en la cabeza', 'Muchos toques seguidos', 'Agitar la ventana'];
+    const fallback = [6, 7];
+    const zones = names.map((name, i) => {
+      const own = !fallback.includes(i);
+      return { name, state: own ? 'DISEÑADA POR ELLA' : 'RESPALDO · AÚN NO LA DISEÑA', color: own ? '#39C5BB' : '#7E9B98' };
+    });
+    return { zones };
+  }
+}
+</script>
+</body>
+</html>
