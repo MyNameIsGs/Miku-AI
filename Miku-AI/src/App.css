@@ -427,7 +427,10 @@ a:hover {
 .controls-panel {
   position: absolute;
   left: 20px;
-  top: 596px;
+  /* Anclado al borde de abajo (antes top 596: quedaban 20 px libres y se
+     veía el avatar por debajo). Como toca el borde, las esquinas de abajo
+     van rectas, como un dock. */
+  bottom: 0;
   width: 710px;
   height: 104px;
   box-sizing: border-box;
@@ -437,7 +440,8 @@ a:hover {
   gap: 10px;
   background: var(--m-glass);
   border: 1px solid var(--m-line);
-  border-radius: 22px;
+  border-bottom: none;
+  border-radius: 22px 22px 0 0;
   z-index: 10;
 }
 
@@ -610,11 +614,12 @@ a:hover {
 }
 
 /* Caja de subtítulo, diseño v1 (components/Caption.tsx). Anclada abajo,
-   12 px sobre el panel de controles (top 596), crece hacia arriba. */
+   12 px sobre el panel de controles (104 px de alto, anclado abajo), crece
+   hacia arriba. */
 .caption {
   position: absolute;
   left: 40px;
-  bottom: 136px;
+  bottom: 116px;
   width: 670px;
   max-height: 300px;
   overflow-y: auto;
@@ -2884,7 +2889,7 @@ a:hover {
   animation: m-fade-in 180ms var(--m-ease-out) both;
 }
 .free-camera-pill.raised {
-  bottom: 136px;
+  bottom: 116px;
 }
 .free-camera-pill .free-camera-done {
   height: 26px;
