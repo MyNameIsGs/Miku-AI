@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
-import { ask } from "@tauri-apps/plugin-dialog";
 import {
   deleteKnowledgeEntry,
   KNOWLEDGE_TOP_K,
@@ -16,6 +15,7 @@ import {
   TouchReactionKey,
 } from "../lib/touchReactionsStore";
 import { IconClose, IconSearch } from "./Icons";
+import { ConfirmDialog } from "./ConfirmDialog";
 import type { MotionPhase } from "../hooks/usePresenceMotion";
 
 type MemoryPanelProps = {
@@ -186,13 +186,11 @@ function KnowledgeSection() {
       setEditing(null);
     });
 
+  // Entrada que se está por olvidar (diálogo de confirmación abierto).
+  const [confirmForget, setConfirmForget] = useState<string | null>(null);
+
   const handleDelete = async (entry: string) => {
-    const preview = entry.length > 120 ? `${entry.slice(0, 120)}…` : entry;
-    const approved = await ask(`¿Que Miku olvide esta entrada de su conocimiento?\n\n${preview}`, {
-      title: "Olvidar",
-      kind: "warning",
-    });
-    if (!approved) return;
+    setConfirmForget(null);
     if (editing === entry) setEditing(null);
     await run(() => deleteKnowledgeEntry(entry));
   };
@@ -232,26 +230,39 @@ function KnowledgeSection() {
         {searchByText && results && results.length > 0 && (
           <p className="mem-empty">El buscador por significado no responde; filtré por texto.</p>
         )}
-        <ul className="mem-list">
+        <ul className={`mem-list ${editing ? "is-editing" : ""}`}>
           {shown?.map((entry, i) =>
             editing === entry ? (
               <li key={`${i}:${entry}`} className="mem-row editing">
                 <span className="mem-row-number">{entryNumber(i)}</span>
-                <textarea
-                  className="mem-textarea"
-                  aria-label="Corregir entrada"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={Math.min(8, Math.max(3, draft.split("\n").length + 1))}
-                  autoFocus
-                />
-                <div className="mem-row-actions">
-                  <button className="mem-btn m-btn-primary" onClick={() => handleSave(entry)} disabled={!draft.trim()}>
-                    Guardar
-                  </button>
-                  <button className="mem-btn" onClick={() => setEditing(null)}>
-                    Cancelar
-                  </button>
+                <div className="mem-edit">
+                  <span className="mem-edit-label">CORREGIENDO</span>
+                  <textarea
+                    className="mem-textarea"
+                    aria-label="Corregir entrada"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    // Enter guarda, Esc cancela, Shift+Enter hace salto de línea.
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (draft.trim()) handleSave(entry);
+                      } else if (e.key === "Escape") {
+                        e.stopPropagation();
+                        setEditing(null);
+                      }
+                    }}
+                    rows={3}
+                    autoFocus
+                  />
+                  <div className="mem-edit-actions">
+                    <button className="mem-btn" onClick={() => setEditing(null)}>
+                      Cancelar
+                    </button>
+                    <button className="mem-btn m-btn-primary" onClick={() => handleSave(entry)} disabled={!draft.trim()}>
+                      Guardar
+                    </button>
+                  </div>
                 </div>
               </li>
             ) : (
@@ -268,7 +279,7 @@ function KnowledgeSection() {
                   >
                     Corregir
                   </button>
-                  <button className="mem-btn" onClick={() => handleDelete(entry)}>
+                  <button className="mem-btn" onClick={() => setConfirmForget(entry)}>
                     Olvidar
                   </button>
                 </div>
@@ -277,6 +288,19 @@ function KnowledgeSection() {
           )}
         </ul>
       </div>
+
+      {confirmForget !== null && (
+        <ConfirmDialog
+          title="¿Olvidar esto?"
+          confirmLabel="Olvidar"
+          tone="danger"
+          onConfirm={() => handleDelete(confirmForget)}
+          onCancel={() => setConfirmForget(null)}
+        >
+          <p className="m-dialog-quote">{confirmForget}</p>
+          <p className="m-dialog-text">Miku deja de usarlo en sus charlas. No se puede deshacer.</p>
+        </ConfirmDialog>
+      )}
 
       <Footer
         left={`CONOCIMIENTO.MD · ${entries?.length ?? 0} ${entries?.length === 1 ? "ENTRADA" : "ENTRADAS"}`}
@@ -365,17 +389,13 @@ function formatDate(iso: string): string {
 }
 
 function TouchSection() {
-  const [reactions, setReactions] = useState<[TouchReactionKey, DesignedTouchReaction][] | null>(null);
+  const [reactions, setReactions] = useState<Partial<Record<TouchReactionKey, DesignedTouchReaction>> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmKey, setConfirmKey] = useState<TouchReactionKey | null>(null);
 
   const reload = async () => {
     try {
-      const store = await listDesignedReactions();
-      setReactions(
-        (Object.entries(store) as [TouchReactionKey, DesignedTouchReaction][]).sort(([a], [b]) =>
-          a.localeCompare(b),
-        ),
-      );
+      setReactions(await listDesignedReactions());
     } catch (err) {
       setError(String(err));
     }
@@ -386,11 +406,7 @@ function TouchSection() {
   }, []);
 
   const handleRedesign = async (key: TouchReactionKey) => {
-    const approved = await ask(
-      `¿Borrar la reacción de Miku a "${TOUCH_LABELS[key] ?? key}"? La próxima vez que la toques ahí, la va a diseñar de nuevo.`,
-      { title: "Que la rediseñe", kind: "warning" },
-    );
-    if (!approved) return;
+    setConfirmKey(null);
     setError(null);
     try {
       await deleteDesignedReaction(key);
@@ -400,45 +416,72 @@ function TouchSection() {
     await reload();
   };
 
+  // Las 11 zonas siempre; las que ella todavía no diseñó usan el respaldo.
+  const zones = Object.keys(TOUCH_LABELS) as TouchReactionKey[];
+  const designedCount = reactions ? zones.filter((k) => reactions[k]).length : 0;
+
   return (
     <>
       <div className="mem-intro">
         <p className="mem-hint">
-          Cómo decidió reaccionar cuando la tocas en cada zona. Si alguna no te convence, bórrala: la próxima vez
-          que la toques ahí, la diseña de nuevo ella misma.
+          Cómo decidió reaccionar cuando la tocas en cada zona. Si alguna no te convence, pídele que la rediseñe: la
+          próxima vez que la toques ahí, la diseña de nuevo ella misma.
         </p>
       </div>
       <div className="m-panel-body">
         {error && <p className="mem-error">{error}</p>}
         {reactions === null && !error && <p className="mem-empty">Cargando…</p>}
-        {reactions?.length === 0 && <p className="mem-empty">Todavía no diseñó ninguna reacción propia.</p>}
-        <ul className="mem-list">
-          {reactions?.map(([key, reaction], i) => (
-            <li key={key} className="mem-row">
-              <span className="mem-row-number">{entryNumber(i)}</span>
-              <div className="mem-row-text mem-touch">
-                <span>
-                  {TOUCH_LABELS[key] ?? key}{" "}
-                  <span className="mem-touch-meta">· {reaction.expression ?? "sin cambiar la expresión"}</span>
-                </span>
-                <span className="mem-touch-meta">{describeMovement(reaction)}</span>
-                <span className="mem-touch-date">
-                  {formatDate(reaction.createdAt)}
-                  {reaction.side &&
-                    ` · diseñada del lado ${reaction.side === "left" ? "izquierdo" : "derecho"}, espejada del otro`}
-                </span>
-              </div>
-              <div className="mem-row-actions">
-                <button className="mem-btn" onClick={() => handleRedesign(key)}>
-                  Que la rediseñe
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        {reactions && (
+          <ul className="mem-touch-grid">
+            {zones.map((key) => {
+              const reaction = reactions[key];
+              return (
+                <li key={key} className="mem-row mem-touch-row">
+                  <div className="mem-row-text mem-touch">
+                    <span>{TOUCH_LABELS[key]}</span>
+                    <span className={`mem-touch-state ${reaction ? "own" : ""}`}>
+                      {reaction ? "DISEÑADA POR ELLA" : "RESPALDO · AÚN NO LA DISEÑA"}
+                    </span>
+                    {reaction && (
+                      <span className="mem-touch-meta" title={describeMovement(reaction)}>
+                        {reaction.expression ?? "sin cambiar la expresión"} · {formatDate(reaction.createdAt)}
+                        {reaction.side && ` · espejada del lado ${reaction.side === "left" ? "izquierdo" : "derecho"}`}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    className="mem-btn"
+                    onClick={() => setConfirmKey(key)}
+                    disabled={!reaction}
+                    title={
+                      reaction
+                        ? describeMovement(reaction)
+                        : "Todavía no diseñó esta: la diseña la primera vez que la toques ahí"
+                    }
+                  >
+                    Que la rediseñe
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
+      {confirmKey && (
+        <ConfirmDialog
+          title={`¿Que rediseñe «${TOUCH_LABELS[confirmKey].toLowerCase()}»?`}
+          confirmLabel="Que la rediseñe"
+          tone="primary"
+          onConfirm={() => handleRedesign(confirmKey)}
+          onCancel={() => setConfirmKey(null)}
+        >
+          <p className="m-dialog-text">
+            Miku la va a diseñar de nuevo la próxima vez que la toques ahí. Mientras tanto usa la reacción básica.
+          </p>
+        </ConfirmDialog>
+      )}
       <Footer
-        left={`REACCIONES AL TACTO · ${reactions?.length ?? 0} ZONAS`}
+        left={`REACCIONES AL TACTO · ${designedCount} DE ${zones.length} DISEÑADAS`}
         right="LAS DISEÑA ELLA LA PRIMERA VEZ QUE LA TOCAS"
       />
     </>

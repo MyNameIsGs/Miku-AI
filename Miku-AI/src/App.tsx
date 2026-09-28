@@ -322,7 +322,7 @@ function App() {
     const sendRegions = () => {
       const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
       document
-        .querySelectorAll(".m-panel, .app-launcher-panel, .controls-panel, .toolbar-menu")
+        .querySelectorAll(".m-panel, .app-launcher-panel, .controls-panel, .toolbar-menu, .m-dialog-layer")
         .forEach((el) => {
           const r = el.getBoundingClientRect();
           regions.push({ x: r.left, y: r.top, width: r.width, height: r.height });
