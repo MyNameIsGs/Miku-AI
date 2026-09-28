@@ -28,5 +28,10 @@
     "heard": "Emi que buscabalos a Japón por favor",
     "reply": "Uy, la búsqueda me falló, se cayó del otro lado. Intento de nuevo si quieres.\n\nY para que no busque a ciegas: ¿desde dónde saldrías y más o menos en qué fecha? Porque si es para después de tu viaje a Estados Unidos, cambia bastante el precio según la temporada.",
     "timestampMs": 1790634850318
+  },
+  {
+    "heard": "Hey mico Busca vuelos a Japón por favor",
+    "reply": "Ay, se me cayó la búsqueda dos veces — algo pasó del otro lado. ¿Quieres que lo intente de nuevo en un momento, o me dices desde qué ciudad y más o menos para cuándo, así lo tengo listo para el próximo intento?\n\nY oye... ¿vuelos a Japón? Eso no lo tenías en la lista. ¿Es para después de tu viaje a Estados Unidos, o me estás escondiendo algo bonito?",
+    "timestampMs": 1790634855134
   }
 ]
