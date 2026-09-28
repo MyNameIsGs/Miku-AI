@@ -2,11 +2,12 @@ import { load } from "@tauri-apps/plugin-store";
 
 // A6 del plan (idea de Sebastián): charla corta. El largo de cada
 // respuesta lo decide ella según lo que tiene que decir (ver la guía en
-// systemPrompt.ts); acá solo se le avisa si él la cortó con ⏹.
+// systemPrompt.ts). Cortarla con ⏹ no se le dice ni cambia sus respuestas
+// siguientes (pedido de Sebastián, 2026-09-28).
 //
-// También queda un registro local, para comparar antes y después con
-// datos: largo de cada respuesta y si la cortaron. En .settings.dat
-// (local, no se sincroniza), los últimos 500.
+// Solo queda un registro local, para comparar con datos: largo de cada
+// respuesta y si la cortaron. En .settings.dat (local, no se sincroniza),
+// los últimos 500.
 
 type Interruption = "botón" | "mensaje";
 
@@ -90,17 +91,4 @@ export async function endReply(live: LiveReply) {
   } catch (err) {
     console.error("Error guardando el registro de la charla:", err);
   }
-}
-
-// Para el prompt del turno nuevo: solo si él la cortó con ⏹ en la
-// respuesta anterior (un hecho concreto, no un patrón de largo). El largo
-// lo decide ella según lo que tiene que decir (pedido de Sebastián): no se
-// le pasan conteos de palabras. Si él escribió mientras ella seguía
-// hablando, queda en el registro local pero no se le dice.
-export function takeTalkSignals(): string | null {
-  noteInterruption("mensaje");
-  const last = current?.record;
-  if (!last || last.interrupted !== "botón") return null;
-  const pct = last.heardPct !== null ? `, cuando ibas por el ${last.heardPct} % de lo que decías` : "";
-  return `En tu respuesta anterior, Sebastián apretó el botón para cortarte${pct}.`;
 }

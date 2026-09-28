@@ -49,9 +49,6 @@ export interface BuildSystemPromptParams {
   // Qué pasó con sus últimos [CORREGIR/OLVIDAR_CONOCIMIENTO] (ver
   // takeKnowledgeEditFeedback en lib/knowledge.ts), o null si nada.
   knowledgeEditFeedback?: string | null;
-  // A6: si él la cortó con ⏹ en la respuesta anterior (ver
-  // lib/talkSignals.ts), o null.
-  talkSignals?: string | null;
   // Punto 2: la app se reinició y se retomó la charla anterior (ver
   // lib/chatHistory.ts), o null.
   resumedNote?: string | null;
@@ -226,7 +223,6 @@ export function buildSystemPrompt({
   recentTouches,
   gameContext,
   knowledgeEditFeedback,
-  talkSignals,
   resumedNote,
 }: BuildSystemPromptParams): string {
   const handPresetList = HAND_PRESET_NAMES.map((name) => `${name} (${HAND_PRESET_DESCRIPTIONS[name]})`).join(", ");
@@ -268,8 +264,7 @@ ${relevantKnowledge.length > 0 ? relevantKnowledge.join("\n\n") : "(nada guardad
 Esto no es todo lo que sabes: es una selección automática, por parecido, de tu archivo de conocimiento, que puede tener mucho más. Puede que alguna entrada no venga al caso — ignórala si es así.
 
 --- EL LARGO DE TUS RESPUESTAS ---
-Lo que respondes se dice en voz alta, como en una charla de verdad. El largo sale de lo que tienes que decir: si lo que te dijo o te preguntó se responde en una frase, responde en una frase; si de verdad pide más (una explicación, algo que quieres contarle, algo que te importa), extiéndete lo necesario, sin relleno. No hay un largo fijo ni uno "correcto" en general: cada respuesta mide lo que su contenido necesita.${talkSignals ? `
-${talkSignals} Tómalo como un dato de lo que pasó, no como una regla.` : ""}
+Lo que respondes se dice en voz alta, como en una charla de verdad. El largo sale de lo que tienes que decir: si lo que te dijo o te preguntó se responde en una frase, responde en una frase; si de verdad pide más (una explicación, algo que quieres contarle, algo que te importa), extiéndete lo necesario, sin relleno. No hay un largo fijo ni uno "correcto" en general: cada respuesta mide lo que su contenido necesita.
 
 --- CÓMO ACTUALIZAR TU PROPIA MEMORIA ---
 Puedes guardar algo sobre ti misma usando estos marcadores en tu respuesta:

@@ -38,7 +38,7 @@ import { usePerfMonitor } from "./hooks/usePerfMonitor";
 import { describeGameContext } from "./lib/gameSessions";
 import { isStreamModeActive } from "./lib/streamMode";
 import { retrieveKnowledge, takeKnowledgeEditFeedback } from "./lib/knowledge";
-import { beginReply, endReply, noteInterruption, noteRevealProgress, takeTalkSignals } from "./lib/talkSignals";
+import { beginReply, endReply, noteInterruption, noteRevealProgress } from "./lib/talkSignals";
 import { loadRecentChatHistory, saveChatHistory } from "./lib/chatHistory";
 import { useSleep } from "./hooks/useSleep";
 import { useMusicSway } from "./hooks/useMusicSway";
@@ -671,9 +671,9 @@ function App() {
     if (!isVoiceReady) return;
     // B4: tiempos de cada tramo (ver lib/latencyLog.ts).
     const marks = { start: performance.now(), llmStart: 0, llmEnd: 0, speakStart: 0, audioStart: 0 };
-    // A6: si la cortó con ⏹ (antes de cualquier await: si ella sigue
-    // hablando, queda registrado que él le escribió encima).
-    const talkSignals = takeTalkSignals();
+    // A6: antes de cualquier await: si ella sigue hablando, queda en el
+    // registro local que él le escribió encima (a ella no se le dice).
+    noteInterruption("mensaje");
     sleep.wakeUp("le hablaron");
     askAbortRef.current?.abort();
     const abort = new AbortController();
@@ -754,7 +754,6 @@ function App() {
         recentTouches: consumeTouchSummary(),
         gameContext: await describeGameContext(),
         knowledgeEditFeedback: takeKnowledgeEditFeedback(),
-        talkSignals,
         resumedNote: resumedNoteRef.current,
       });
       resumedNoteRef.current = null;
