@@ -2220,3 +2220,148 @@ a:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --- Botón atrás en paneles que se abren desde otro (Quirks) --- */
+.m-panel-heading-back {
+  align-items: center;
+}
+.m-panel .m-panel-back {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-right: -2px;
+  background: transparent;
+  border: 1px solid var(--m-line-soft);
+  border-radius: 12px;
+  color: var(--m-muted);
+  cursor: pointer;
+}
+.m-panel .m-panel-back:hover {
+  border-color: rgba(57, 197, 187, 0.45);
+  color: var(--m-text);
+}
+.m-panel .m-panel-back:active {
+  background: rgba(57, 197, 187, 0.14);
+  color: var(--m-teal);
+}
+
+/* --- Estado vacío genérico (ronda 2 §3.2) --- */
+.m-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.m-empty-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  border-radius: 16px;
+  background: rgba(57, 197, 187, 0.12);
+  color: var(--m-teal);
+}
+.m-empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--m-text);
+}
+.m-empty-text {
+  margin: 0;
+  max-width: 380px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--m-muted);
+}
+
+/* --- Quirks (ronda 2 §2.1) --- */
+.quirks-hint {
+  margin: 0;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--m-muted);
+  flex-shrink: 0;
+}
+.quirk-group + .quirk-group {
+  margin-top: 18px;
+}
+.quirk-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+.quirk-group-led {
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.quirk-group-label.evaluating {
+  color: var(--m-pink-text);
+}
+.quirk-group-label.evaluating .quirk-group-led {
+  border: 1.5px solid var(--m-pink);
+}
+.quirk-group-label.confirmed {
+  color: var(--m-teal);
+}
+.quirk-group-label.confirmed .quirk-group-led {
+  background: var(--m-teal);
+}
+.quirk-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.quirk-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--m-module);
+  border: 1px solid rgba(157, 185, 182, 0.14);
+  border-radius: 12px;
+}
+.quirk-row.evaluating {
+  background: rgba(240, 80, 143, 0.05);
+  border-color: rgba(240, 80, 143, 0.28);
+}
+.quirk-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.quirk-name {
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.quirk-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--m-muted);
+}
+.quirk-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}

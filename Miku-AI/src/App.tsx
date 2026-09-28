@@ -1462,6 +1462,7 @@ function App() {
   const controlsMotion = usePresenceMotion(showControls, { exitDelayMs: 600, exitMs: 180 });
   const configMotion = usePresenceMotion(showConfig, { exitMs: 160 });
   const memoryMotion = usePresenceMotion(showMemoryPanel, { exitMs: 160 });
+  const quirksMotion = usePresenceMotion(showQuirksPanel, { exitMs: 160 });
 
   const captionMode: CaptionMode | null =
     avatarState === "listening"
@@ -1505,8 +1506,12 @@ function App() {
           onToggleAppLauncher={() => setShowAppLauncher((v) => !v)}
           showMemoryPanel={showMemoryPanel}
           onToggleMemoryPanel={() => setShowMemoryPanel((v) => !v)}
-          showConfig={showConfig}
-          onToggleConfig={() => setShowConfig((v) => !v)}
+          // Quirks se abre desde Configuración: su botón queda marcado.
+          showConfig={showConfig || showQuirksPanel}
+          onToggleConfig={() => {
+            if (showQuirksPanel) setShowQuirksPanel(false);
+            else setShowConfig((v) => !v);
+          }}
           freeCamera={freeCamera}
           onToggleFreeCamera={() => setFreeCamera((v) => !v)}
           onSaveCamera={handleSaveCamera}
@@ -1565,8 +1570,13 @@ function App() {
         />
       )}
 
-      {showQuirksPanel && (
+      {quirksMotion.mounted && (
         <QuirksPanel
+          motion={quirksMotion.phase}
+          onBack={() => {
+            setShowQuirksPanel(false);
+            setShowConfig(true);
+          }}
           quirks={quirksState}
           onConfirm={handleConfirmQuirk}
           onRevertToEvaluando={handleRevertQuirkToEvaluando}
