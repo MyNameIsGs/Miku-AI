@@ -2826,3 +2826,10 @@ a:hover {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Caja de error: Reintentar / Descartar (propuesta aprobada de la ronda 2). */
+.caption-error-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 2px;
+}

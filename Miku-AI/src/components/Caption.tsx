@@ -30,6 +30,9 @@ type CaptionProps = {
   text: string;
   // Con el panel de controles a la vista va encima de él; si no, baja.
   raised: boolean;
+  // error: volver a mandar el mensaje o descartar el aviso.
+  onRetry?: () => void;
+  onDiscard?: () => void;
 };
 
 // Con muchas tools se ven las últimas; las anteriores se juntan.
@@ -183,6 +186,19 @@ export function Caption(props: CaptionProps) {
               NO PUDE RESPONDER
             </span>
             <p className="caption-error-text">{props.text}</p>
+            <div className="caption-error-actions">
+              {props.onRetry && (
+                <button className="m-btn m-btn-small m-btn-primary" onClick={props.onRetry}>
+                  <IconReload size={14} />
+                  Reintentar
+                </button>
+              )}
+              {props.onDiscard && (
+                <button className="m-btn m-btn-small" onClick={props.onDiscard}>
+                  Descartar
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>

@@ -106,6 +106,8 @@ import { loadPendientes, getActivePendientes } from "./lib/pendientes";
 // tapa la cabeza, y con Miku bloqueada sigue siendo usable (ver
 // click_through.rs). También es de donde se arrastra la ventana.
 const TOOLBAR_STRIP_HEIGHT = 40;
+// Lo que se le manda a Miku cuando solo hay una imagen adjunta.
+const IMAGE_ONLY_MESSAGE = "(imagen adjunta, sin mensaje de texto)";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -324,7 +326,7 @@ function App() {
     const sendRegions = () => {
       const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
       document
-        .querySelectorAll(".m-panel, .controls-panel, .toolbar-menu, .m-dialog-layer")
+        .querySelectorAll(".m-panel, .controls-panel, .toolbar-menu, .m-dialog-layer, .caption-error")
         .forEach((el) => {
           const r = el.getBoundingClientRect();
           regions.push({ x: r.left, y: r.top, width: r.width, height: r.height });
@@ -381,6 +383,9 @@ function App() {
   const [retryInfo, setRetryInfo] = useState<RetryInfo | null>(null);
   // El modelo no respondió (ronda 2 §3.1): la caja pasa a modo error.
   const [replyError, setReplyError] = useState<string | null>(null);
+  // El mensaje que no tuvo respuesta, para «Reintentar» (propuesta de la
+  // ronda 2 aprobada por Sebastián). También vuelve al campo.
+  const failedMessageRef = useRef<{ message: string; image: string | null } | null>(null);
   const [replyRevealing, setReplyRevealing] = useState(false);
   // La charla en curso (mientras piensa), para poder cancelarla desde el
   // botón principal del panel de controles. Una cancelada no habla ni se
@@ -979,7 +984,12 @@ function App() {
       }
       console.error("Error al consultar el LLM:", err);
       setLlmResponse("");
-      setReplyError("El modelo no contestó. Prueba a enviarlo de nuevo en un momento.");
+      // El mensaje vuelve al campo para no perderlo (si no escribiste otra
+      // cosa mientras tanto).
+      failedMessageRef.current = { message: userMessage, image: imageDataUrl ?? null };
+      if (userMessage !== IMAGE_ONLY_MESSAGE) setTranscript((current) => (current.trim() ? current : userMessage));
+      if (imageDataUrl) setAttachedImage((current) => current ?? imageDataUrl);
+      setReplyError("El modelo no contestó. Tu mensaje sigue ahí: puedes volver a enviarlo.");
     } finally {
       // Si se canceló (o ya empezó otra charla), el estado lo maneja quien
       // canceló o la charla nueva.
@@ -1003,6 +1013,26 @@ function App() {
     setLlmResponse("");
   };
 
+  // Caja de error: «Reintentar» vuelve a mandar el mensaje que falló;
+  // «Descartar» cierra el aviso y lo saca del campo.
+  const handleRetryFailed = () => {
+    const failed = failedMessageRef.current;
+    if (!failed || isThinking) return;
+    failedMessageRef.current = null;
+    setTranscript("");
+    setAttachedImage(null);
+    askMiku(failed.message, failed.image);
+  };
+  const handleDiscardFailed = () => {
+    const failed = failedMessageRef.current;
+    failedMessageRef.current = null;
+    setReplyError(null);
+    if (failed) {
+      setTranscript((current) => (current === failed.message ? "" : current));
+      setAttachedImage((current) => (current === failed.image ? null : current));
+    }
+  };
+
   // Tarea 8.1: acepta un texto explícito (ver handleAutoStopRecording) para
   // el caso de "voz sin manos" -- el VAD ya transcribió y quiere mandarlo
   // sin pasar por el cuadro de texto. Sin argumento, usa lo que haya en el
@@ -1015,10 +1045,7 @@ function App() {
     setTranscript("");
     const imageToSend = attachedImage;
     setAttachedImage(null);
-    askMiku(
-      messageToSend || "(imagen adjunta, sin mensaje de texto)",
-      imageToSend,
-    );
+    askMiku(messageToSend || IMAGE_ONLY_MESSAGE, imageToSend);
   };
 
   // --- Etapa 5: el contrato del loop animate() vive en useVRMScene. Estas
@@ -1634,6 +1661,8 @@ function App() {
           userEcho={userEcho}
           tools={toolTrail}
           retry={retryInfo}
+          onRetry={handleRetryFailed}
+          onDiscard={handleDiscardFailed}
           text={captionMode === "error" ? (replyError ?? "") : llmResponse}
           // Sube y baja junto con el panel de controles.
           raised={controlsMotion.mounted && controlsMotion.phase === "enter"}
