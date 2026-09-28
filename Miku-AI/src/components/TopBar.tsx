@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Mood, getCachedMood, getCurrentMood, onMoodChange } from "../lib/mood";
 import type { MusicCategory } from "../lib/musicStore";
+import type { MotionPhase } from "../hooks/usePresenceMotion";
 import {
   IconApps,
   IconBroadcast,
@@ -95,6 +96,8 @@ function useMood(): Mood {
 }
 
 type TopBarProps = {
+  // Fase de entrada/salida (ver usePresenceMotion).
+  motion?: MotionPhase;
   avatarState: AvatarState;
   getPresence: () => Presence;
   onMouseDown: (e: ReactMouseEvent) => void;
@@ -174,6 +177,7 @@ export function TopBar(props: TopBarProps) {
     <>
       <header
         className={`toolbar toolbar-presence-${shownPresence.kind}`}
+        data-motion={props.motion}
         onMouseDown={props.onMouseDown}
         onMouseMove={props.onMouseMove}
         onMouseUp={props.onPressEnd}

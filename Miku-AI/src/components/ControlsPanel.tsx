@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ClipboardEvent, RefObject } from "react";
 import type { AvatarState } from "./TopBar";
+import type { MotionPhase } from "../hooks/usePresenceMotion";
 import { IconAttach, IconClose, IconEye, IconEyeOff, IconMic, IconSend, IconStop } from "./Icons";
 
 // Panel de controles de abajo, diseño v1 (docs/diseno-ui-v1/README.md §3):
@@ -62,10 +63,16 @@ function PianoStrip({
 
     let frame = 0;
     let smoothed = 0;
+    // El nivel del audio se sigue mostrando igual (es información).
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const start = performance.now();
 
     const tick = () => {
-      if (mode === "thinking") {
+      if (mode === "thinking" && reducedMotion) {
+        // Reducir movimiento: sin barrido, tres teclas fijas en el centro.
+        const mid = Math.floor(KEY_COUNT / 2);
+        for (let i = 0; i < KEY_COUNT; i++) paint(i, Math.abs(i - mid) <= 1 ? KEY_TEAL : null);
+      } else if (mode === "thinking") {
         // Una tecla turquesa con dos vecinas al 45 % que recorre la fila
         // de ida y vuelta.
         const steps = ((performance.now() - start) / 1000) * SWEEP_KEYS_PER_SECOND;
@@ -111,6 +118,8 @@ function PianoStrip({
 // --- Panel ---------------------------------------------------------------
 
 type ControlsPanelProps = {
+  // Fase de entrada/salida (ver usePresenceMotion).
+  motion?: MotionPhase;
   avatarState: AvatarState;
   isVoiceReady: boolean;
   isThinking: boolean;
@@ -173,6 +182,7 @@ export function ControlsPanel(props: ControlsPanelProps) {
   return (
     <section
       className="controls-panel"
+      data-motion={props.motion}
       aria-label="Hablar con Miku"
       onFocus={() => props.onFocusChange(true)}
       onBlur={(e) => {

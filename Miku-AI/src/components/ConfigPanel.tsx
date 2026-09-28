@@ -10,6 +10,7 @@ import { Connections } from "../hooks/useConnections";
 import { useStreamMode } from "../hooks/useStreamMode";
 import { useGameMode } from "../hooks/useGameMode";
 import { IconClose } from "./Icons";
+import type { MotionPhase } from "../hooks/usePresenceMotion";
 
 // Panel de Configuración, diseño v1 (docs/diseno-ui-v1/README.md §4):
 // cuatro módulos numerados en dos columnas. Todo lo que ya existía se
@@ -18,6 +19,8 @@ import { IconClose } from "./Icons";
 // interruptor falso.
 
 type ConfigPanelProps = {
+  // Fase de entrada/salida (ver usePresenceMotion).
+  motion?: MotionPhase;
   voicePitch: number;
   setVoicePitch: (value: number) => void;
   voiceRate: number;
@@ -182,7 +185,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
   const quietNow = isQuietHours();
 
   return (
-    <div className="m-panel config-panel" role="dialog" aria-labelledby="cfg-title">
+    <div className="m-panel config-panel" data-motion={props.motion} role="dialog" aria-labelledby="cfg-title">
       <div className="m-panel-header">
         <div className="m-panel-heading">
           <h2 id="cfg-title" className="m-panel-title">

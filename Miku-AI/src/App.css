@@ -687,13 +687,6 @@ a:hover {
   border: 1px solid var(--m-line);
   border-radius: 22px;
   z-index: 10;
-  animation: controls-appear 0.18s ease-out;
-}
-@keyframes controls-appear {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
 }
 
 .piano-strip {
@@ -1967,4 +1960,122 @@ a:hover {
 }
 .caption-spoken {
   font-weight: 500;
+}
+
+/* ==========================================================================
+   Movimiento (ronda 2, DISENO.md §4 y Movimiento.dc.html). Todo con
+   transform y opacity; la fase la pone usePresenceMotion en data-motion.
+   ========================================================================== */
+.toolbar[data-motion="enter"],
+.controls-panel[data-motion="enter"] {
+  animation: m-rise-in 180ms var(--m-ease-out) both;
+}
+.toolbar[data-motion="exit"],
+.controls-panel[data-motion="exit"] {
+  animation: m-rise-out 180ms var(--m-ease-in) both;
+  pointer-events: none;
+}
+@keyframes m-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes m-rise-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.m-panel {
+  transform-origin: top center;
+}
+.m-panel[data-motion="enter"] {
+  animation: m-panel-in 220ms var(--m-ease-out) both;
+}
+.m-panel[data-motion="exit"] {
+  animation: m-panel-out 160ms var(--m-ease-in) both;
+  pointer-events: none;
+}
+@keyframes m-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes m-panel-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+.toolbar-menu {
+  animation: m-drop-in 140ms var(--m-ease-out) both;
+}
+@keyframes m-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Subtítulo: aparece subiendo 8 px, acompaña al panel al subir o bajar, y
+   su contenido se cruza al cambiar de estado. */
+.caption {
+  animation: m-caption-in 220ms var(--m-ease-out) both;
+  transition: bottom 180ms var(--m-ease-out);
+}
+@keyframes m-caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.caption-content {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  animation: m-fade-in 160ms var(--m-ease-std) both;
+}
+@keyframes m-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes m-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Botón principal: el ícono nuevo entra girando 90°. */
+.controls-main svg {
+  animation: m-face-in 160ms var(--m-ease-std) both;
+}
+@keyframes m-face-in {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg);
+  }
+}
+
+/* Reducir movimiento: solo fundidos cortos, sin desplazamientos ni giros. */
+@media (prefers-reduced-motion: reduce) {
+  [data-motion="enter"],
+  .toolbar-menu,
+  .caption,
+  .caption-content,
+  .controls-main svg {
+    animation-name: m-fade-in !important;
+    animation-duration: 120ms !important;
+  }
+  [data-motion="exit"] {
+    animation-name: m-fade-out !important;
+    animation-duration: 120ms !important;
+  }
+  .caption {
+    transition: none;
+  }
 }

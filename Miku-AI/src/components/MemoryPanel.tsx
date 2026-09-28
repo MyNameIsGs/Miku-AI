@@ -16,9 +16,12 @@ import {
   TouchReactionKey,
 } from "../lib/touchReactionsStore";
 import { IconClose, IconSearch } from "./Icons";
+import type { MotionPhase } from "../hooks/usePresenceMotion";
 
 type MemoryPanelProps = {
   onClose: () => void;
+  // Fase de entrada/salida (ver usePresenceMotion).
+  motion?: MotionPhase;
 };
 
 type Tab = "conocimiento" | "memorias" | "personalidad" | "diario" | "tacto";
@@ -40,11 +43,11 @@ const TABS: { id: Tab; label: string }[] = [
 //
 // Carga sus propios datos al abrirse (como el panel de quirks, recién cuando
 // hace falta) para no sumar estado a App.tsx. Diseño v1: README §4.
-export function MemoryPanel({ onClose }: MemoryPanelProps) {
+export function MemoryPanel({ onClose, motion }: MemoryPanelProps) {
   const [tab, setTab] = useState<Tab>("conocimiento");
 
   return (
-    <div className="m-panel memory-panel" role="dialog" aria-labelledby="mem-title">
+    <div className="m-panel memory-panel" data-motion={motion} role="dialog" aria-labelledby="mem-title">
       <div className="m-panel-header">
         <div className="m-panel-heading">
           <h2 id="mem-title" className="m-panel-title">

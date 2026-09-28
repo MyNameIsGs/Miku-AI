@@ -67,6 +67,8 @@ export function Caption(props: CaptionProps) {
 
   return (
     <div ref={boxRef} className={`caption caption-${mode} ${props.raised ? "" : "caption-low"}`} aria-live="polite">
+      {/* Al cambiar de estado, el contenido entra con un fundido (ronda 2 §4). */}
+      <div key={mode} className="caption-content">
       {mode === "listening" && (
         <>
           <div className="caption-label">
@@ -118,6 +120,7 @@ export function Caption(props: CaptionProps) {
           <SpokenText text={props.text} karaoke={mode === "speaking"} />
         </>
       )}
+      </div>
     </div>
   );
 }

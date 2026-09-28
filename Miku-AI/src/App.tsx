@@ -62,6 +62,7 @@ import { QuirksPanel } from "./components/QuirksPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { TopBar, Presence } from "./components/TopBar";
+import { usePresenceMotion } from "./hooks/usePresenceMotion";
 import { isQuietHours } from "./lib/quietHours";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { Caption, CaptionMode } from "./components/Caption";
@@ -1455,6 +1456,13 @@ function App() {
     !!attachedImage ||
     controlsFocused;
 
+  // Entradas y salidas animadas (ronda 2 §4): la barra y el panel esperan
+  // 600 ms antes de irse, para no parpadear si el mouse solo pasa.
+  const barMotion = usePresenceMotion(showToolbar, { exitDelayMs: 600, exitMs: 180 });
+  const controlsMotion = usePresenceMotion(showControls, { exitDelayMs: 600, exitMs: 180 });
+  const configMotion = usePresenceMotion(showConfig, { exitMs: 160 });
+  const memoryMotion = usePresenceMotion(showMemoryPanel, { exitMs: 160 });
+
   const captionMode: CaptionMode | null =
     avatarState === "listening"
       ? "listening"
@@ -1481,8 +1489,9 @@ function App() {
       {fileDragOver && <div className="file-drop-hint">Suéltalo para que Miku lo vea</div>}
       {/* La barra aparece solo al pasar el mouse (pedido de Sebastián),
           aunque Miku esté escuchando o pensando. */}
-      {showToolbar && (
+      {barMotion.mounted && (
         <TopBar
+          motion={barMotion.phase}
           avatarState={avatarState}
           getPresence={getPresence}
           onMouseDown={handleToolbarMouseDown}
@@ -1507,8 +1516,9 @@ function App() {
         />
       )}
 
-      {showControls && (
+      {controlsMotion.mounted && (
         <ControlsPanel
+          motion={controlsMotion.phase}
           onFocusChange={setControlsFocused}
           avatarState={avatarState}
           isVoiceReady={isVoiceReady}
@@ -1565,10 +1575,13 @@ function App() {
         />
       )}
 
-      {showMemoryPanel && <MemoryPanel onClose={() => setShowMemoryPanel(false)} />}
+      {memoryMotion.mounted && (
+        <MemoryPanel motion={memoryMotion.phase} onClose={() => setShowMemoryPanel(false)} />
+      )}
 
-      {showConfig && (
+      {configMotion.mounted && (
         <ConfigPanel
+          motion={configMotion.phase}
           voicePitch={voicePitch}
           setVoicePitch={setVoicePitch}
           voiceRate={voiceRate}
@@ -1600,7 +1613,8 @@ function App() {
           tools={toolTrail}
           note={thinkingNote}
           text={llmResponse}
-          raised={showControls}
+          // Sube y baja junto con el panel de controles.
+          raised={controlsMotion.mounted && controlsMotion.phase === "enter"}
         />
       )}
 
