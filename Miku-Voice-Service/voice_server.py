@@ -34,6 +34,7 @@ os.chdir(system_temp)
 
 import threading
 import time as time_module
+from collections import deque
 
 import numpy as np
 import sounddevice as sd
@@ -113,6 +114,18 @@ WAKE_WORD_THRESHOLD = 0.85
 WAKE_WORD_SAMPLE_RATE = 16000
 WAKE_WORD_FRAME_SAMPLES = 1280  # 80ms a 16kHz, mismo tamaño de frame que usa nanowakeword
 WAKE_WORD_COOLDOWN_S = 3.0
+
+# Registro de detecciones (2026-09-28, para calibrar los falsos positivos
+# con audio del propio equipo): por cada detección se guarda el audio de
+# los ~2,5 s previos + 0,64 s posteriores (.wav) y el score cuadro a
+# cuadro (.json), en %LOCALAPPDATA%\MikuAI\wake-word-log\. No cambia cómo
+# se detecta. Los cuadros posteriores se miden retrasando interpreter.reset()
+# (antes se reseteaba al instante y no se veía si el score se sostenía).
+WAKE_WORD_LOG_DIR = os.path.join(
+    os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "MikuAI", "wake-word-log"
+)
+WAKE_WORD_LOG_PRE_FRAMES = 31  # ~2,5 s
+WAKE_WORD_LOG_POST_FRAMES = 8  # ~0,64 s
 
 # El frontend hace polling de este contador (ver /wake-word/poll) -- se
 # incrementa cada vez que se detecta "Hey Miku", en vez de un evento push,
@@ -325,9 +338,36 @@ def _wake_word_loop():
         _vad = None
 
     last_trigger_at = 0.0
+    # Registro de detecciones (ver WAKE_WORD_LOG_DIR): audio y scores
+    # recientes, y la detección en curso esperando sus cuadros posteriores.
+    recent_frames = deque(maxlen=WAKE_WORD_LOG_PRE_FRAMES)
+    recent_scores = deque(maxlen=WAKE_WORD_LOG_PRE_FRAMES)
+    pending_log = None
+
+    def save_detection_log(entry):
+        try:
+            os.makedirs(WAKE_WORD_LOG_DIR, exist_ok=True)
+            base = os.path.join(WAKE_WORD_LOG_DIR, entry["stamp"])
+            with wave.open(base + ".wav", "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(WAKE_WORD_SAMPLE_RATE)
+                wav_file.writeframes(np.concatenate(entry["frames"]).astype(np.int16).tobytes())
+            with open(base + ".json", "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "threshold": WAKE_WORD_THRESHOLD,
+                        "detection_frame": entry["detection_frame"],
+                        "scores": entry["scores"],
+                    },
+                    f,
+                )
+        except Exception:
+            print("[WAKE_WORD][WARN] No se pudo guardar el registro de la detección:")
+            traceback.print_exc()
 
     def audio_callback(indata, _frames, _time_info, status):
-        nonlocal last_trigger_at
+        nonlocal last_trigger_at, pending_log
         global wake_word_detection_id
 
         if status:
@@ -335,13 +375,36 @@ def _wake_word_loop():
 
         frame = indata[:, 0]
 
+        # Cuadros posteriores de una detección en curso (registro): se miden
+        # aunque la app ya haya pasado el micrófono al VAD para grabar.
+        logging_post_frames = pending_log is not None
+        if logging_post_frames:
+            try:
+                post_score = round(float(interpreter.predict(frame).score), 4)
+            except Exception:
+                post_score = None
+            pending_log["frames"].append(frame.copy())
+            pending_log["scores"].append(post_score)
+            pending_log["post_left"] -= 1
+            if pending_log["post_left"] <= 0:
+                entry, pending_log = pending_log, None
+                # El score interno queda "pegado" arriba varios segundos
+                # después de detectar (filtro de patience/debounce de
+                # nanowakeword, pensado para no cortar a mitad de frase).
+                # Se resetea para no arrastrar ese estado durante el
+                # cooldown ni interferir con la próxima detección real --
+                # ahora 8 cuadros después de detectar, para registrarlos.
+                interpreter.reset()
+                threading.Thread(target=save_detection_log, args=(entry,), daemon=True).start()
+
         # Modos mutuamente excluyentes del mismo stream -- ver el comentario
         # largo arriba de vad_state_lock.
         if vad_enabled:
             _process_vad_frame(frame)
             return
 
-        if not wake_word_enabled:
+        # Este cuadro ya pasó por el detector (arriba): no dos veces.
+        if not wake_word_enabled or logging_post_frames:
             return
 
         try:
@@ -351,19 +414,24 @@ def _wake_word_loop():
             traceback.print_exc()
             return
 
-        if result.score >= WAKE_WORD_THRESHOLD:
+        score = float(result.score)
+        recent_frames.append(frame.copy())
+        recent_scores.append(round(score, 4))
+
+        if score >= WAKE_WORD_THRESHOLD:
             now = time_module.monotonic()
             if now - last_trigger_at >= WAKE_WORD_COOLDOWN_S:
                 last_trigger_at = now
                 with wake_word_state_lock:
                     wake_word_detection_id += 1
-                print(f"[WAKE_WORD] Detectado 'Hey Miku' (score={result.score:.3f})")
-                # El score interno queda "pegado" arriba varios segundos
-                # después de detectar (filtro de patience/debounce de
-                # nanowakeword, pensado para no cortar a mitad de frase).
-                # Se resetea acá para no arrastrar ese estado durante el
-                # cooldown ni interferir con la próxima detección real.
-                interpreter.reset()
+                print(f"[WAKE_WORD] Detectado 'Hey Miku' (score={score:.3f})")
+                pending_log = {
+                    "stamp": time_module.strftime("%Y%m%d-%H%M%S"),
+                    "frames": list(recent_frames),
+                    "scores": list(recent_scores),
+                    "detection_frame": len(recent_scores) - 1,
+                    "post_left": WAKE_WORD_LOG_POST_FRAMES,
+                }
 
     try:
         with sd.InputStream(
