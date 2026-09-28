@@ -271,21 +271,21 @@ a:hover {
   color: var(--m-pink-text);
 }
 
-/* Menú "Vista y cámara". Pegado a la barra (top 40, sin hueco): con Miku
-   bloqueada, un hueco entre las dos zonas haría que la barra se escondiera
-   al bajar el mouse al menú. */
+/* Menú de cámara (ronda 2 §2.6). 4 px debajo de la barra: con Miku
+   bloqueada, cruzar ese hueco no esconde la barra porque espera 600 ms
+   antes de irse (ver usePresenceMotion). */
 .toolbar-menu {
   position: absolute;
-  top: 40px;
-  min-width: 260px;
+  top: 44px;
+  width: 272px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 8px;
-  background: var(--m-glass-panel);
-  border: 1px solid var(--m-line);
-  border-top: none;
-  border-radius: 0 0 14px 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  background: rgba(9, 20, 23, 0.97);
+  border: 1px solid rgba(57, 197, 187, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
   z-index: 12;
 }
 .toolbar-menu-heading {
@@ -294,45 +294,60 @@ a:hover {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  color: var(--m-pink);
-}
-.toolbar-menu-heading:not(:first-child) {
-  margin-top: 4px;
-  border-top: 1px solid var(--m-line-soft);
-  padding-top: 10px;
+  color: var(--m-dim);
 }
 .toolbar-menu .toolbar-menu-item {
+  min-height: 44px;
   display: grid;
-  grid-template-columns: 18px 1fr;
-  column-gap: 8px;
+  grid-template-columns: 22px 1fr;
+  column-gap: 10px;
   align-items: center;
   text-align: left;
-  padding: 8px 10px;
+  padding: 7px 10px;
   background: transparent;
   border: 0;
   border-radius: 10px;
   box-shadow: none;
   color: var(--m-text);
   font-family: var(--m-font-body);
-  font-size: 13px;
-  font-weight: 500;
   cursor: pointer;
 }
-.toolbar-menu .toolbar-menu-item:hover {
-  background: rgba(57, 197, 187, 0.1);
-}
-.toolbar-menu-check {
+.toolbar-menu-box,
+.toolbar-menu-icon {
+  grid-row: span 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--m-teal);
-  grid-row: span 2;
+}
+.toolbar-menu-box {
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1.5px solid rgba(157, 185, 182, 0.55);
+  border-radius: 5px;
+  color: var(--m-on-teal);
+}
+.toolbar-menu-box.on {
+  background: var(--m-teal);
+  border-color: var(--m-teal);
+}
+.toolbar-menu-icon {
+  color: var(--m-muted);
+}
+.toolbar-menu-label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
 }
 .toolbar-menu-hint {
   grid-column: 2;
-  font-size: 11px;
-  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.3;
   color: var(--m-dim);
+}
+.toolbar-menu-item.saved .toolbar-menu-label,
+.toolbar-menu-item.saved .toolbar-menu-icon {
+  color: var(--m-teal);
 }
 
 /* Modo juego (useGameMode.ts): se desvanece hacia abajo antes de
@@ -1691,7 +1706,6 @@ a:hover {
 }
 .controls-panel,
 .caption,
-.toolbar-menu,
 .m-panel {
   box-shadow: var(--m-edge);
 }

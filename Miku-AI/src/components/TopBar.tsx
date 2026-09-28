@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { Mood, getCachedMood, getCurrentMood, onMoodChange } from "../lib/mood";
 import type { MusicCategory } from "../lib/musicStore";
 import type { MotionPhase } from "../hooks/usePresenceMotion";
@@ -9,6 +9,7 @@ import {
   IconDoNotDisturb,
   IconMoon,
   IconNote,
+  IconSave,
   IconCamera,
   IconCheck,
   IconClose,
@@ -153,7 +154,10 @@ export function TopBar(props: TopBarProps) {
       setCameraMenuOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCameraMenuOpen(false);
+      if (e.key === "Escape") {
+        setCameraMenuOpen(false);
+        cameraButtonRef.current?.focus();
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -162,6 +166,21 @@ export function TopBar(props: TopBarProps) {
       document.removeEventListener("keydown", onKey);
     };
   }, [cameraMenuOpen]);
+
+  // Al abrir el menú, el foco va al primer ítem (ronda 2 §2.6: flechas
+  // arriba/abajo recorren, Enter o Espacio activan, Esc cierra).
+  useEffect(() => {
+    if (cameraMenuOpen) menuRef.current?.querySelector<HTMLElement>("[role^='menuitem']")?.focus();
+  }, [cameraMenuOpen]);
+
+  const handleMenuKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>("[role^='menuitem']") ?? [])];
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const next = e.key === "ArrowDown" ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+    items[next]?.focus();
+  };
 
   useEffect(() => {
     if (!cameraSaved) return;
@@ -311,7 +330,14 @@ export function TopBar(props: TopBarProps) {
 
       {/* Fuera del <header>: la barra tiene overflow-x y recortaría el menú. */}
       {cameraMenuOpen && (
-        <div ref={menuRef} className="toolbar-menu" role="menu" aria-label="Cámara" style={{ left: menuLeft }}>
+        <div
+          ref={menuRef}
+          className="toolbar-menu"
+          role="menu"
+          aria-label="Cámara"
+          style={{ left: menuLeft }}
+          onKeyDown={handleMenuKeyDown}
+        >
           <div className="toolbar-menu-heading">CÁMARA</div>
           <button
             role="menuitemcheckbox"
@@ -319,17 +345,22 @@ export function TopBar(props: TopBarProps) {
             className="toolbar-menu-item"
             onClick={props.onToggleFreeCamera}
           >
-            <span className="toolbar-menu-check">{props.freeCamera && <IconCheck />}</span>
-            Cámara libre
+            <span className={`toolbar-menu-box ${props.freeCamera ? "on" : ""}`} aria-hidden="true">
+              {props.freeCamera && <IconCheck size={12} strokeWidth={3} />}
+            </span>
+            <span className="toolbar-menu-label">Cámara libre</span>
             <span className="toolbar-menu-hint">mover la vista con el mouse</span>
           </button>
           <button
             role="menuitem"
-            className="toolbar-menu-item"
+            className={`toolbar-menu-item ${cameraSaved ? "saved" : ""}`}
             onClick={() => props.onSaveCamera().then(() => setCameraSaved(true))}
           >
-            <span className="toolbar-menu-check">{cameraSaved && <IconCheck />}</span>
-            {cameraSaved ? "Posición guardada" : "Guardar posición de la cámara"}
+            <span className="toolbar-menu-icon" aria-hidden="true">
+              {cameraSaved ? <IconCheck size={16} /> : <IconSave size={16} />}
+            </span>
+            <span className="toolbar-menu-label">{cameraSaved ? "Posición guardada" : "Guardar posición"}</span>
+            <span className="toolbar-menu-hint">así arranca la próxima vez</span>
           </button>
         </div>
       )}
