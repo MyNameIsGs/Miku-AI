@@ -33,8 +33,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -162,17 +172,7 @@ fun OverlayScreen(phase: MikuOverlayPhase, onDismiss: () -> Unit) {
                             p.tools.forEach { tool -> ToolRow(tool) }
                         }
                         is MikuOverlayPhase.Responding -> {
-                            Text(
-                                text = p.reply,
-                                color = MikuText,
-                                fontFamily = ZenKaku,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 17.sp,
-                                lineHeight = 25.sp,
-                                modifier = Modifier
-                                    .heightIn(max = 280.dp)
-                                    .verticalScroll(rememberScrollState()),
-                            )
+                            KaraokeReply(p)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     "Abrir el chat",
@@ -206,6 +206,105 @@ fun OverlayScreen(phase: MikuOverlayPhase, onDismiss: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * La respuesta revelándose por palabras al ritmo del audio, con la última
+ * palabra en turquesa y subrayada en rosa (estilo karaoke), y la tira de
+ * teclas rosa siguiendo el nivel de la voz (ronda 2 de diseño, §6.5).
+ */
+@Composable
+private fun KaraokeReply(p: MikuOverlayPhase.Responding) {
+    val elapsedMs by produceState(
+        initialValue = if (p.durationMs > 0) (System.currentTimeMillis() - p.startedAtMs).coerceAtLeast(0) else Long.MAX_VALUE,
+        key1 = p,
+    ) {
+        if (p.durationMs <= 0) return@produceState
+        while (value < p.durationMs + 200) {
+            withFrameMillis { }
+            value = System.currentTimeMillis() - p.startedAtMs
+        }
+    }
+    val text = p.reply
+    val ratio = if (p.durationMs > 0) (elapsedMs.toFloat() / p.durationMs).coerceIn(0f, 1f) else 1f
+    val revealing = ratio < 1f
+    // Por palabras completas: el punto calculado por tiempo se extiende hasta
+    // el final de la palabra en curso (igual que en el escritorio).
+    var count = kotlin.math.ceil(ratio * text.length).toInt().coerceIn(if (text.isEmpty()) 0 else 1, text.length)
+    while (count < text.length && text[count] != ' ') count++
+    val shown = text.substring(0, count)
+    val lastWordStart = if (revealing) shown.trimEnd().lastIndexOf(' ') + 1 else shown.length
+    val lastWordEnd = shown.trimEnd().length
+
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(count) { scroll.animateScrollTo(scroll.maxValue) }
+
+    Text(
+        text = buildAnnotatedString {
+            append(shown.substring(0, lastWordStart.coerceAtMost(shown.length)))
+            if (revealing && lastWordEnd > lastWordStart) {
+                withStyle(SpanStyle(color = MikuTeal)) { append(shown.substring(lastWordStart, lastWordEnd)) }
+                append(shown.substring(lastWordEnd))
+            }
+        },
+        color = MikuText,
+        fontFamily = ZenKaku,
+        fontWeight = FontWeight.Medium,
+        fontSize = 17.sp,
+        lineHeight = 25.sp,
+        onTextLayout = { layout = it },
+        modifier = Modifier
+            .heightIn(max = 280.dp)
+            .verticalScroll(scroll)
+            .drawBehind {
+                // Subrayado rosa de 3 dp bajo la última palabra.
+                val l = layout ?: return@drawBehind
+                if (!revealing || lastWordEnd <= lastWordStart || lastWordEnd > l.layoutInput.text.length) return@drawBehind
+                val line = l.getLineForOffset(lastWordStart)
+                val x0 = l.getHorizontalPosition(lastWordStart, true)
+                val x1 = l.getHorizontalPosition(lastWordEnd, true)
+                val y = l.getLineBottom(line) - 1.dp.toPx()
+                drawLine(MikuPink, Offset(x0, y), Offset(x1, y), strokeWidth = 3.dp.toPx())
+            },
+    )
+
+    val levels = p.levels
+    if (levels != null && levels.isNotEmpty()) {
+        val index = (elapsedMs / MikuOverlayPhase.Responding.LEVEL_STEP_MS).toInt()
+        val level = if (revealing && index in levels.indices) levels[index] else 0f
+        PianoKeys(level = level * 0.9f, keys = 28)
+    }
+}
+
+/** Tira de teclas de piano (patrón B N B N B B N B N B N B), en rosa. */
+@Composable
+private fun PianoKeys(level: Float, keys: Int) {
+    val octave = booleanArrayOf(false, true, false, true, false, false, true, false, true, false, true, false)
+    val lit = (level.coerceIn(0f, 1f) * keys).toInt()
+    Row(
+        modifier = Modifier.fillMaxWidth().height(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        for (i in 0 until keys) {
+            val black = octave[i % 12]
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(if (black) 7.dp else 11.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        when {
+                            i < lit && black -> Color(0xFFB83A6C)
+                            i < lit -> MikuPink
+                            black -> MikuMuted.copy(alpha = 0.22f)
+                            else -> MikuText.copy(alpha = 0.12f)
+                        }
+                    )
+            )
         }
     }
 }

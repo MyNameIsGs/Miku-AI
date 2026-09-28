@@ -200,6 +200,13 @@ class WakeWordService : Service() {
         if (intent?.action == ACTION_QUICK_LISTEN) {
             onWakeWordDetected()
         }
+        // «Pausar» desde la notificación (ronda 2 de diseño): lo mismo que
+        // apagar el interruptor de «Hey Miku».
+        if (intent?.action == ACTION_PAUSE) {
+            WakeWordPrefs.setEnabled(applicationContext, false)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         return START_STICKY
     }
 
@@ -541,8 +548,17 @@ class WakeWordService : Service() {
                             generated
                         }
                     }
-                    // Audio listo -- recién ahora se "manda" el mensaje.
-                    MikuOverlayState.update(MikuOverlayPhase.Responding(heard, reply))
+                    // Audio listo -- recién ahora se "manda" el mensaje, con
+                    // lo necesario para revelarlo al ritmo del audio.
+                    MikuOverlayState.update(
+                        MikuOverlayPhase.Responding(
+                            heard,
+                            reply,
+                            startedAtMs = System.currentTimeMillis(),
+                            durationMs = mikuVoice.size * 1000L / 48000,
+                            levels = voiceLevels(mikuVoice, 48000),
+                        )
+                    )
                     withContext(Dispatchers.IO) { AudioPlayer.play(mikuVoice, 48000) }
                     // El audio YA terminó de sonar -- recién acá es seguro reactivar el mic.
                     MikuOverlayState.update(MikuOverlayPhase.Idle)
@@ -559,7 +575,16 @@ class WakeWordService : Service() {
 
     /** Camino de respaldo (sin RVC, o si falló): el TTS del sistema no tiene un "archivo" que esperar, así que se revela de inmediato. */
     private fun speakSystemTtsAndReveal(heard: String, reply: String) {
-        MikuOverlayState.update(MikuOverlayPhase.Responding(heard, reply))
+        // Sin audio que medir: se revela con el mismo ritmo estimado que
+        // usa scheduleOverlayDismissAndResume (sin la tira de teclas).
+        MikuOverlayState.update(
+            MikuOverlayPhase.Responding(
+                heard,
+                reply,
+                startedAtMs = System.currentTimeMillis(),
+                durationMs = if (ttsReady) reply.length * 60L else 0L,
+            )
+        )
         if (ttsReady) {
             tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "miku_voice_reply")
         }
@@ -589,6 +614,29 @@ class WakeWordService : Service() {
             mainHandler.post(resumeRunnable)
         }
         mainHandler.postDelayed(resumeRunnable, estimatedMs)
+    }
+
+    /**
+     * Energía de la voz cada 50 ms (RMS normalizado al pico, 0-1): la tira
+     * de teclas de la pantalla flotante se enciende con esto, como en el
+     * escritorio con los visemas.
+     */
+    private fun voiceLevels(pcm: FloatArray, sampleRate: Int): FloatArray {
+        val window = (sampleRate * MikuOverlayPhase.Responding.LEVEL_STEP_MS / 1000).toInt().coerceAtLeast(1)
+        val count = (pcm.size + window - 1) / window
+        val levels = FloatArray(count)
+        var peak = 0f
+        for (i in 0 until count) {
+            var sum = 0.0
+            val start = i * window
+            val end = minOf(start + window, pcm.size)
+            for (j in start until end) sum += pcm[j] * pcm[j]
+            val rms = kotlin.math.sqrt(sum / (end - start)).toFloat()
+            levels[i] = rms
+            if (rms > peak) peak = rms
+        }
+        if (peak > 0f) for (i in levels.indices) levels[i] = levels[i] / peak
+        return levels
     }
 
     private fun resumeWakeWordListening() {
@@ -742,6 +790,15 @@ class WakeWordService : Service() {
             .setContentTitle(if (waiting) "Miku te escucha" else "Miku")
             .setContentText(text)
             .setContentIntent(pendingIntent)
+            .addAction(
+                R.drawable.ic_stat_miku,
+                "Pausar",
+                PendingIntent.getService(
+                    applicationContext, 3,
+                    Intent(applicationContext, WakeWordService::class.java).setAction(ACTION_PAUSE),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
             .setOngoing(true)
             .setSilent(true)
             .build()
@@ -819,6 +876,8 @@ class WakeWordService : Service() {
         // MikuWidgetProvider.kt) para escuchar un pedido sin decir "Hey
         // Miku" en voz alta.
         const val ACTION_QUICK_LISTEN = "com.sebas.mikuai.ACTION_QUICK_LISTEN"
+        // «Pausar» de la notificación del servicio: apaga «Hey Miku».
+        const val ACTION_PAUSE = "com.sebas.mikuai.ACTION_PAUSE"
 
         fun start(context: Context) {
             val intent = Intent(context, WakeWordService::class.java)

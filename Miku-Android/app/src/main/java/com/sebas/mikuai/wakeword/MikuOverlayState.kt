@@ -28,7 +28,22 @@ sealed class MikuOverlayPhase {
      * -- a propósito, para que el texto de la respuesta "aparezca" junto
      * con el audio, no antes (ver pedido de Sebastián).
      */
-    data class Responding(val heard: String, val reply: String) : MikuOverlayPhase()
+    data class Responding(
+        val heard: String,
+        val reply: String,
+        // Karaoke (ronda 2 de diseño): el texto se revela por palabras al
+        // ritmo del audio. [durationMs] = 0 → se muestra completo de una
+        // (voz silenciada).
+        val startedAtMs: Long = 0L,
+        val durationMs: Long = 0L,
+        // Nivel de la voz cada [LEVEL_STEP_MS] ms (0-1), para la tira de
+        // teclas; null si no hay audio que medir (voz del sistema).
+        val levels: FloatArray? = null,
+    ) : MikuOverlayPhase() {
+        companion object {
+            const val LEVEL_STEP_MS = 50L
+        }
+    }
 }
 
 data class OverlayTool(val name: String, val done: Boolean)
