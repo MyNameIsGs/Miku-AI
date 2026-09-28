@@ -61,7 +61,8 @@ import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { ConfigPanel } from "./components/ConfigPanel";
-import { TopBar } from "./components/TopBar";
+import { TopBar, Presence } from "./components/TopBar";
+import { isQuietHours } from "./lib/quietHours";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { Caption, CaptionMode } from "./components/Caption";
 import { useConnections } from "./hooks/useConnections";
@@ -82,6 +83,7 @@ import {
   VOICE_RATE_MIN,
   VOICE_RATE_MAX,
   VOICE_VOLUME_MIN,
+  QUIET_HOURS_END_HOUR,
 } from "./config/constants";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
 import { runToolCallingCycle, ToolEvent } from "./lib/openrouter";
@@ -319,7 +321,7 @@ function App() {
     const sendRegions = () => {
       const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
       document
-        .querySelectorAll(".config-panel, .app-launcher-panel, .controls-panel, .toolbar-menu")
+        .querySelectorAll(".m-panel, .app-launcher-panel, .controls-panel, .toolbar-menu")
         .forEach((el) => {
           const r = el.getBoundingClientRect();
           regions.push({ x: r.left, y: r.top, width: r.width, height: r.height });
@@ -375,6 +377,12 @@ function App() {
   const [toolTrail, setToolTrail] = useState<ToolEvent[]>([]);
   const [thinkingNote, setThinkingNote] = useState<string | null>(null);
   const [replyRevealing, setReplyRevealing] = useState(false);
+  // La charla en curso (mientras piensa), para poder cancelarla desde el
+  // botón principal del panel de controles. Una cancelada no habla ni se
+  // guarda en el historial.
+  const askAbortRef = useRef<AbortController | null>(null);
+  // Algo del panel de controles tiene el foco (ver showControls).
+  const [controlsFocused, setControlsFocused] = useState(false);
   // Punto 7: un archivo arrastrándose sobre la ventana (ver handleFileDrop).
   const [fileDragOver, setFileDragOver] = useState(false);
 
@@ -623,6 +631,9 @@ function App() {
     // hablando, queda registrado que él le escribió encima).
     const talkSignals = takeTalkSignals();
     sleep.wakeUp("le hablaron");
+    askAbortRef.current?.abort();
+    const abort = new AbortController();
+    askAbortRef.current = abort;
     setUserEcho(userMessage);
     setToolTrail([]);
     setThinkingNote(null);
@@ -766,9 +777,12 @@ function App() {
               : [...trail, event],
           );
         },
+        abort.signal,
       );
 
       marks.llmEnd = performance.now();
+      // Cancelada justo cuando llegaba la respuesta: se descarta entera.
+      if (abort.signal.aborted) return;
       let reply = toolCycle.finalContent || "No obtuve respuesta.";
 
       await memoryFiles.processMemoryMarkers(reply);
@@ -953,13 +967,34 @@ function App() {
 
       memoryFiles.consolidateMemoryIfNeeded();
     } catch (err) {
+      if (abort.signal.aborted) {
+        console.log("[Charla] Cancelada mientras pensaba");
+        return;
+      }
       console.error("Error al consultar el LLM:", err);
       setLlmResponse("Hubo un error al conectar con el modelo.");
     } finally {
-      setIsThinking(false);
-      setReplyRevealing(false);
+      // Si se canceló (o ya empezó otra charla), el estado lo maneja quien
+      // canceló o la charla nueva.
+      if (askAbortRef.current === abort) {
+        askAbortRef.current = null;
+        setIsThinking(false);
+        setReplyRevealing(false);
+      }
     }
   }
+
+  // Botón de cancelar mientras piensa: corta el pedido al modelo (una tool
+  // que ya estaba corriendo termina, pero no empieza otra) y descarta la
+  // respuesta.
+  const handleCancelThinking = () => {
+    const abort = askAbortRef.current;
+    if (!abort) return;
+    askAbortRef.current = null;
+    abort.abort();
+    setIsThinking(false);
+    setLlmResponse("");
+  };
 
   // Tarea 8.1: acepta un texto explícito (ver handleAutoStopRecording) para
   // el caso de "voz sin manos" -- el VAD ya transcribió y quiere mandarlo
@@ -1398,6 +1433,28 @@ function App() {
     }
   };
 
+  // Estado de presencia para la barra (diseño v1, Presencia.dc.html), en
+  // orden de prioridad. Lo lee la barra cada tanto mientras está a la vista:
+  // dormir y bailar viven en refs, no en estado de React.
+  const getPresence = (): Presence => {
+    if (streamMode.active) return { kind: "live" };
+    if (sleep.asleepRef.current) return { kind: "sleeping" };
+    if (musicSway.musicOnRef.current) return { kind: "dancing", category: musicSway.categoryRef.current };
+    if (isQuietHours()) return { kind: "quiet", until: `${QUIET_HOURS_END_HOUR}:00` };
+    return { kind: "normal" };
+  };
+
+  // El panel de controles no es permanente (pedido de Sebastián): aparece
+  // con el mouse encima, igual que la barra, y se queda mientras hay una
+  // charla en curso (teclas, detener, cancelar), algo escrito o adjunto, o
+  // el foco en el campo.
+  const showControls =
+    showToolbar ||
+    avatarState !== "idle" ||
+    transcript.trim().length > 0 ||
+    !!attachedImage ||
+    controlsFocused;
+
   const captionMode: CaptionMode | null =
     avatarState === "listening"
       ? "listening"
@@ -1422,18 +1479,12 @@ function App() {
       onDrop={handleFileDrop}
     >
       {fileDragOver && <div className="file-drop-hint">Suéltalo para que Miku lo vea</div>}
-      {/* La barra aparece al pasar el mouse, y además se queda mientras
-          Miku escucha o piensa (ahí vive el estado que antes era una
-          insignia aparte) o con un panel abierto (su botón queda marcado). */}
-      {(showToolbar ||
-        avatarState === "listening" ||
-        avatarState === "thinking" ||
-        showConfig ||
-        showMemoryPanel ||
-        showAppLauncher ||
-        showQuirksPanel) && (
+      {/* La barra aparece solo al pasar el mouse (pedido de Sebastián),
+          aunque Miku esté escuchando o pensando. */}
+      {showToolbar && (
         <TopBar
           avatarState={avatarState}
+          getPresence={getPresence}
           onMouseDown={handleToolbarMouseDown}
           onMouseMove={handleToolbarMouseMove}
           onPressEnd={() => {
@@ -1456,32 +1507,36 @@ function App() {
         />
       )}
 
-      <ControlsPanel
-        avatarState={avatarState}
-        isVoiceReady={isVoiceReady}
-        isThinking={isThinking}
-        listening={speechRecognition.listening}
-        transcribing={speechRecognition.transcribing}
-        onToggleListening={speechRecognition.toggleListening}
-        onStopSpeaking={() => {
-          noteInterruption("botón");
-          speech.stopSpeaking();
-        }}
-        getMicLevel={speechRecognition.getMicLevel}
-        speechLevelRef={speech.speechLevelRef}
-        // Mientras escucha, lo que vas diciendo se ve en la caja de
-        // subtítulo, no en el campo.
-        transcript={speechRecognition.listening || speechRecognition.transcribing ? "" : transcript}
-        setTranscript={setTranscript}
-        transcriptRef={transcriptRef}
-        onPaste={handlePasteImage}
-        onSend={() => handleSendTranscript()}
-        attachedImage={attachedImage}
-        onRemoveImage={() => setAttachedImage(null)}
-        onPickImage={handlePickImage}
-        hideResponseText={hideResponseText}
-        onToggleHideResponseText={() => setHideResponseText((v) => !v)}
-      />
+      {showControls && (
+        <ControlsPanel
+          onFocusChange={setControlsFocused}
+          avatarState={avatarState}
+          isVoiceReady={isVoiceReady}
+          isThinking={isThinking}
+          listening={speechRecognition.listening}
+          transcribing={speechRecognition.transcribing}
+          onToggleListening={speechRecognition.toggleListening}
+          onStopSpeaking={() => {
+            noteInterruption("botón");
+            speech.stopSpeaking();
+          }}
+          onCancelThinking={handleCancelThinking}
+          getMicLevel={speechRecognition.getMicLevel}
+          speechLevelRef={speech.speechLevelRef}
+          // Mientras escucha, lo que vas diciendo se ve en la caja de
+          // subtítulo, no en el campo.
+          transcript={speechRecognition.listening || speechRecognition.transcribing ? "" : transcript}
+          setTranscript={setTranscript}
+          transcriptRef={transcriptRef}
+          onPaste={handlePasteImage}
+          onSend={() => handleSendTranscript()}
+          attachedImage={attachedImage}
+          onRemoveImage={() => setAttachedImage(null)}
+          onPickImage={handlePickImage}
+          hideResponseText={hideResponseText}
+          onToggleHideResponseText={() => setHideResponseText((v) => !v)}
+        />
+      )}
 
       {showAppLauncher && (
         <AppLauncherPanel
@@ -1545,6 +1600,7 @@ function App() {
           tools={toolTrail}
           note={thinkingNote}
           text={llmResponse}
+          raised={showControls}
         />
       )}
 

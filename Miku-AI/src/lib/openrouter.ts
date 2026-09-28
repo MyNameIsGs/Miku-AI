@@ -6,7 +6,17 @@ export async function fetchOpenRouterWithRetry(
   body: object,
   // kind: para qué es la llamada, para medir cuánto gasta cada tipo (B2,
   // ver lib/tokenUsage.ts).
-  { kind = "otro", onRetry }: { kind?: CallKind; onRetry?: (attempt: number, maxAttempts: number, delayMs: number) => void } = {},
+  {
+    kind = "otro",
+    onRetry,
+    signal,
+  }: {
+    kind?: CallKind;
+    onRetry?: (attempt: number, maxAttempts: number, delayMs: number) => void;
+    // Para cancelar la respuesta a mitad de camino (botón de cancelar
+    // mientras piensa): corta el pedido y la espera entre reintentos.
+    signal?: AbortSignal;
+  } = {},
 ): Promise<Response> {
   const delaysMs = [2000, 5000, 10000];
   let lastResponse: Response;
@@ -21,6 +31,7 @@ export async function fetchOpenRouterWithRetry(
           Authorization: `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
         },
         body: JSON.stringify(body),
+        signal,
       },
     );
 
@@ -42,6 +53,7 @@ export async function fetchOpenRouterWithRetry(
     );
     onRetry?.(attempt + 1, delaysMs.length, delay);
     await new Promise((resolve) => setTimeout(resolve, delay));
+    signal?.throwIfAborted();
   }
 
   return lastResponse!;
@@ -78,6 +90,7 @@ export async function runToolCallingCycle(
   initialMessages: object[],
   onRetry?: (attempt: number, maxAttempts: number, delayMs: number) => void,
   onToolEvent?: (event: ToolEvent) => void,
+  signal?: AbortSignal,
 ): Promise<ToolCallingResult> {
   const messages = [...initialMessages];
   const appendedMessages: ChatMessage[] = [];
@@ -90,7 +103,7 @@ export async function runToolCallingCycle(
         tools: getToolSchemas(),
         tool_choice: "auto",
       },
-      { kind: "charla", onRetry },
+      { kind: "charla", onRetry, signal },
     );
 
     const data = await response.json();
@@ -129,6 +142,8 @@ export async function runToolCallingCycle(
     }
 
     for (const toolCall of toolCalls!) {
+      // Una tool ya en curso no se interrumpe, pero no se empieza otra.
+      signal?.throwIfAborted();
       // `function.arguments` llega como string JSON, no como objeto
       // (verificado en la Tarea 6.0) -- se parsea dentro de executeTool.
       onToolEvent?.({ id: toolCall.id, name: toolCall.function.name, status: "running" });

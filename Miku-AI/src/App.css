@@ -593,81 +593,6 @@ button {
   margin: 0;
 }
 
-.memory-panel-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.memory-panel-tabs button,
-.memory-panel-entry button {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 4px;
-  color: white;
-  cursor: pointer;
-  padding: 2px 8px;
-  font-size: 11px;
-}
-
-.memory-panel-tabs button.active {
-  background: rgba(100, 200, 255, 0.5);
-}
-
-.memory-panel-entry button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.memory-panel-entry {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.memory-panel-text {
-  flex: 1;
-  min-width: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.memory-panel-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.memory-panel-textarea {
-  flex: 1;
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  color: white;
-  padding: 4px 6px;
-  font-size: 12px;
-  font-family: inherit;
-  resize: vertical;
-}
-
-.memory-panel-readonly {
-  margin: 0;
-  max-height: 400px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: inherit;
-  font-size: 12px;
-}
-
-.memory-panel-error {
-  color: rgba(255, 140, 140, 0.95);
-  margin: 0 0 6px 0;
-}
 .miku-canvas {
   width: 100%;
   height: 100%;
@@ -794,6 +719,13 @@ button {
   border-radius: 22px;
   backdrop-filter: blur(4px);
   z-index: 10;
+  animation: controls-appear 0.18s ease-out;
+}
+@keyframes controls-appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .piano-strip {
@@ -996,6 +928,10 @@ button {
   color: var(--m-text);
   z-index: 10;
 }
+/* Sin el panel de controles a la vista, baja hasta el borde. */
+.caption.caption-low {
+  bottom: 20px;
+}
 .caption-listening {
   border-color: rgba(240, 80, 143, 0.35);
 }
@@ -1102,8 +1038,8 @@ button {
 }
 
 .caption-spoken {
-  /* La maqueta pide 24 px; en vivo se veía demasiado grande. */
-  font-size: 18px;
+  /* La maqueta pide 24 px; en vivo se veía demasiado grande (y 18 también). */
+  font-size: 16px;
   line-height: 1.45;
   font-weight: 700;
 }
@@ -1511,4 +1447,311 @@ button {
 }
 .m-panel .cfg-footer-btn:hover {
   border-color: var(--m-line);
+}
+
+/* --- Memoria (components/MemoryPanel.tsx) --- */
+.mem-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(57, 197, 187, 0.18);
+  flex-shrink: 0;
+}
+.m-panel .mem-tab {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+  color: var(--m-muted);
+  background: transparent;
+  border: 1px solid rgba(157, 185, 182, 0.22);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.m-panel .mem-tab:hover {
+  color: var(--m-text);
+}
+.m-panel .mem-tab.active {
+  font-weight: 700;
+  color: var(--m-on-teal);
+  background: var(--m-teal);
+  border-color: var(--m-teal);
+}
+
+.mem-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.mem-hint {
+  margin: 0;
+  max-width: 380px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--m-muted);
+  text-align: left;
+  text-wrap: pretty;
+}
+.mem-search {
+  position: relative;
+  width: 260px;
+  flex-shrink: 0;
+}
+.mem-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 11px;
+  display: flex;
+  color: var(--m-dim);
+  pointer-events: none;
+}
+.m-panel .mem-search input {
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 12px 0 36px;
+  font-family: var(--m-font-body);
+  font-size: 14px;
+  color: var(--m-text);
+  background: var(--m-fill-soft);
+  border: 1px solid rgba(157, 185, 182, 0.22);
+  border-radius: 10px;
+  box-shadow: none;
+  outline: none;
+}
+.m-panel .mem-search input:focus {
+  border-color: var(--m-line);
+}
+.mem-search input::placeholder {
+  color: var(--m-dim);
+}
+
+.mem-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mem-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--m-module);
+  border: 1px solid rgba(157, 185, 182, 0.14);
+  border-radius: 12px;
+}
+.mem-row.editing {
+  align-items: flex-start;
+  border-color: var(--m-line);
+}
+.mem-row-number {
+  width: 20px;
+  flex-shrink: 0;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--m-pink);
+}
+.mem-row-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mem-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mem-row.editing .mem-row-actions {
+  flex-direction: column;
+}
+.m-panel .mem-btn {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--m-muted);
+  background: transparent;
+  border: 1px solid var(--m-line-soft);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.m-panel .mem-btn:hover {
+  color: var(--m-text);
+}
+.m-panel .mem-btn.accent {
+  color: var(--m-teal);
+  border-color: rgba(57, 197, 187, 0.4);
+}
+.m-panel .mem-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.m-panel .mem-textarea {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-family: var(--m-font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--m-text);
+  background: var(--m-fill-soft);
+  border: 1px solid var(--m-line-soft);
+  border-radius: 10px;
+  box-shadow: none;
+  outline: none;
+  resize: vertical;
+}
+
+.mem-touch {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mem-touch-meta {
+  font-size: 12px;
+  color: var(--m-muted);
+}
+.mem-touch-date {
+  font-size: 11px;
+  color: var(--m-dim);
+}
+
+.mem-readonly {
+  margin: 0;
+  padding: 14px 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--m-font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  color: var(--m-text);
+  background: var(--m-module);
+  border: 1px solid rgba(157, 185, 182, 0.14);
+  border-radius: 12px;
+}
+
+.mem-empty,
+.mem-error {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-align: left;
+}
+.mem-empty {
+  color: var(--m-dim);
+}
+.mem-error {
+  color: var(--m-pink-text);
+}
+
+.mem-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--m-dim);
+}
+
+/* Estados de presencia en la barra (Presencia.dc.html). */
+.toolbar-state-detail {
+  color: var(--m-text);
+}
+.toolbar-state svg {
+  flex-shrink: 0;
+}
+
+.toolbar.toolbar-presence-sleeping {
+  background: rgba(9, 20, 23, 0.7);
+  border-bottom-color: rgba(157, 185, 182, 0.2);
+}
+.toolbar-presence-sleeping .toolbar-wordmark {
+  color: #5e8b87;
+}
+.toolbar-presence-sleeping .toolbar-divider {
+  background: rgba(157, 185, 182, 0.2);
+}
+
+.toolbar.toolbar-presence-dancing {
+  border-bottom-color: rgba(240, 80, 143, 0.4);
+}
+.toolbar-state-dancing {
+  color: var(--m-pink-text);
+}
+.toolbar-dance-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.toolbar-dance-bars span {
+  width: 3px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--m-pink);
+  transform-origin: bottom;
+  animation: toolbar-dance 0.9s ease-in-out infinite;
+}
+.toolbar-dance-bars span:nth-child(1) {
+  animation-delay: -0.2s;
+}
+.toolbar-dance-bars span:nth-child(2) {
+  animation-delay: -0.55s;
+}
+.toolbar-dance-bars span:nth-child(3) {
+  animation-delay: -0.1s;
+}
+.toolbar-dance-bars span:nth-child(4) {
+  animation-delay: -0.7s;
+}
+.toolbar-dance-bars span:nth-child(5) {
+  animation-delay: -0.35s;
+}
+@keyframes toolbar-dance {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.toolbar-live {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px;
+  background: var(--m-pink);
+  border-radius: 999px;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.1em;
+  color: var(--m-on-pink);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-dance-bars span,
+  .toolbar-led {
+    animation: none !important;
+  }
 }

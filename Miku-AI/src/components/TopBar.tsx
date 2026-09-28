@@ -1,8 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Mood, getCachedMood, getCurrentMood, onMoodChange } from "../lib/mood";
+import type { MusicCategory } from "../lib/musicStore";
 import {
   IconApps,
+  IconBroadcast,
+  IconDoNotDisturb,
+  IconMoon,
+  IconNote,
   IconCamera,
   IconCheck,
   IconClose,
@@ -26,6 +31,40 @@ const STATE_LABEL: Record<Exclude<AvatarState, "speaking">, string> = {
   listening: "ESCUCHANDO",
   thinking: "PENSANDO",
 };
+
+// Estados de presencia (Presencia.dc.html). Reemplazan "EN ESPERA" y la
+// píldora de ánimo mientras Miku está en reposo; si escucha o piensa, manda
+// eso. El modo juego no aparece: ahí la ventana ya está oculta.
+export type Presence =
+  | { kind: "normal" }
+  | { kind: "live" }
+  | { kind: "sleeping" }
+  | { kind: "dancing"; category: MusicCategory | null }
+  | { kind: "quiet"; until: string };
+
+const DANCE_LABEL: Record<MusicCategory, string> = {
+  sin_golpe: "SIN GOLPE",
+  ritmo_tranquilo: "TRANQUILO",
+  ritmo_movido: "MOVIDO",
+};
+
+// Dormir y bailar viven en refs: la barra los vuelve a leer cada tanto
+// mientras está a la vista (solo aparece con el mouse encima).
+const PRESENCE_REFRESH_MS = 500;
+
+function usePresence(getPresence: () => Presence): Presence {
+  const getRef = useRef(getPresence);
+  getRef.current = getPresence;
+  const [presence, setPresence] = useState<Presence>(() => getPresence());
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = getRef.current();
+      setPresence((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    }, PRESENCE_REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
+  return presence;
+}
 
 const MOOD_LABEL: Record<Mood, string> = {
   happy: "CONTENTA",
@@ -57,6 +96,7 @@ function useMood(): Mood {
 
 type TopBarProps = {
   avatarState: AvatarState;
+  getPresence: () => Presence;
   onMouseDown: (e: ReactMouseEvent) => void;
   onMouseMove: (e: ReactMouseEvent) => void;
   onPressEnd: () => void;
@@ -82,6 +122,7 @@ type TopBarProps = {
 
 export function TopBar(props: TopBarProps) {
   const mood = useMood();
+  const presence = usePresence(props.getPresence);
   const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
   const [menuLeft, setMenuLeft] = useState(0);
   const [cameraSaved, setCameraSaved] = useState(false);
@@ -126,11 +167,13 @@ export function TopBar(props: TopBarProps) {
   }, [cameraSaved]);
 
   const { avatarState } = props;
+  // En reposo manda la presencia; escuchando o pensando, ese estado.
+  const shownPresence: Presence = avatarState === "idle" ? presence : { kind: "normal" };
 
   return (
     <>
       <header
-        className="toolbar"
+        className={`toolbar toolbar-presence-${shownPresence.kind}`}
         onMouseDown={props.onMouseDown}
         onMouseMove={props.onMouseMove}
         onMouseUp={props.onPressEnd}
@@ -143,19 +186,55 @@ export function TopBar(props: TopBarProps) {
           </div>
           {/* Hablando: sin estado en la barra (la insignia se sacó por
               redundante: ya se ve la boca y el texto). */}
-          {avatarState !== "speaking" && (
+          {avatarState !== "speaking" && <div className="toolbar-divider" />}
+          {avatarState !== "speaking" && shownPresence.kind === "normal" && (
+            <div className={`toolbar-state toolbar-state-${avatarState}`}>
+              <span className="toolbar-led" />
+              <span>{STATE_LABEL[avatarState]}</span>
+            </div>
+          )}
+          {shownPresence.kind === "live" && (
+            <div className="toolbar-live">
+              <IconBroadcast />
+              <span>EN VIVO</span>
+            </div>
+          )}
+          {shownPresence.kind === "sleeping" && (
+            <div className="toolbar-state">
+              <IconMoon />
+              <span>DURMIENDO</span>
+            </div>
+          )}
+          {shownPresence.kind === "dancing" && (
             <>
-              <div className="toolbar-divider" />
-              <div className={`toolbar-state toolbar-state-${avatarState}`}>
-                <span className="toolbar-led" />
-                <span>{STATE_LABEL[avatarState]}</span>
+              <div className="toolbar-state toolbar-state-dancing">
+                <IconNote />
+                <span>BAILANDO</span>
+                {shownPresence.category && (
+                  <span className="toolbar-state-detail">· {DANCE_LABEL[shownPresence.category]}</span>
+                )}
+              </div>
+              <div className="toolbar-dance-bars" aria-hidden="true">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <span key={i} />
+                ))}
               </div>
             </>
           )}
-          <div className="toolbar-mood" title="Su ánimo de base ahora">
-            <span>ÁNIMO</span>
-            <span className="toolbar-mood-value">{MOOD_LABEL[mood]}</span>
-          </div>
+          {shownPresence.kind === "quiet" && (
+            <div className="toolbar-state">
+              <IconDoNotDisturb />
+              <span>NO MOLESTAR</span>
+              <span className="toolbar-state-detail">· HASTA {shownPresence.until}</span>
+            </div>
+          )}
+          {/* El ánimo va con el estado normal, como en la maqueta. */}
+          {shownPresence.kind === "normal" && (
+            <div className="toolbar-mood" title="Su ánimo de base ahora">
+              <span>ÁNIMO</span>
+              <span className="toolbar-mood-value">{MOOD_LABEL[mood]}</span>
+            </div>
+          )}
         </div>
 
         <nav className="toolbar-right" aria-label="Controles de la ventana">

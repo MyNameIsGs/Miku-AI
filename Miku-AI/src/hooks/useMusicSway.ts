@@ -490,5 +490,6 @@ export function useMusicSway({
     startSway(category, dance);
   }
 
-  return { update, musicOnRef };
+  // categoryRef: la barra muestra "BAILANDO · MOVIDO" (diseño v1).
+  return { update, musicOnRef, categoryRef };
 }

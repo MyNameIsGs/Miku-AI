@@ -250,6 +250,15 @@ export async function retrieveKnowledge(
   }
 }
 
+// Búsqueda del panel de Memoria: como retrieveKnowledge, pero si el
+// servidor de voz no responde tira error en vez de caer a las más
+// recientes -- ahí el panel filtra por texto.
+export async function searchKnowledge(query: string, k: number): Promise<string[]> {
+  const entries = await loadKnowledgeEntries();
+  const { indexPath } = await knowledgePaths();
+  return rankByMeaning(entries, query, k, indexPath);
+}
+
 // Las k entradas más parecidas a `query`, de más a menos parecida (también
 // la usan los recuerdos viejos, ver memory.ts). Tira error si el servidor
 // de voz no responde: quien llama decide qué usar en ese caso.

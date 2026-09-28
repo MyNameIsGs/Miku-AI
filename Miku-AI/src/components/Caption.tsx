@@ -24,6 +24,8 @@ type CaptionProps = {
   note: string | null;
   // speaking / reply
   text: string;
+  // Con el panel de controles a la vista va encima de él; si no, baja.
+  raised: boolean;
 };
 
 function ListeningText({ transcript, confirmedWordCount }: { transcript: string; confirmedWordCount: number }) {
@@ -64,7 +66,7 @@ export function Caption(props: CaptionProps) {
   });
 
   return (
-    <div ref={boxRef} className={`caption caption-${mode}`} aria-live="polite">
+    <div ref={boxRef} className={`caption caption-${mode} ${props.raised ? "" : "caption-low"}`} aria-live="polite">
       {mode === "listening" && (
         <>
           <div className="caption-label">

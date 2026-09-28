@@ -118,6 +118,7 @@ type ControlsPanelProps = {
   transcribing: boolean;
   onToggleListening: () => void;
   onStopSpeaking: () => void;
+  onCancelThinking: () => void;
   getMicLevel: () => number;
   speechLevelRef: RefObject<number>;
 
@@ -132,16 +133,27 @@ type ControlsPanelProps = {
 
   hideResponseText: boolean;
   onToggleHideResponseText: () => void;
+  // Si algo del panel tiene el foco (escribiendo): App lo mantiene visible
+  // aunque el mouse salga de la ventana.
+  onFocusChange: (focused: boolean) => void;
 };
 
 export function ControlsPanel(props: ControlsPanelProps) {
   const { avatarState, listening } = props;
   const hasDraft = props.transcript.trim().length > 0 || !!props.attachedImage;
 
-  // Botón principal: hablando → detener; escuchando → micrófono rosa;
-  // con algo escrito → enviar; si no → micrófono.
-  const main: "stop" | "listening" | "send" | "mic" =
-    avatarState === "speaking" ? "stop" : listening ? "listening" : hasDraft ? "send" : "mic";
+  // Botón principal: hablando → detener; pensando → cancelar; escuchando
+  // → micrófono rosa; con algo escrito → enviar; si no → micrófono.
+  const main: "stop" | "cancel" | "listening" | "send" | "mic" =
+    avatarState === "speaking"
+      ? "stop"
+      : avatarState === "thinking" && props.isThinking
+        ? "cancel"
+        : listening
+          ? "listening"
+          : hasDraft
+            ? "send"
+            : "mic";
 
   const keyMode: KeyMode =
     avatarState === "listening" && listening
@@ -159,7 +171,14 @@ export function ControlsPanel(props: ControlsPanelProps) {
       : "Escribe, pega una imagen o di «Hey Miku»";
 
   return (
-    <section className="controls-panel" aria-label="Hablar con Miku">
+    <section
+      className="controls-panel"
+      aria-label="Hablar con Miku"
+      onFocus={() => props.onFocusChange(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) props.onFocusChange(false);
+      }}
+    >
       <PianoStrip mode={keyMode} getMicLevel={props.getMicLevel} speechLevelRef={props.speechLevelRef} />
       <div className="controls-row">
         <button
@@ -215,7 +234,16 @@ export function ControlsPanel(props: ControlsPanelProps) {
           />
         </div>
 
-        {main === "stop" ? (
+        {main === "cancel" ? (
+          <button
+            className="controls-main stop"
+            onClick={props.onCancelThinking}
+            aria-label="Cancelar respuesta"
+            title="Cancelar: que no responda a esto"
+          >
+            <IconClose size={20} strokeWidth={2.2} />
+          </button>
+        ) : main === "stop" ? (
           <button className="controls-main stop" onClick={props.onStopSpeaking} aria-label="Detener" title="Cortar lo que está diciendo ahora">
             <IconStop size={20} />
           </button>
