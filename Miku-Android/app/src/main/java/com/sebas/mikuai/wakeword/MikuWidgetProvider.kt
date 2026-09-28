@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -32,9 +33,42 @@ class MikuWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray,
     ) {
         for (appWidgetId in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.widget_miku)
-            views.setOnClickPendingIntent(R.id.widget_miku_root, buildPendingIntent(context))
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            appWidgetManager.updateAppWidget(appWidgetId, buildViews(context))
+        }
+    }
+
+    // Ronda 2 de diseño (DISENO.md §6.6): con «Hey Miku» apagado, borde
+    // gris, cebollín al 70 %, micrófono con contorno y la aclaración de que
+    // tocarlo lo prende.
+    private fun buildViews(context: Context): RemoteViews {
+        val enabled = WakeWordPrefs.isEnabled(context)
+        return RemoteViews(context.packageName, R.layout.widget_miku).apply {
+            setInt(
+                R.id.widget_miku_root,
+                "setBackgroundResource",
+                if (enabled) R.drawable.widget_miku_background else R.drawable.widget_miku_background_off,
+            )
+            setInt(R.id.widget_miku_avatar, "setImageAlpha", if (enabled) 255 else 178)
+            setTextViewText(R.id.widget_miku_status, if (enabled) "«HEY MIKU» ACTIVO" else "TOCAR PRENDE «HEY MIKU»")
+            setTextColor(R.id.widget_miku_status, if (enabled) 0xFF39C5BB.toInt() else 0xFF7E9B98.toInt())
+            setInt(
+                R.id.widget_miku_mic,
+                "setBackgroundResource",
+                if (enabled) R.drawable.widget_mic_background else R.drawable.widget_mic_background_off,
+            )
+            setImageViewResource(R.id.widget_miku_mic, if (enabled) R.drawable.ic_widget_mic else R.drawable.ic_widget_mic_off)
+            setOnClickPendingIntent(R.id.widget_miku_root, buildPendingIntent(context))
+        }
+    }
+
+    companion object {
+        /** Redibuja los widgets (al prender o apagar «Hey Miku»). */
+        fun refresh(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            val ids = manager.getAppWidgetIds(ComponentName(context, MikuWidgetProvider::class.java))
+            if (ids.isNotEmpty()) {
+                MikuWidgetProvider().onUpdate(context, manager, ids)
+            }
         }
     }
 

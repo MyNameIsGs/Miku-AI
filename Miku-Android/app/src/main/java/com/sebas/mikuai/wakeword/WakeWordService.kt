@@ -733,10 +733,13 @@ class WakeWordService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Ronda 2 de diseño (DISENO.md §6.8): esperando «Hey Miku», el título
+        // dice que está escuchando; en los demás estados, «Miku» + el estado.
+        val waiting = text == getString(R.string.wakeword_status_listening)
         return NotificationCompat.Builder(applicationContext, MikuApp.WAKEWORD_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_miku)
             .setColor(0xFF39C5BB.toInt())
-            .setContentTitle("Miku")
+            .setContentTitle(if (waiting) "Miku te escucha" else "Miku")
             .setContentText(text)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

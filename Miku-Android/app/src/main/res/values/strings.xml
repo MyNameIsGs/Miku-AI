@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">MikuAI</string>
 
-    <string name="wakeword_status_listening">Escuchando "Hey Miku"…</string>
+    <string name="wakeword_status_listening">Di «Hey Miku» para hablarle.</string>
     <string name="wakeword_status_command">Escuchando tu pedido…</string>
     <string name="wakeword_status_thinking">Pensando…</string>
     <string name="wakeword_no_credentials">No tengo tus claves configuradas todavía.</string>

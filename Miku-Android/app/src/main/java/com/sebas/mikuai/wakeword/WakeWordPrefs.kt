@@ -21,5 +21,7 @@ object WakeWordPrefs {
             .edit()
             .putBoolean(KEY_ENABLED, enabled)
             .apply()
+        // El widget muestra si está prendido (ronda 2 de diseño).
+        MikuWidgetProvider.refresh(context)
     }
 }

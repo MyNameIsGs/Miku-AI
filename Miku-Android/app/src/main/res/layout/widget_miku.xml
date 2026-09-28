@@ -1,27 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Idea #6: widget de pantalla de inicio, un solo botón, sin estado
-     propio que mostrar (a diferencia de la ficha de Ajustes Rápidos, que
-     sí refleja si "Hey Miku" está prendido). -->
+<!-- Idea #6 + ronda 2 de diseño (DISENO.md §6.6): cebollín · «Hablar con
+     Miku» + estado · botón de micrófono. El estado («Hey Miku» prendido o
+     apagado) lo pone MikuWidgetProvider. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_miku_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:gravity="center"
+    android:gravity="center_vertical"
     android:background="@drawable/widget_miku_background"
-    android:padding="12dp">
+    android:paddingStart="14dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="🎙️"
-        android:textSize="20sp"
-        android:layout_marginEnd="8dp" />
+    <ImageView
+        android:id="@+id/widget_miku_avatar"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/widget_avatar_background"
+        android:src="@drawable/ic_launcher_foreground"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
 
-    <TextView
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Hablar con Miku"
-        android:textColor="#DDE3F0"
-        android:textSize="14sp" />
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hablar con Miku"
+            android:textColor="#FFEAF4F3"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:fontFamily="@font/zen_kaku_gothic_new_bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_miku_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="«HEY MIKU» ACTIVO"
+            android:textColor="#FF39C5BB"
+            android:textSize="10sp"
+            android:letterSpacing="0.12"
+            android:fontFamily="@font/chakra_petch_semibold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/widget_miku_mic"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:background="@drawable/widget_mic_background"
+        android:src="@drawable/ic_widget_mic"
+        android:scaleType="center"
+        android:contentDescription="Hablar con Miku" />
 </LinearLayout>
