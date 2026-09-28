@@ -94,6 +94,19 @@ fun ChatScreen(
         vm.selectImage(uri)
     }
 
+    // Configuración es una pantalla propia (ronda 2 §6.4), con botón atrás.
+    if (showSettings) {
+        SettingsScreen(
+            vm = vm,
+            onBack = {
+                showSettings = false
+                wakeWordEnabled = WakeWordPrefs.isEnabled(context)
+            },
+            onLogout = onLogout,
+        )
+        return
+    }
+
     // Scroll al fondo cuando llega un mensaje nuevo, cambia el estado de
     // carga o aparece una tool nueva.
     LaunchedEffect(uiState.messages.size, uiState.isLoading, uiState.toolTrail.size) {
@@ -283,16 +296,6 @@ fun ChatScreen(
         }
     }
 
-    if (showSettings) {
-        SettingsSheet(
-            vm = vm,
-            onDismiss = {
-                showSettings = false
-                wakeWordEnabled = WakeWordPrefs.isEnabled(context)
-            },
-            onLogout = onLogout,
-        )
-    }
 }
 
 private val MikuTypography = Typography
