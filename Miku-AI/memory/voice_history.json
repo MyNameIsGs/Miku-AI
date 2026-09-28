@@ -18,5 +18,10 @@
     "heard": "te gustan los gatos",
     "reply": "¡Sí, me gustan! Sobre todo por esa prueba de la cola del gato que hicimos... me quedó grabada la curva de la cola cuando la movía. Los gatos tienen esa cosa de hacer lo que quieren sin pedir permiso, como alguien más que conozco. ¿Tienes uno, o es una pregunta de curiosidad?",
     "timestampMs": 1790621461954
+  },
+  {
+    "heard": "Buscar en Google pasajes a Japón",
+    "reply": "No me está funcionando la búsqueda ahora mismo, Sebastián — me da error cada vez que lo intento. ¿Quieres que lo pruebe otra vez en un rato, o prefieres que te avise cuando lo logre?",
+    "timestampMs": 1790621910061
   }
 ]
