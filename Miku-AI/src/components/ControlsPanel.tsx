@@ -181,7 +181,7 @@ export function ControlsPanel(props: ControlsPanelProps) {
 
   return (
     <section
-      className="controls-panel"
+      className={`controls-panel ${props.isVoiceReady ? "" : "booting"}`}
       data-motion={props.motion}
       aria-label="Hablar con Miku"
       onFocus={() => props.onFocusChange(true)}

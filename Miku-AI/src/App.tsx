@@ -65,6 +65,8 @@ import { TopBar, Presence } from "./components/TopBar";
 import { usePresenceMotion } from "./hooks/usePresenceMotion";
 import { isQuietHours } from "./lib/quietHours";
 import { ControlsPanel } from "./components/ControlsPanel";
+import { LoadingScreen } from "./components/LoadingScreen";
+import { FileDropHint } from "./components/FileDropHint";
 import { Caption, CaptionMode } from "./components/Caption";
 import { useConnections } from "./hooks/useConnections";
 import {
@@ -1450,6 +1452,8 @@ function App() {
   // charla en curso (teclas, detener, cancelar), algo escrito o adjunto, o
   // el foco en el campo.
   const showControls =
+    // Mientras arranca se ve deshabilitado (ronda 2 §2.3).
+    !isMikuReady ||
     showToolbar ||
     avatarState !== "idle" ||
     transcript.trim().length > 0 ||
@@ -1488,7 +1492,7 @@ function App() {
       }}
       onDrop={handleFileDrop}
     >
-      {fileDragOver && <div className="file-drop-hint">Suéltalo para que Miku lo vea</div>}
+      {fileDragOver && <FileDropHint />}
       {/* La barra aparece solo al pasar el mouse (pedido de Sebastián),
           aunque Miku esté escuchando o pensando. */}
       {barMotion.mounted && (
@@ -1631,40 +1635,13 @@ function App() {
       )}
 
       {!isMikuReady && (
-        <div className="loading-overlay" onMouseDown={handleMouseDown}>
-          <div className="voice-loading-badge">
-            <div className="voice-loading-badge-row">
-              <span className="loading-spinner" />
-              <span
-                className={`loading-text ${
-                  !isVoiceReady && !downloadProgress && !loadingPhraseVisible
-                    ? "loading-text-hidden"
-                    : ""
-                }`}
-              >
-                {!isVoiceReady
-                  ? downloadProgress
-                    ? `Descargando el servidor de voz... ${Math.round(
-                        (downloadProgress.downloaded / downloadProgress.total) * 100,
-                      )}%`
-                    : loadingPhrase
-                  : "Cargando a Miku..."}
-              </span>
-            </div>
-            {downloadProgress && (
-              <div className="download-progress-track">
-                <div
-                  className="download-progress-fill"
-                  style={{
-                    width: `${Math.round(
-                      (downloadProgress.downloaded / downloadProgress.total) * 100,
-                    )}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+        <LoadingScreen
+          downloadProgress={downloadProgress}
+          isVoiceReady={isVoiceReady}
+          phrase={loadingPhrase}
+          phraseVisible={loadingPhraseVisible}
+          onMouseDown={handleMouseDown}
+        />
       )}
 
       <canvas

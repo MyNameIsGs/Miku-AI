@@ -374,42 +374,8 @@ a:hover {
   pointer-events: auto;
 }
 
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 15;
-  background: transparent;
-}
 
-.voice-loading-badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  background: rgba(20, 20, 30, 0.75);
-  backdrop-filter: blur(8px);
-  color: #39c5bb;
-  border: 1px solid rgba(57, 197, 187, 0.35);
-  padding: 10px 18px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  user-select: none;
-}
 
-.voice-loading-badge-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 
 .loading-text {
   display: inline-block;
@@ -423,19 +389,7 @@ a:hover {
   transform: translateY(5px);
 }
 
-.download-progress-track {
-  width: 140px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(57, 197, 187, 0.2);
-  overflow: hidden;
-}
 
-.download-progress-fill {
-  height: 100%;
-  background: #39c5bb;
-  transition: width 0.3s ease;
-}
 
 .loading-spinner {
   width: 14px;
@@ -453,22 +407,6 @@ a:hover {
 }
 
 
-/* Punto 7: aviso mientras se arrastra un archivo sobre la ventana. */
-.file-drop-hint {
-  position: absolute;
-  inset: 40px 12px 12px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed rgba(57, 197, 187, 0.9);
-  border-radius: 16px;
-  background: rgba(57, 197, 187, 0.12);
-  color: #fff;
-  font-size: 18px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-  z-index: 20;
-}
 
 /* Panel de controles, diseño v1 (components/ControlsPanel.tsx). */
 .controls-panel {
@@ -2478,4 +2416,198 @@ a:hover {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
   transform: rotate(-2deg);
   white-space: nowrap;
+}
+
+/* --- Pantalla de carga (ronda 2 §2.3, components/LoadingScreen.tsx) --- */
+.loading-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  /* La capa no bloquea: el panel de controles deshabilitado sigue a la
+     vista y "Ocultar texto" sigue activo. */
+  pointer-events: none;
+}
+.loading-card,
+.loading-pill {
+  pointer-events: auto;
+}
+.loading-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 400px;
+  box-sizing: border-box;
+  padding: 28px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  background: rgba(9, 20, 23, 0.94);
+  border: 1px solid var(--m-line);
+  border-radius: 22px;
+  box-shadow: var(--m-edge);
+  animation: m-fade-in 220ms var(--m-ease-out) both;
+}
+.loading-title {
+  margin: 4px 0 0;
+  font-family: var(--m-font-display);
+  font-size: 19px;
+  font-weight: 400;
+}
+.loading-text-body {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--m-muted);
+}
+.loading-keys {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 15px;
+}
+.loading-key {
+  flex: 1 1 0;
+  border-radius: 2px;
+  transition: background-color 0.2s var(--m-ease-std);
+}
+.loading-key.white {
+  height: 14px;
+  background: rgba(234, 244, 243, 0.12);
+}
+.loading-key.black {
+  height: 9px;
+  background: rgba(157, 185, 182, 0.22);
+}
+.loading-key.white.lit {
+  background: var(--m-teal);
+}
+.loading-key.black.lit {
+  background: var(--m-teal-dim);
+}
+.loading-progress {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.loading-progress-label {
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--m-muted);
+}
+.loading-progress-pct {
+  font-family: var(--m-font-label);
+  font-size: 20px;
+  font-weight: 600;
+}
+.loading-steps {
+  width: 100%;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  gap: 8px;
+}
+.loading-step {
+  flex: 1 1 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--m-font-label);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--m-dim);
+  border: 1px solid var(--m-line-soft);
+  border-radius: 8px;
+}
+.loading-step.current {
+  color: var(--m-on-teal);
+  background: var(--m-teal);
+  border-color: var(--m-teal);
+}
+.loading-step.done {
+  color: var(--m-teal);
+  border-color: var(--m-line);
+}
+.loading-pill {
+  position: absolute;
+  left: 50%;
+  top: 520px;
+  transform: translateX(-50%);
+  height: 40px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px 0 14px;
+  font-size: 14px;
+  color: var(--m-text);
+  background: rgba(9, 20, 23, 0.94);
+  border: 1px solid var(--m-line);
+  border-radius: 999px;
+  box-shadow: var(--m-edge);
+  white-space: nowrap;
+}
+/* Panel de controles mientras arranca: la tira de teclas al 50 %. */
+.controls-panel.booting .piano-strip {
+  opacity: 0.5;
+}
+
+/* --- Soltar un archivo (ronda 2 §2.4, components/FileDropHint.tsx) --- */
+.file-drop-hint {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(9, 20, 23, 0.62);
+  border: 2px dashed var(--m-teal);
+  border-radius: 26px;
+  pointer-events: none;
+  z-index: 20;
+  animation: m-fade-in 140ms var(--m-ease-out) both;
+}
+.file-drop-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.file-drop-icon {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  background: var(--m-teal);
+  color: var(--m-on-teal);
+  border-radius: 22px;
+  box-shadow: 0 0 0 8px rgba(57, 197, 187, 0.16);
+}
+.file-drop-title,
+.file-drop-label {
+  padding: 4px 12px;
+  background: rgba(9, 20, 23, 0.9);
+  border-radius: 10px;
+}
+.file-drop-title {
+  font-family: var(--m-font-display);
+  font-size: 20px;
+  color: var(--m-text);
+}
+.file-drop-label {
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--m-teal);
 }
