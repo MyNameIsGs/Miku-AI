@@ -237,3 +237,10 @@ pub fn game_mode_hide(window: WebviewWindow) {
 pub fn game_mode_show(window: WebviewWindow) {
     show_without_focus(&window);
 }
+
+// Para que Ctrl+Shift+H alterne: esconderla si está a la vista, traerla si
+// está escondida (por Minimizar o por el modo juego).
+#[tauri::command]
+pub fn game_mode_is_hidden() -> bool {
+    HIDDEN.load(Ordering::SeqCst)
+}

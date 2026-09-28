@@ -372,7 +372,7 @@ function App() {
   // Minimizar (pedido de Sebastián, «por si acaso»): la ventana no está en
   // la barra de tareas, así que se esconde igual que en el modo juego
   // (game_mode_hide) y vuelve con «Hey Miku» (lo vigila game_mode.rs) o con
-  // Ctrl+Shift+H.
+  // Ctrl+Shift+H, que alterna: la esconde si está a la vista.
   const [minimizeAnim, setMinimizeAnim] = useState<"hiding" | "appearing" | null>(null);
   const handleMinimize = () => {
     setMinimizeAnim("hiding");
@@ -386,9 +386,17 @@ function App() {
     register("CommandOrControl+Shift+H", (event) => {
       if (event.state === "Pressed" && !isPressed) {
         isPressed = true;
-        invoke("game_mode_show").catch(console.error);
-        setMinimizeAnim("appearing");
-        window.setTimeout(() => setMinimizeAnim(null), 600);
+        invoke<boolean>("game_mode_is_hidden")
+          .then((hidden) => {
+            if (!hidden) {
+              handleMinimize();
+              return;
+            }
+            invoke("game_mode_show").catch(console.error);
+            setMinimizeAnim("appearing");
+            window.setTimeout(() => setMinimizeAnim(null), 600);
+          })
+          .catch(console.error);
       } else if (event.state === "Released") {
         isPressed = false;
       }

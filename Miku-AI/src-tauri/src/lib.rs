@@ -269,6 +269,7 @@ pub fn run() {
             game_mode::set_game_mode_enabled,
             game_mode::game_mode_hide,
             game_mode::game_mode_show,
+            game_mode::game_mode_is_hidden,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,
