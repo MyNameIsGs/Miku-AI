@@ -369,6 +369,35 @@ function App() {
     };
   }, []);
 
+  // Minimizar (pedido de Sebastián, «por si acaso»): la ventana no está en
+  // la barra de tareas, así que se esconde igual que en el modo juego
+  // (game_mode_hide) y vuelve con «Hey Miku» (lo vigila game_mode.rs) o con
+  // Ctrl+Shift+H.
+  const [minimizeAnim, setMinimizeAnim] = useState<"hiding" | "appearing" | null>(null);
+  const handleMinimize = () => {
+    setMinimizeAnim("hiding");
+    window.setTimeout(() => {
+      invoke("game_mode_hide").catch(console.error);
+      setMinimizeAnim(null);
+    }, 350);
+  };
+  useEffect(() => {
+    let isPressed = false;
+    register("CommandOrControl+Shift+H", (event) => {
+      if (event.state === "Pressed" && !isPressed) {
+        isPressed = true;
+        invoke("game_mode_show").catch(console.error);
+        setMinimizeAnim("appearing");
+        window.setTimeout(() => setMinimizeAnim(null), 600);
+      } else if (event.state === "Released") {
+        isPressed = false;
+      }
+    }).catch((err) => console.error("Error registrando atajo:", err));
+    return () => {
+      unregister("CommandOrControl+Shift+H").catch(() => {});
+    };
+  }, []);
+
   const speechRecognition = useSpeechRecognition({
     isVoiceReady,
     setTranscript,
@@ -1520,7 +1549,9 @@ function App() {
 
   return (
     <div
-      className={`app-container ${gameMode.visual !== "shown" ? `game-${gameMode.visual}` : ""}`}
+      className={`app-container ${
+        minimizeAnim ? `game-${minimizeAnim}` : gameMode.visual !== "shown" ? `game-${gameMode.visual}` : ""
+      }`}
       onMouseEnter={() => setShowToolbar(true)}
       onMouseLeave={() => setShowToolbar(false)}
       onDragOver={handleFileDragOver}
@@ -1566,6 +1597,7 @@ function App() {
           onSaveCamera={handleSaveCamera}
           clickThrough={clickThrough}
           onToggleClickThrough={() => setClickThrough((v) => !v)}
+          onMinimize={handleMinimize}
           onClose={handleCloseApp}
         />
       )}

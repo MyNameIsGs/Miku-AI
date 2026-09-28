@@ -16,6 +16,7 @@ import {
   IconConfig,
   IconLock,
   IconMemory,
+  IconMinimize,
   IconVolume,
   IconVolumeMuted,
 } from "./Icons";
@@ -121,6 +122,7 @@ type TopBarProps = {
   clickThrough: boolean;
   onToggleClickThrough: () => void;
 
+  onMinimize: () => void;
   onClose: () => void;
 };
 
@@ -322,6 +324,14 @@ export function TopBar(props: TopBarProps) {
             {props.voiceMuted ? <IconVolumeMuted /> : <IconVolume />}
           </button>
           <div className="toolbar-divider toolbar-divider-right" />
+          <button
+            className="toolbar-btn"
+            onClick={props.onMinimize}
+            aria-label="Minimizar"
+            title="Esconder a Miku (vuelve con «Hey Miku» o Ctrl+Shift+H)"
+          >
+            <IconMinimize />
+          </button>
           <button className="toolbar-btn" onClick={props.onClose} aria-label="Cerrar" title="Cerrar a Miku">
             <IconClose />
           </button>
