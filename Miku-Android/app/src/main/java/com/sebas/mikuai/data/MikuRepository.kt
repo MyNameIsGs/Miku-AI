@@ -133,14 +133,24 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
         systemPrompt: String,
         history: List<ChatMessage>,
         userMessage: String,
-        userImageBase64: String? = null
+        userImageBase64: String? = null,
+        // Aviso de cada tool que empieza (done = false) y termina (true), para
+        // el rastro de "pensando" del chat (ronda 2 de diseño). Solo informa.
+        onToolEvent: ((name: String, done: Boolean) -> Unit)? = null,
     ): String = orApi.chatWithTools(
         systemPrompt,
         history,
         userMessage,
         userImageBase64,
         Tools.schemas(),
-    ) { name, argumentsJson -> Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi, orApi) }
+    ) { name, argumentsJson ->
+        onToolEvent?.invoke(name, false)
+        try {
+            Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi, orApi)
+        } finally {
+            onToolEvent?.invoke(name, true)
+        }
+    }
 
     // Segundo paso de "Miku en Android" (ver SpotifyAuth.kt / SpotifyApi.kt).
     suspend fun connectSpotify() = spotifyAuth.connect()

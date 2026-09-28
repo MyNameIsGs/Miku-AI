@@ -17,10 +17,17 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
 data class UiMessage(
-    val role: String, 
+    val role: String,
     val text: String,
-    val imageUri: String? = null // NUEVA: Para renderizar la imagen localmente en la burbuja
+    val imageUri: String? = null, // Para renderizar la imagen localmente en la burbuja
+    // Idea #10 + ronda 2 de diseño: lo que se habló por "Hey Miku" va en el
+    // mismo chat, con un separador "POR VOZ · hora" y la burbuja punteada.
+    val fromVoice: Boolean = false,
+    val timestampMs: Long? = null,
 )
+
+// Una tool del ciclo actual, para el rastro de "pensando" (ronda 2).
+data class UiTool(val id: Int, val name: String, val done: Boolean)
 
 data class ChatUiState(
     val messages : List<UiMessage> = emptyList(),
@@ -28,7 +35,8 @@ data class ChatUiState(
     val statusText: String         = "Cargando memoria…",
     val isReady  : Boolean         = false,
     val error    : String?         = null,
-    val selectedImageUri: Uri?     = null // NUEVA: Estado de la foto adjunta actualmente
+    val selectedImageUri: Uri?     = null, // Estado de la foto adjunta actualmente
+    val toolTrail: List<UiTool>    = emptyList(),
 )
 
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
@@ -127,9 +135,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     voiceHistoryLoaded = true
                     try {
                         r.loadVoiceHistory().sortedBy { it.timestampMs }.forEach { entry ->
-                            addMessage(UiMessage("user", "🎙️ ${entry.heard}"))
+                            addMessage(UiMessage("user", entry.heard, fromVoice = true, timestampMs = entry.timestampMs))
                             history.add(ChatMessage("user", entry.heard))
-                            addMessage(UiMessage("miku", entry.reply))
+                            addMessage(UiMessage("miku", entry.reply, fromVoice = true, timestampMs = entry.timestampMs))
                             history.add(ChatMessage("assistant", entry.reply))
                         }
                     } catch (e: Exception) {}
@@ -168,7 +176,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // Limpiamos la imagen seleccionada de inmediato en el estado de la UI
         _uiState.value = _uiState.value.copy(selectedImageUri = null)
 
-        _uiState.value = _uiState.value.copy(isLoading = true)
+        _uiState.value = _uiState.value.copy(isLoading = true, toolTrail = emptyList())
 
         viewModelScope.launch {
             try {
@@ -189,7 +197,19 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
                 val activePendientes = r.loadActivePendientes()
                 val systemPrompt = Prompts.buildChatPrompt(mem, activePendientes)
-                val raw          = r.chatWithTools(systemPrompt, history.dropLast(1), promptText, base64Payload)
+                var toolCount = 0
+                val raw          = r.chatWithTools(systemPrompt, history.dropLast(1), promptText, base64Payload) { name, done ->
+                    val trail = _uiState.value.toolTrail
+                    _uiState.value = _uiState.value.copy(
+                        toolTrail = if (!done) {
+                            trail + UiTool(toolCount++, name, false)
+                        } else {
+                            // Termina la última en curso con ese nombre.
+                            val i = trail.indexOfLast { it.name == name && !it.done }
+                            if (i < 0) trail else trail.toMutableList().also { it[i] = it[i].copy(done = true) }
+                        }
+                    )
+                }
                 val parsed       = MarkerParser.parse(raw)
 
                 addMessage(UiMessage("miku", parsed.cleanText))
@@ -226,9 +246,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 if (history.isNotEmpty()) {
                     history.removeAt(history.lastIndex) // revertir user msg
                 }
-                addMessage(UiMessage("system", "⚠ ${e.message}"))
+                addMessage(UiMessage("system", e.message ?: "No pude responder."))
             } finally {
-                _uiState.value = _uiState.value.copy(isLoading = false)
+                _uiState.value = _uiState.value.copy(isLoading = false, toolTrail = emptyList())
             }
         }
     }

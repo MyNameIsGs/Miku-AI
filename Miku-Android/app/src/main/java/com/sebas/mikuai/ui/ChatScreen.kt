@@ -1,70 +1,79 @@
 package com.sebas.mikuai.ui
 
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
-import android.os.PowerManager
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import com.sebas.mikuai.data.SecurePrefs
-import com.sebas.mikuai.voice.ModelDownloadManager
-import com.sebas.mikuai.voice.ModelDownloadState
-import com.sebas.mikuai.wakeword.WakeWordPrefs
-import com.sebas.mikuai.wakeword.WakeWordService
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import com.sebas.mikuai.ui.theme.*
+import com.sebas.mikuai.wakeword.WakeWordPrefs
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+// Chat de Android, ronda 2 de diseño (docs/diseno-ui-v2/DISENO.md §6.3):
+// cabecera con el avatar y el estado, burbujas (las tuyas en rosa, las de
+// Miku en turquesa), lo dicho por "Hey Miku" en el mismo chat con un
+// separador, y mientras piensa, el rastro de tools como en el escritorio.
 @Composable
 fun ChatScreen(
     vm: ChatViewModel = viewModel(),
@@ -76,19 +85,8 @@ fun ChatScreen(
     val context     = LocalContext.current
     var inputText   by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
-    var spotifyConnected by remember { mutableStateOf(vm.isSpotifyConnected()) }
-    var spotifyConnecting by remember { mutableStateOf(false) }
-    var spotifyError by remember { mutableStateOf<String?>(null) }
-    var gmailAccounts by remember { mutableStateOf(vm.listConnectedGmailEmails()) }
-    var gmailConnecting by remember { mutableStateOf(false) }
-    var gmailError by remember { mutableStateOf<String?>(null) }
-    var calendarAccounts by remember { mutableStateOf(vm.listConnectedCalendarEmails()) }
-    var calendarConnecting by remember { mutableStateOf(false) }
-    var calendarError by remember { mutableStateOf<String?>(null) }
+    // Se relee al cerrar Configuración (ahí se prende o apaga).
     var wakeWordEnabled by remember { mutableStateOf(WakeWordPrefs.isEnabled(context)) }
-    val securePrefs = remember { SecurePrefs(context) }
-    var voiceMuted by remember { mutableStateOf(securePrefs.isVoiceMuted()) }
-    val modelDownloadManager = remember { ModelDownloadManager(context) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -96,512 +94,257 @@ fun ChatScreen(
         vm.selectImage(uri)
     }
 
-    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        wakeWordEnabled = granted
-        WakeWordPrefs.setEnabled(context, granted)
-        if (granted) WakeWordService.start(context)
+    // Scroll al fondo cuando llega un mensaje nuevo, cambia el estado de
+    // carga o aparece una tool nueva.
+    LaunchedEffect(uiState.messages.size, uiState.isLoading, uiState.toolTrail.size) {
+        val count = uiState.messages.size + if (uiState.isLoading) 1 else 0
+        if (count > 0) listState.animateScrollToItem(count - 1)
     }
 
-    // Scroll al fondo cuando llega un mensaje nuevo o cambia el estado de carga
-    LaunchedEffect(uiState.messages.size, uiState.isLoading) {
-        if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
-        }
+    val statusText: String
+    val statusColor: Color
+    when {
+        uiState.error != null -> { statusText = uiState.statusText.uppercase(); statusColor = MikuPinkText }
+        !uiState.isReady -> { statusText = uiState.statusText.uppercase(); statusColor = MikuDim }
+        uiState.isLoading -> { statusText = "PENSANDO…"; statusColor = MikuTeal }
+        wakeWordEnabled -> { statusText = "«HEY MIKU» ACTIVO"; statusColor = MikuTeal }
+        else -> { statusText = "LISTA"; statusColor = MikuMuted }
     }
+    val lastVoiceIndex = uiState.messages.indexOfLast { it.fromVoice && it.role == "user" }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MikuBg)
-            .padding(WindowInsets.systemBars.asPaddingValues())
+            .padding(WindowInsets.statusBars.asPaddingValues())
     ) {
-        // Header
+        // Cabecera (alto 68).
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MikuSurface)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment     = Alignment.CenterVertically
+                .height(68.dp)
+                .padding(start = 16.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text("Hatsune Miku", color = MikuTeal, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text(
-                    text = uiState.statusText + (uiState.error?.let { " — $it" } ?: ""),
-                    color = if (uiState.error != null) MaterialTheme.colorScheme.error else MikuTextDim,
-                    fontSize = 11.sp
-                )
+            MikuAvatar(size = 40.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Miku", style = MikuTypography.titleMedium, color = MikuText)
+                MikuLabelText(statusText, statusColor, small = true)
             }
-            IconButton(onClick = { showSettings = true }) {
-                Icon(Icons.Default.Settings, contentDescription = "Configuración", tint = MikuTextDim)
+            // Historial de voz: va a lo último que se habló por "Hey Miku".
+            if (lastVoiceIndex >= 0) {
+                IconButton(
+                    onClick = { scope.launch { listState.animateScrollToItem(lastVoiceIndex) } },
+                    modifier = Modifier.size(44.dp),
+                ) {
+                    Icon(MikuIcons.Clock, contentDescription = "Historial de voz", tint = MikuMuted, modifier = Modifier.size(22.dp))
+                }
+            }
+            IconButton(
+                onClick = { showSettings = true },
+                modifier = Modifier.size(44.dp),
+            ) {
+                Icon(MikuIcons.Settings, contentDescription = "Configuración", tint = MikuMuted, modifier = Modifier.size(22.dp))
+            }
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MikuCardBorder)
+        )
+
+        // Mensajes.
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val maxBubble = maxWidth * 0.8f
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+            ) {
+                itemsIndexed(uiState.messages) { _, msg ->
+                    if (msg.fromVoice && msg.role == "user") VoiceSeparator(msg.timestampMs)
+                    MessageBubble(msg, maxBubble)
+                }
+                if (uiState.isLoading) {
+                    item { TypingBubble(uiState.toolTrail, maxBubble) }
+                }
             }
         }
 
-        // Messages
-        LazyColumn(
-            state          = listState,
-            modifier       = Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(uiState.messages) { msg ->
-                MessageBubble(msg)
-            }
-            if (uiState.isLoading) {
-                item { TypingIndicator() }
-            }
-        }
-
-        // Preview de imagen seleccionada antes de enviar
+        // Foto adjunta, encima del campo.
         if (uiState.selectedImageUri != null) {
             Row(
                 modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 8.dp)
                     .fillMaxWidth()
-                    .background(MikuSurface)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MikuTeal.copy(alpha = 0.08f))
+                    .border(1.dp, MikuTeal.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(modifier = Modifier.size(60.dp)) {
-                    Image(
-                        painter = rememberAsyncImagePainter(uiState.selectedImageUri),
-                        contentDescription = "Preview",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    IconButton(
-                        onClick = { vm.selectImage(null) },
-                        modifier = Modifier
-                            .size(24.dp)
-                            .align(Alignment.TopEnd)
-                            .offset(x = 6.dp, y = (-6).dp)
-                            .background(MaterialTheme.colorScheme.error, RoundedCornerShape(50))
-                    ) {
-                        Icon(
-                            Icons.Default.Close, 
-                            contentDescription = "Quitar", 
-                            tint = MikuBg,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                Image(
+                    painter = rememberAsyncImagePainter(uiState.selectedImageUri),
+                    contentDescription = "Foto adjunta",
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Foto lista para enviar", color = MikuText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    MikuLabelText("SE MANDA CON TU MENSAJE", MikuDim, small = true)
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Foto lista para enviar", color = MikuTextDim, fontSize = 12.sp)
+                IconButton(onClick = { vm.selectImage(null) }, modifier = Modifier.size(44.dp)) {
+                    Icon(MikuIcons.Close, contentDescription = "Quitar foto", tint = MikuMuted, modifier = Modifier.size(20.dp))
+                }
             }
         }
 
-        // Input Layout
+        // Campo.
+        val canType = uiState.isReady && !uiState.isLoading
+        val isSendEnabled = canType && (inputText.isNotBlank() || uiState.selectedImageUri != null)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MikuSurface)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 10.dp)
                 .navigationBarsPadding()
                 .imePadding(),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Botón de adjuntar foto
+            val photoMarked = uiState.selectedImageUri != null
             IconButton(
                 onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 },
-                enabled = uiState.isReady && !uiState.isLoading,
+                enabled = canType,
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(MikuSurface2)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(if (photoMarked) MikuTeal.copy(alpha = 0.16f) else Color.Transparent)
+                    .border(1.dp, if (photoMarked) MikuTeal.copy(alpha = 0.5f) else MikuOutline, CircleShape),
             ) {
                 Icon(
-                    Icons.Default.PhotoCamera, 
-                    contentDescription = "Adjuntar Foto", 
-                    tint = if (uiState.selectedImageUri != null) MikuTeal else MikuTextDim
+                    MikuIcons.Image,
+                    contentDescription = "Adjuntar foto",
+                    tint = if (photoMarked) MikuTeal else MikuMuted,
+                    modifier = Modifier.size(22.dp).alpha(if (canType) 1f else 0.4f),
                 )
             }
 
-            OutlinedTextField(
-                value         = inputText,
-                onValueChange = { inputText = it },
-                modifier      = Modifier.weight(1f),
-                placeholder   = { Text("Escríbele a Miku…", color = MikuTextDim) },
-                enabled       = uiState.isReady && !uiState.isLoading,
-                maxLines      = 5,
-                colors        = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = MikuTeal,
-                    unfocusedBorderColor = MikuBorder,
-                    focusedTextColor     = MikuText,
-                    unfocusedTextColor   = MikuText,
-                    cursorColor          = MikuTeal
-                ),
-                shape = RoundedCornerShape(20.dp)
-            )
-            
-            val isSendEnabled = uiState.isReady && !uiState.isLoading && (inputText.isNotBlank() || uiState.selectedImageUri != null)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(MikuText.copy(alpha = 0.05f))
+                    .border(1.dp, MikuOutline, RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (inputText.isEmpty()) {
+                    Text("Escríbele a Miku…", color = MikuDim, style = MikuTypography.bodyLarge)
+                }
+                BasicTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    enabled = canType,
+                    maxLines = 5,
+                    textStyle = MikuTypography.bodyLarge.copy(color = MikuText),
+                    cursorBrush = SolidColor(MikuTeal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             IconButton(
-                onClick  = {
+                onClick = {
                     val text = inputText.trim()
                     inputText = ""
                     vm.sendMessage(text)
-                    scope.launch {
-                        listState.animateScrollToItem(
-                            (uiState.messages.size).coerceAtLeast(0)
-                        )
-                    }
                 },
-                enabled  = isSendEnabled,
+                enabled = isSendEnabled,
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (isSendEnabled) MikuTeal else MikuSurface2)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(if (isSendEnabled) MikuTeal else MikuMuted.copy(alpha = 0.14f)),
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Enviar",
-                    tint = if (isSendEnabled) MikuBg else MikuTextDim)
+                Icon(
+                    MikuIcons.Send,
+                    contentDescription = "Enviar",
+                    tint = if (isSendEnabled) MikuOnTeal else Color(0xFF4E6866),
+                    modifier = Modifier.size(22.dp),
+                )
             }
         }
     }
 
-    // Settings bottom sheet
     if (showSettings) {
-        ModalBottomSheet(
-            onDismissRequest = { showSettings = false },
-            containerColor   = MikuSurface
-        ) {
-            // Idea #16: cada vez que se abre Configuración, si la voz real ya
-            // está descargada, revisa contra el manifest.json remoto si hay
-            // una versión nueva -- sin esto, Sebastián solo se enteraría de
-            // un cambio del pipeline de voz recibiendo un APK nuevo a mano.
-            LaunchedEffect(Unit) {
-                modelDownloadManager.checkForUpdate()
-            }
-            Column(
-                modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("⚙️ Configuración", color = MikuTeal, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("v${com.sebas.mikuai.BuildConfig.VERSION_NAME}", color = MikuTextDim, fontSize = 10.sp)
-                OutlinedButton(
-                    onClick = { showSettings = false; vm.reloadMemory() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                ) { Text("↺ Recargar memoria desde GitHub") }
+        SettingsSheet(
+            vm = vm,
+            onDismiss = {
+                showSettings = false
+                wakeWordEnabled = WakeWordPrefs.isEnabled(context)
+            },
+            onLogout = onLogout,
+        )
+    }
+}
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Decir \"Hey Miku\"", color = MikuText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Escucha activa en segundo plano, como \"Hey Siri\". Usa el micrófono todo el tiempo y muestra una notificación permanente mientras está activo.",
-                            color = MikuTextDim,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Switch(
-                        checked = wakeWordEnabled,
-                        onCheckedChange = { checked ->
-                            if (checked) {
-                                val hasPermission = ContextCompat.checkSelfPermission(
-                                    context, Manifest.permission.RECORD_AUDIO
-                                ) == PackageManager.PERMISSION_GRANTED
-                                if (hasPermission) {
-                                    wakeWordEnabled = true
-                                    WakeWordPrefs.setEnabled(context, true)
-                                    WakeWordService.start(context)
-                                } else {
-                                    recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                }
-                            } else {
-                                wakeWordEnabled = false
-                                WakeWordPrefs.setEnabled(context, false)
-                                WakeWordService.stop(context)
-                            }
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = MikuTeal, checkedTrackColor = MikuTealDark)
-                    )
-                }
-                if (wakeWordEnabled) {
-                    OutlinedButton(
-                        onClick = {
-                            val pm = context.getSystemService(PowerManager::class.java)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                                pm?.isIgnoringBatteryOptimizations(context.packageName) != true
-                            ) {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                    ) { Text("🔋 Evitar que el sistema corte el micrófono en segundo plano") }
+private val MikuTypography = Typography
 
-                    // Camino PRINCIPAL para que la pantalla flotante de
-                    // "Hey Miku" aparezca al instante siempre (bloqueado o
-                    // no) -- ver wakeword/MikuOverlayWindow.kt. Sin este
-                    // permiso cae a una notificación de pantalla completa
-                    // que Android solo abre sola con el teléfono bloqueado
-                    // (con la pantalla desbloqueada y en uso, a propósito
-                    // se queda como notificación que hay que tocar --
-                    // política de la plataforma, confirmado con Sebastián
-                    // que así pasaba, no un bug de acá).
-                    var canDrawOverlays by remember {
-                        mutableStateOf(Settings.canDrawOverlays(context))
-                    }
-                    if (!canDrawOverlays) {
-                        OutlinedButton(
-                            onClick = {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                        ) { Text("🖼️ Habilitar que \"Hey Miku\" abra la pantalla sola") }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Voz de Miku", color = MikuTeal, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (voiceMuted) "Silenciada" else "Con voz", color = MikuTextDim, fontSize = 11.sp)
-                        Switch(
-                            checked = !voiceMuted,
-                            onCheckedChange = { on ->
-                                voiceMuted = !on
-                                securePrefs.setVoiceMuted(voiceMuted)
-                            },
-                            colors = SwitchDefaults.colors(checkedThumbColor = MikuTeal, checkedTrackColor = MikuTealDark)
-                        )
-                    }
-                }
-                val downloadState by modelDownloadManager.state.collectAsState()
-                when (val s = downloadState) {
-                    is ModelDownloadState.Ready -> {
-                        Text("Voz real descargada ✓ (~518MB)", color = MikuTeal, fontSize = 11.sp)
-                    }
-                    is ModelDownloadState.UpdateAvailable -> {
-                        Text("Voz real descargada ✓ (~518MB)", color = MikuTeal, fontSize = 11.sp)
-                        Text("Hay una versión nueva disponible.", color = MikuTextDim, fontSize = 11.sp)
-                        OutlinedButton(
-                            onClick = { scope.launch { modelDownloadManager.ensureModelsReady() } },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                        ) { Text("Actualizar voz de Miku") }
-                    }
-                    is ModelDownloadState.Downloading -> {
-                        val pct = if (s.totalBytes > 0) (s.downloadedBytes * 100 / s.totalBytes).toInt() else 0
-                        Text("Descargando ${s.fileName}... $pct%", color = MikuTextDim, fontSize = 11.sp)
-                        LinearProgressIndicator(
-                            progress = { if (s.totalBytes > 0) s.downloadedBytes.toFloat() / s.totalBytes else 0f },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MikuTeal,
-                        )
-                    }
-                    is ModelDownloadState.Failed -> {
-                        Text("Error descargando la voz real: ${s.message}", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
-                        OutlinedButton(
-                            onClick = { scope.launch { modelDownloadManager.ensureModelsReady() } },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                        ) { Text("Reintentar descarga") }
-                    }
-                    is ModelDownloadState.NotStarted -> {
-                        OutlinedButton(
-                            onClick = { scope.launch { modelDownloadManager.ensureModelsReady() } },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                        ) { Text("Descargar voz real de Miku (~518MB)") }
-                        Text(
-                            "Se usa una sola vez -- conviene hacerlo con Wi-Fi antes de viajar. Hasta que se descargue, responde con la voz del sistema.",
-                            color = MikuTextDim,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        spotifyConnecting = true
-                        spotifyError = null
-                        vm.connectSpotify { success, error ->
-                            spotifyConnecting = false
-                            if (success) spotifyConnected = true else spotifyError = error
-                        }
-                    },
-                    enabled = !spotifyConnecting,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = if (spotifyConnected) MikuTeal else MikuText
-                    )
-                ) {
-                    Text(
-                        when {
-                            spotifyConnecting -> "Conectando..."
-                            spotifyConnected -> "Spotify conectado ✓"
-                            else -> "Conectar Spotify"
-                        }
-                    )
-                }
-                if (spotifyError != null) {
-                    Text(spotifyError.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
-                }
-                gmailAccounts.forEach { email ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(email, color = MikuText, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        IconButton(onClick = {
-                            vm.disconnectGmailAccount(email)
-                            gmailAccounts = gmailAccounts.filter { it != email }
-                        }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Desconectar cuenta de Gmail",
-                                tint = MikuTextDim,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-                OutlinedButton(
-                    onClick = {
-                        gmailConnecting = true
-                        gmailError = null
-                        vm.connectGmail { email, error ->
-                            gmailConnecting = false
-                            if (email != null) {
-                                gmailAccounts = gmailAccounts.filter { it != email } + email
-                            } else {
-                                gmailError = error
-                            }
-                        }
-                    },
-                    enabled = !gmailConnecting,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                ) {
-                    Text(
-                        when {
-                            gmailConnecting -> "Conectando..."
-                            gmailAccounts.isEmpty() -> "Conectar Gmail"
-                            else -> "+ Otra cuenta de Gmail"
-                        }
-                    )
-                }
-                if (gmailError != null) {
-                    Text(gmailError.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
-                }
-                calendarAccounts.forEach { email ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(email, color = MikuText, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        IconButton(onClick = {
-                            vm.disconnectCalendarAccount(email)
-                            calendarAccounts = calendarAccounts.filter { it != email }
-                        }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Desconectar cuenta de Calendar",
-                                tint = MikuTextDim,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-                OutlinedButton(
-                    onClick = {
-                        calendarConnecting = true
-                        calendarError = null
-                        vm.connectCalendar { email, error ->
-                            calendarConnecting = false
-                            if (email != null) {
-                                calendarAccounts = calendarAccounts.filter { it != email } + email
-                            } else {
-                                calendarError = error
-                            }
-                        }
-                    },
-                    enabled = !calendarConnecting,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuText)
-                ) {
-                    Text(
-                        when {
-                            calendarConnecting -> "Conectando..."
-                            calendarAccounts.isEmpty() -> "Conectar Calendar"
-                            else -> "+ Otra cuenta de Calendar"
-                        }
-                    )
-                }
-                if (calendarError != null) {
-                    Text(calendarError.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
-                }
-                OutlinedButton(
-                    onClick = { showSettings = false; vm.logout(); onLogout() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("Borrar claves y cerrar sesión") }
-                OutlinedButton(
-                    onClick = { showSettings = false },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MikuTextDim)
-                ) { Text("Cerrar") }
-            }
-        }
+@Composable
+private fun VoiceSeparator(timestampMs: Long?) {
+    val time = timestampMs?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it)) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.weight(1f).height(1.dp).background(MikuOutline))
+        Icon(MikuIcons.Mic, contentDescription = null, tint = MikuDim, modifier = Modifier.size(14.dp))
+        MikuLabelText(if (time != null) "POR VOZ · $time" else "POR VOZ", MikuDim, small = true)
+        Box(Modifier.weight(1f).height(1.dp).background(MikuOutline))
     }
 }
 
 @Composable
-private fun MessageBubble(msg: UiMessage) {
+private fun MessageBubble(msg: UiMessage, maxBubble: androidx.compose.ui.unit.Dp) {
     when (msg.role) {
-        "miku" -> Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start
-        ) {
+        "miku" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
             Column(
                 modifier = Modifier
-                    .widthIn(max = 300.dp)
-                    .clip(RoundedCornerShape(14.dp, 14.dp, 14.dp, 4.dp))
-                    .background(MikuSurface2)
+                    .widthIn(max = maxBubble)
+                    .clip(shape)
+                    .background(MikuText.copy(alpha = 0.06f))
+                    .border(1.dp, MikuTeal.copy(alpha = 0.24f), shape)
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                Text("MIKU", color = MikuTeal, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                MikuLabelText("MIKU", MikuTeal, small = true)
                 Spacer(Modifier.height(3.dp))
-                Text(msg.text, color = MikuText, fontSize = 15.sp, lineHeight = 22.sp)
+                Text(msg.text, color = MikuText, style = MikuTypography.bodyLarge)
             }
         }
-        "user" -> Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
+        "user" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 6.dp, bottomStart = 18.dp)
+            // Lo dicho por voz: borde punteado, sin relleno.
+            val bubble = if (msg.fromVoice) {
+                Modifier.widthIn(max = maxBubble).dashedBorder(MikuPink.copy(alpha = 0.5f), 18.dp)
+            } else {
+                Modifier
+                    .widthIn(max = maxBubble)
+                    .clip(shape)
+                    .background(MikuPink.copy(alpha = 0.14f))
+                    .border(1.dp, MikuPink.copy(alpha = 0.32f), shape)
+            }
             Column(
-                modifier = Modifier
-                    .widthIn(max = 300.dp)
-                    .clip(RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp))
-                    .background(MikuTealDark)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalAlignment = Alignment.End
+                modifier = bubble.padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.End,
             ) {
                 if (msg.imageUri != null) {
                     AsyncImage(
@@ -610,59 +353,84 @@ private fun MessageBubble(msg: UiMessage) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 180.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
+                            .clip(RoundedCornerShape(10.dp)),
+                        contentScale = ContentScale.Crop,
                     )
                     Spacer(Modifier.height(6.dp))
                 }
-                Text(
-                    text  = msg.text,
-                    color = MikuBg,
-                    fontSize = 15.sp,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Text(msg.text, color = MikuText, style = MikuTypography.bodyLarge)
             }
         }
-        else -> Text(
-            text     = msg.text,
-            color = MikuTextDim,
-            fontSize = 12.sp,
+        // Errores y avisos del sistema.
+        else -> Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(MikuIcons.Alert, contentDescription = null, tint = MikuPinkText, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(msg.text, color = MikuPinkText, fontSize = 12.sp, textAlign = TextAlign.Center)
+        }
     }
 }
 
+// "Escribiendo": tres puntos turquesa que parpadean escalonados (1,2 s) y,
+// debajo, el rastro de tools del ciclo actual.
 @Composable
-private fun TypingIndicator() {
-    Row(
+private fun TypingBubble(tools: List<UiTool>, maxBubble: androidx.compose.ui.unit.Dp) {
+    val transition = rememberInfiniteTransition(label = "typing")
+    val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
+    Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(14.dp, 14.dp, 14.dp, 4.dp))
-            .background(MikuSurface2)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment     = Alignment.CenterVertically
+            .widthIn(max = maxBubble)
+            .clip(shape)
+            .background(MikuText.copy(alpha = 0.06f))
+            .border(1.dp, MikuTeal.copy(alpha = 0.24f), shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        repeat(3) { i ->
-            val offset by animateFloatAsState(
-                targetValue = 0f,
-                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                    animation = androidx.compose.animation.core.keyframes {
-                        durationMillis = 900
-                        0f at 0
-                        -6f at 200 + i * 100
-                        0f at 400 + i * 100
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            repeat(3) { i ->
+                val a by transition.animateFloat(
+                    initialValue = 0.25f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(600, delayMillis = i * 200),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                    label = "dot$i",
+                )
+                Box(
+                    Modifier
+                        .size(7.dp)
+                        .alpha(a)
+                        .clip(CircleShape)
+                        .background(MikuTeal)
+                )
+            }
+        }
+        tools.forEach { tool ->
+            val (category, text) = describeTool(tool.name, tool.done)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (tool.done) {
+                    Box(
+                        Modifier.size(20.dp).clip(CircleShape).background(MikuTeal.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(MikuIcons.Check, contentDescription = null, tint = MikuTeal, modifier = Modifier.size(12.dp))
                     }
-                ),
-                label = "dot$i"
-            )
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .offset(y = offset.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(MikuTeal)
-            )
+                } else {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = MikuTeal,
+                        trackColor = MikuTeal.copy(alpha = 0.25f),
+                        strokeWidth = 2.dp,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                MikuLabelText(category, MikuDim, small = true, modifier = Modifier.width(78.dp))
+                Text(text, color = MikuText, fontSize = 13.sp)
+            }
         }
     }
 }
