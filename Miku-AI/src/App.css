@@ -4,8 +4,33 @@
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafb);
 }
+/* Diseño v1 (docs/diseno-ui-v1/README.md §2): tokens de color y tipografía. */
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  --m-teal: #39c5bb;
+  --m-teal-dim: #2a8f88;
+  --m-pink: #f0508f;
+  --m-pink-text: #f58ab3;
+  --m-pink-dim: #b83a6c;
+  --m-text: #eaf4f3;
+  --m-muted: #9db9b6;
+  --m-dim: #7e9b98;
+  --m-glass: rgba(9, 20, 23, 0.92);
+  --m-glass-caption: rgba(9, 20, 23, 0.88);
+  --m-glass-panel: rgba(9, 20, 23, 0.96);
+  --m-line: rgba(57, 197, 187, 0.3);
+  --m-line-soft: rgba(157, 185, 182, 0.25);
+  --m-fill-soft: rgba(234, 244, 243, 0.05);
+  --m-module: rgba(234, 244, 243, 0.035);
+  --m-on-teal: #06221f;
+  --m-on-pink: #2a0714;
+
+  --m-font-display: "Dela Gothic One", "Arial Black", sans-serif;
+  --m-font-label: "Chakra Petch", "Bahnschrift", monospace;
+  --m-font-body: "Zen Kaku Gothic New", "Yu Gothic", "Segoe UI", sans-serif;
+}
+
+:root {
+  font-family: var(--m-font-body);
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
@@ -119,6 +144,7 @@ button {
   box-sizing: border-box;
 }
 
+/* Barra superior, diseño v1 (components/TopBar.tsx). */
 .toolbar {
   position: absolute;
   top: 0;
@@ -130,85 +156,215 @@ button {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  /* flex-start + scroll: si algún día no entran todos, lo que sobra queda a
-     la DERECHA y se puede desplazar -- con flex-end quedaba fuera por la
-     izquierda, sin forma de alcanzarlo. El agarre (margin-right: auto)
-     sigue empujando los botones a la derecha mientras entren. */
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 0 14px;
+  /* Si algún día no entra todo, lo que sobra queda a la derecha y se puede
+     desplazar (con el contenido alineado al final quedaba fuera por la
+     izquierda, sin forma de alcanzarlo). */
   overflow-x: auto;
   scrollbar-width: none;
-  gap: 4px;
-  padding: 0 6px;
-  background: rgba(20, 20, 30, 0.55);
+  background: var(--m-glass);
+  border-bottom: 1px solid var(--m-line);
   backdrop-filter: blur(4px);
+  cursor: default;
+  user-select: none;
   z-index: 10;
 }
-.send-button {
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
-  align-self: flex-end;
-  background: rgba(100, 200, 255, 0.3);
-  border: none;
-  border-radius: 6px;
-  padding: 4px 10px;
-  color: white;
-  cursor: pointer;
-  font-size: 12px;
-  box-shadow: none;
+}
+.toolbar-left {
+  gap: 12px;
 }
 
-.response-box {
-  position: absolute;
-  bottom: 24px;
-  left: 16px;
-  right: 16px;
-  max-height: 150px;
-  overflow-y: auto;
-  background: rgba(40, 20, 50, 0.7);
-  backdrop-filter: blur(4px);
-  color: white;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  z-index: 10;
-  transition: bottom 0.2s ease;
+.toolbar-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.toolbar-wordmark {
+  font-family: var(--m-font-display);
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: var(--m-teal);
+}
+.toolbar-channel {
+  font-family: var(--m-font-label);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--m-pink);
 }
 
-.response-box.with-input {
-  bottom: 130px;
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--m-line);
+  flex-shrink: 0;
+}
+.toolbar-divider-right {
+  margin: 0 4px;
 }
 
-/* Idea #18: indicador de "escuchando/pensando/hablando" cerca del avatar,
-   mismo espíritu que el ícono pulsante de la pantalla flotante de Android. */
-.avatar-state-badge {
-  position: absolute;
-  top: 44px;
-  left: 16px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  color: white;
-  background: rgba(40, 20, 50, 0.7);
-  backdrop-filter: blur(4px);
-  z-index: 10;
-  animation: avatar-state-pulse 1.6s ease-in-out infinite;
+.toolbar-state,
+.toolbar-mood {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
 }
-
-.avatar-state-listening {
-  background: rgba(220, 90, 60, 0.65);
+.toolbar-state {
+  color: var(--m-muted);
 }
-
-.avatar-state-thinking {
-  background: rgba(200, 160, 40, 0.6);
+.toolbar-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--m-teal);
 }
-
-@keyframes avatar-state-pulse {
-  0%, 100% {
-    opacity: 0.75;
-  }
-  50% {
+.toolbar-state-listening .toolbar-led {
+  background: var(--m-pink);
+  animation: toolbar-led-blink 1.2s ease-in-out infinite;
+}
+.toolbar-state-thinking .toolbar-led {
+  animation: toolbar-led-blink 0.9s ease-in-out infinite;
+}
+@keyframes toolbar-led-blink {
+  0%,
+  100% {
     opacity: 1;
   }
+  50% {
+    opacity: 0.3;
+  }
 }
+
+.toolbar-mood {
+  padding: 3px 9px;
+  border: 1px solid rgba(240, 80, 143, 0.45);
+  border-radius: 999px;
+  color: var(--m-pink-text);
+}
+.toolbar-mood-value {
+  color: var(--m-text);
+}
+
+.toolbar .toolbar-btn {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
+  color: var(--m-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+.toolbar .toolbar-btn:hover {
+  color: var(--m-text);
+  background: rgba(234, 244, 243, 0.06);
+}
+.toolbar .toolbar-btn.active {
+  background: rgba(57, 197, 187, 0.16);
+  color: var(--m-teal);
+}
+/* Voz silenciada: marca el botón en rosa, no reemplaza el estado. */
+.toolbar .toolbar-btn.muted {
+  background: rgba(240, 80, 143, 0.16);
+  color: var(--m-pink-text);
+}
+.toolbar .toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.toolbar .toolbar-btn:focus-visible,
+.toolbar-menu-item:focus-visible {
+  outline: 2px solid var(--m-teal);
+  outline-offset: -2px;
+}
+
+/* Menú "Vista y cámara". Pegado a la barra (top 40, sin hueco): con Miku
+   bloqueada, un hueco entre las dos zonas haría que la barra se escondiera
+   al bajar el mouse al menú. */
+.toolbar-menu {
+  position: absolute;
+  top: 40px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: var(--m-glass-panel);
+  border: 1px solid var(--m-line);
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 12;
+}
+.toolbar-menu-heading {
+  padding: 6px 10px 4px;
+  font-family: var(--m-font-label);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--m-pink);
+}
+.toolbar-menu-heading:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--m-line-soft);
+  padding-top: 10px;
+}
+.toolbar-menu .toolbar-menu-item {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
+  color: var(--m-text);
+  font-family: var(--m-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.toolbar-menu .toolbar-menu-item:hover {
+  background: rgba(57, 197, 187, 0.1);
+}
+.toolbar-menu-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--m-teal);
+  grid-row: span 2;
+}
+.toolbar-menu-hint {
+  grid-column: 2;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--m-dim);
+}
+
 /* Modo juego (useGameMode.ts): se desvanece hacia abajo antes de
    esconderse, y aparece deslizándose hacia arriba con un pequeño rebote. */
 .app-container.game-hiding,
@@ -233,112 +389,6 @@ button {
     opacity: 1;
     transform: none;
   }
-}
-
-/* Agarre para arrastrar la ventana -- a la izquierda de la barra, el
-   resto de los botones siguen a la derecha. */
-.toolbar-grip {
-  flex-shrink: 0;
-  margin-right: auto;
-  padding: 0 6px;
-  font-size: 18px;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: grab;
-  user-select: none;
-}
-
-.toolbar button {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 14px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.toolbar button.icon-btn {
-  padding: 4px 6px;
-  font-size: 15px;
-  line-height: 1;
-}
-.config-panel {
-  position: absolute;
-  top: 44px;
-  right: 8px;
-  background: rgba(20, 20, 30, 0.75);
-  backdrop-filter: blur(4px);
-  padding: 10px 14px;
-  border-radius: 8px;
-  z-index: 10;
-  color: white;
-  font-size: 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.config-panel input[type="range"] {
-  width: 100%;
-}
-
-.oauth-connect-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.oauth-connect-row button {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 13px;
-  color: white;
-}
-
-.oauth-connect-row button.active {
-  background: rgba(30, 215, 96, 0.5);
-}
-
-.oauth-connect-row button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.oauth-error {
-  color: rgba(255, 120, 120, 0.9);
-  font-size: 12px;
-}
-
-.gmail-accounts-row {
-  flex-wrap: wrap;
-}
-
-.gmail-account-chip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 2px 4px 2px 8px;
-  font-size: 12px;
-  color: white;
-}
-
-.gmail-account-chip button {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 4px;
-}
-
-.gmail-account-chip button:hover {
-  color: rgba(255, 120, 120, 0.9);
 }
 
 .app-launcher-panel {
@@ -618,70 +668,6 @@ button {
   color: rgba(255, 140, 140, 0.95);
   margin: 0 0 6px 0;
 }
-.toolbar button.active {
-  background: rgba(100, 200, 255, 0.5);
-}
-
-.transcript-box {
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  background: rgba(20, 20, 30, 0.6);
-  backdrop-filter: blur(4px);
-  color: white;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  z-index: 10;
-}
-
-.transcript-box textarea {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: none;
-  box-shadow: none;
-  color: white;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 18px;
-  padding: 4px 0;
-}
-
-.transcript-box textarea::placeholder {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.toolbar button.close-btn {
-  background: rgba(255, 80, 80, 0.3);
-}
-
-.close-transcript-btn {
-  flex-shrink: 0;
-  align-self: flex-end;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  font-size: 12px;
-  box-shadow: none;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.close-transcript-btn:hover {
-  background: rgba(255, 80, 80, 0.3);
-  color: white;
-}
-
 .miku-canvas {
   width: 100%;
   height: 100%;
@@ -773,13 +759,6 @@ button {
   }
 }
 
-.toolbar button:disabled,
-.send-button:disabled,
-.transcript-box textarea:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  filter: grayscale(0.5);
-}
 
 /* Punto 7: aviso mientras se arrastra un archivo sobre la ventana. */
 .file-drop-hint {
@@ -796,4 +775,740 @@ button {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   pointer-events: none;
   z-index: 20;
+}
+
+/* Panel de controles, diseño v1 (components/ControlsPanel.tsx). */
+.controls-panel {
+  position: absolute;
+  left: 20px;
+  top: 596px;
+  width: 710px;
+  height: 104px;
+  box-sizing: border-box;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--m-glass);
+  border: 1px solid var(--m-line);
+  border-radius: 22px;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+.piano-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 12px;
+  padding: 0 4px;
+}
+.piano-key {
+  flex: 1 1 0;
+  border-radius: 2px;
+}
+.piano-key.white {
+  height: 11px;
+  background: rgba(234, 244, 243, 0.12);
+}
+.piano-key.black {
+  height: 7px;
+  background: rgba(157, 185, 182, 0.22);
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.controls-panel .controls-btn {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--m-line-soft);
+  border-radius: 14px;
+  box-shadow: none;
+  color: var(--m-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+.controls-panel .controls-btn:hover {
+  color: var(--m-text);
+  background: rgba(234, 244, 243, 0.06);
+}
+.controls-panel .controls-btn.active {
+  background: rgba(57, 197, 187, 0.16);
+  border-color: var(--m-line);
+  color: var(--m-teal);
+}
+
+.controls-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 16px;
+  background: var(--m-fill-soft);
+  border: 1px solid rgba(157, 185, 182, 0.2);
+  border-radius: 14px;
+  transition: border-color 0.15s;
+}
+.controls-input:focus-within {
+  border-color: var(--m-line);
+}
+.controls-input textarea {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  box-sizing: border-box;
+  /* (42 - 21) / 2: una línea centrada; si hay más, se desplaza adentro. */
+  padding: 10.5px 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  resize: none;
+  box-shadow: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  color: var(--m-text);
+  font-family: var(--m-font-body);
+  font-size: 15px;
+  line-height: 21px;
+}
+.controls-input textarea::placeholder {
+  color: var(--m-dim);
+}
+.controls-input textarea:disabled {
+  cursor: default;
+}
+
+.controls-attachment {
+  position: relative;
+  flex-shrink: 0;
+  order: 2;
+}
+.controls-attachment img {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.controls-attachment button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  box-shadow: none;
+  background: var(--m-text);
+  color: #12161a;
+  cursor: pointer;
+}
+
+.controls-panel .controls-main {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--m-teal);
+  color: var(--m-on-teal);
+  box-shadow: 0 0 0 4px rgba(57, 197, 187, 0.15);
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
+}
+.controls-panel .controls-main.listening {
+  background: var(--m-pink);
+  color: var(--m-on-pink);
+  box-shadow:
+    0 0 0 5px rgba(240, 80, 143, 0.22),
+    0 0 0 11px rgba(240, 80, 143, 0.08);
+}
+.controls-panel .controls-main.stop {
+  background: var(--m-text);
+  color: #12161a;
+  box-shadow: 0 0 0 4px rgba(234, 244, 243, 0.12);
+}
+.controls-panel .controls-main:disabled,
+.controls-panel .controls-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.controls-panel .controls-main:focus-visible,
+.controls-panel .controls-btn:focus-visible {
+  outline: 2px solid var(--m-teal);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Caja de subtítulo, diseño v1 (components/Caption.tsx). Anclada abajo,
+   12 px sobre el panel de controles (top 596), crece hacia arriba. */
+.caption {
+  position: absolute;
+  left: 40px;
+  bottom: 136px;
+  width: 670px;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  box-sizing: border-box;
+  padding: 14px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--m-glass-caption);
+  border: 1px solid var(--m-line);
+  border-radius: 18px;
+  backdrop-filter: blur(4px);
+  color: var(--m-text);
+  z-index: 10;
+}
+.caption-listening {
+  border-color: rgba(240, 80, 143, 0.35);
+}
+.caption-thinking {
+  gap: 12px;
+}
+.caption-speaking,
+.caption-reply {
+  padding: 14px 22px 18px;
+}
+
+.caption-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.12em;
+}
+.caption-label-you {
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--m-pink-text);
+}
+.caption-label-note {
+  color: var(--m-dim);
+}
+.caption-label-miku {
+  color: var(--m-teal);
+}
+
+.caption p {
+  margin: 0;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.caption-transcript {
+  font-size: 21px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+.caption-pending {
+  color: var(--m-dim);
+  font-weight: 400;
+}
+.caption-echo {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--m-muted);
+}
+.caption-divider {
+  height: 1px;
+  flex-shrink: 0;
+  background: rgba(57, 197, 187, 0.18);
+}
+
+.caption-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.caption-tool {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.caption-tool-done,
+.caption-tool-running {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.caption-tool-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(57, 197, 187, 0.18);
+  color: var(--m-teal);
+}
+.caption-tool-running {
+  border: 2px solid rgba(57, 197, 187, 0.25);
+  border-top-color: var(--m-teal);
+  animation: spin 0.8s linear infinite;
+}
+.caption-tool-category {
+  min-width: 72px;
+  flex-shrink: 0;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--m-dim);
+}
+.caption-note {
+  font-size: 13px;
+  color: var(--m-dim);
+}
+
+.caption-spoken {
+  /* La maqueta pide 24 px; en vivo se veía demasiado grande. */
+  font-size: 18px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+.caption-karaoke {
+  color: var(--m-teal);
+  border-bottom: 3px solid var(--m-pink);
+}
+
+/* Paneles grandes (Configuración, Memoria), diseño v1 README §4: cubren la
+   ventana debajo de la barra, que queda visible con su botón marcado. */
+.m-panel {
+  position: absolute;
+  left: 12px;
+  top: 52px;
+  width: 726px;
+  height: 656px;
+  box-sizing: border-box;
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--m-glass-panel);
+  border: 1px solid var(--m-line);
+  border-radius: 22px;
+  color: var(--m-text);
+  font-size: 14px;
+  line-height: 1.4;
+  z-index: 11;
+}
+.m-panel button {
+  box-shadow: none;
+  font-family: var(--m-font-body);
+}
+.m-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.m-panel-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.m-panel-title {
+  margin: 0;
+  font-family: var(--m-font-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-align: left;
+}
+.m-panel-tag {
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--m-pink);
+}
+.m-panel .m-panel-close {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--m-line-soft);
+  border-radius: 12px;
+  color: var(--m-muted);
+  cursor: pointer;
+}
+.m-panel .m-panel-close:hover {
+  color: var(--m-text);
+  background: rgba(234, 244, 243, 0.06);
+}
+/* Si el contenido no entra, scroll interno. */
+.m-panel-body {
+  flex: 1;
+  min-height: 0;
+  /* La barra de desplazamiento cae en este margen, no encima del contenido. */
+  margin-right: -12px;
+  padding-right: 12px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(57, 197, 187, 0.3) transparent;
+}
+.m-panel button:focus-visible,
+.m-panel select:focus-visible,
+.m-panel input:focus-visible {
+  outline: 2px solid var(--m-teal);
+  outline-offset: 2px;
+}
+
+/* --- Configuración --- */
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.cfg-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+}
+.cfg-module {
+  box-sizing: border-box;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--m-module);
+  border: 1px solid rgba(57, 197, 187, 0.22);
+  border-radius: 16px;
+}
+.cfg-module-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--m-teal);
+}
+.cfg-module-number {
+  color: var(--m-pink);
+}
+.cfg-hint {
+  font-size: 12px;
+  color: var(--m-dim);
+}
+.cfg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cfg-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.m-panel input[type="range"] {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+  accent-color: var(--m-teal);
+}
+.m-panel .cfg-select {
+  height: 38px;
+  padding: 0 10px;
+  font-family: var(--m-font-body);
+  font-size: 14px;
+  color: var(--m-text);
+  background: rgba(234, 244, 243, 0.06);
+  border: 1px solid var(--m-line-soft);
+  border-radius: 10px;
+}
+.m-panel .cfg-select option {
+  background: #0f1c1f;
+  color: var(--m-text);
+}
+
+.cfg-segmented {
+  display: flex;
+  padding: 3px;
+  background: rgba(234, 244, 243, 0.06);
+  border-radius: 10px;
+}
+.m-panel .cfg-segmented button {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--m-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.m-panel .cfg-segmented button[aria-pressed="true"] {
+  color: var(--m-on-teal);
+  background: var(--m-teal);
+  font-weight: 500;
+}
+
+.cfg-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+}
+.cfg-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.m-panel .cfg-switch {
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  background: rgba(157, 185, 182, 0.25);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.cfg-switch-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--m-muted);
+}
+.m-panel .cfg-switch.on {
+  justify-content: flex-end;
+  background: var(--m-teal);
+}
+.cfg-switch.on .cfg-switch-knob {
+  background: var(--m-on-teal);
+}
+
+.cfg-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--m-muted);
+  white-space: nowrap;
+}
+.cfg-led {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.cfg-led-ok {
+  background: var(--m-teal);
+}
+.cfg-led-off {
+  background: rgba(157, 185, 182, 0.45);
+}
+.cfg-led-warn {
+  background: var(--m-pink);
+}
+.cfg-led-busy {
+  background: var(--m-teal);
+  animation: toolbar-led-blink 0.9s ease-in-out infinite;
+}
+
+.cfg-connections {
+  gap: 4px;
+}
+.cfg-connections .cfg-module-title {
+  margin-bottom: 6px;
+}
+.cfg-connection {
+  border-bottom: 1px solid rgba(157, 185, 182, 0.12);
+}
+.cfg-connection:last-of-type {
+  border-bottom: none;
+}
+.cfg-connection-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+}
+.cfg-connection-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cfg-connection-name {
+  font-weight: 500;
+}
+.m-panel .cfg-btn {
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--m-muted);
+  background: transparent;
+  border: 1px solid var(--m-line-soft);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.m-panel .cfg-btn:hover {
+  color: var(--m-text);
+}
+.m-panel .cfg-btn.open {
+  color: var(--m-teal);
+  border-color: rgba(57, 197, 187, 0.45);
+  background: rgba(57, 197, 187, 0.1);
+}
+.m-panel .cfg-btn-accent {
+  color: var(--m-teal);
+  border-color: rgba(57, 197, 187, 0.45);
+}
+.m-panel .cfg-btn-small {
+  height: 28px;
+  font-size: 12px;
+}
+.m-panel .cfg-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cfg-error {
+  padding-bottom: 8px;
+  font-size: 12px;
+  color: var(--m-pink-text);
+}
+.cfg-accounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: rgba(234, 244, 243, 0.03);
+  border-radius: 10px;
+}
+.cfg-account {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cfg-account-email {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--m-muted);
+}
+
+.cfg-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.cfg-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cfg-stat-value {
+  font-family: var(--m-font-label);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.m-panel .cfg-link {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--m-teal);
+  cursor: pointer;
+}
+.m-panel .cfg-link:hover {
+  color: #7fe3da;
+}
+.cfg-usage-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.cfg-usage-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cfg-footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: auto;
+}
+.m-panel .cfg-footer-btn {
+  height: 44px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--m-text);
+  background: rgba(234, 244, 243, 0.06);
+  border: 1px solid var(--m-line-soft);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.m-panel .cfg-footer-btn:hover {
+  border-color: var(--m-line);
 }

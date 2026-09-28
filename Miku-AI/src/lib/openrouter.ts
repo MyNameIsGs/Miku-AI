@@ -49,6 +49,10 @@ export async function fetchOpenRouterWithRetry(
 
 const MAX_TOOL_CALL_ROUNDS = 3;
 
+// Aviso de cada tool que empieza y termina, para el rastro de la caja de
+// subtítulo mientras piensa (diseño v1). Solo informa, no cambia el ciclo.
+export type ToolEvent = { id: string; name: string; status: "running" | "done" };
+
 export type ToolCallingResult = {
   // Contenido de texto de la respuesta final, ya con los resultados de
   // todas las tools que haya pedido (o el texto de siempre, si no pidió
@@ -73,6 +77,7 @@ export async function runToolCallingCycle(
   model: string,
   initialMessages: object[],
   onRetry?: (attempt: number, maxAttempts: number, delayMs: number) => void,
+  onToolEvent?: (event: ToolEvent) => void,
 ): Promise<ToolCallingResult> {
   const messages = [...initialMessages];
   const appendedMessages: ChatMessage[] = [];
@@ -126,10 +131,12 @@ export async function runToolCallingCycle(
     for (const toolCall of toolCalls!) {
       // `function.arguments` llega como string JSON, no como objeto
       // (verificado en la Tarea 6.0) -- se parsea dentro de executeTool.
+      onToolEvent?.({ id: toolCall.id, name: toolCall.function.name, status: "running" });
       const result = await executeTool(
         toolCall.function.name,
         toolCall.function.arguments,
       );
+      onToolEvent?.({ id: toolCall.id, name: toolCall.function.name, status: "done" });
       const toolMessage: ChatMessage = {
         role: "tool",
         tool_call_id: toolCall.id,

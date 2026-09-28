@@ -3,7 +3,6 @@ import { useRef, useState, Dispatch, SetStateAction } from "react";
 type UseSpeechRecognitionParams = {
   isVoiceReady: boolean;
   setTranscript: Dispatch<SetStateAction<string>>;
-  setShowTextInput: Dispatch<SetStateAction<boolean>>;
 };
 
 const TRANSCRIBE_URL = "http://127.0.0.1:8899/transcribe";
@@ -44,7 +43,6 @@ function commonPrefixLength(a: string[], b: string[]): number {
 export function useSpeechRecognition({
   isVoiceReady,
   setTranscript,
-  setShowTextInput,
 }: UseSpeechRecognitionParams) {
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -74,6 +72,26 @@ export function useSpeechRecognition({
   // crecen, nunca se acortan).
   const previousWordsRef = useRef<string[]>([]);
   const confirmedWordsRef = useRef<string[]>([]);
+  // Cuántas de las palabras que se muestran ya están confirmadas: la caja
+  // de subtítulo (diseño v1) pinta el tramo final sin confirmar más tenue.
+  const [confirmedWordCount, setConfirmedWordCount] = useState(0);
+
+  // Nivel del micrófono para las teclas de piano del panel (diseño v1): un
+  // analizador colgado del mismo stream que graba. Solo lee, no cambia lo
+  // que se graba ni lo que se manda a Whisper.
+  const micAnalyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; buf: Float32Array } | null>(null);
+  const getMicLevel = (): number => {
+    const mic = micAnalyserRef.current;
+    if (!mic) return 0;
+    mic.analyser.getFloatTimeDomainData(mic.buf);
+    let sum = 0;
+    for (let i = 0; i < mic.buf.length; i++) sum += mic.buf[i] * mic.buf[i];
+    return Math.sqrt(sum / mic.buf.length);
+  };
+  const closeMicAnalyser = () => {
+    micAnalyserRef.current?.ctx.close().catch(() => {});
+    micAnalyserRef.current = null;
+  };
 
   // Tarea 5.4b: transcripción incremental -- reusa el mismo Whisper ya
   // cargado (sin motor nuevo, ver §6.26 del contexto). No es streaming real
@@ -126,6 +144,7 @@ export function useSpeechRecognition({
         const confirmedLen = confirmedWordsRef.current.length;
         const display = [...confirmedWordsRef.current, ...words.slice(confirmedLen)].join(" ");
         setTranscript(display);
+        setConfirmedWordCount(confirmedLen);
       } catch (err) {
         console.error("Error en transcripción parcial:", err);
       } finally {
@@ -157,7 +176,20 @@ export function useSpeechRecognition({
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
 
+      try {
+        closeMicAnalyser();
+        const ctx = new AudioContext();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        micAnalyserRef.current = { ctx, analyser, buf: new Float32Array(analyser.fftSize) };
+      } catch (err) {
+        // Sin medidor las teclas quedan apagadas; la grabación sigue igual.
+        console.error("No se pudo medir el nivel del micrófono:", err);
+      }
+
       recorder.onstop = async () => {
+        closeMicAnalyser();
         stream.getTracks().forEach((track) => track.stop());
         stopPartialTranscription();
 
@@ -179,6 +211,8 @@ export function useSpeechRecognition({
             console.error("Error de transcripción:", data.error);
           } else {
             setTranscript(text);
+            // El resultado final ya no cambia: todo confirmado.
+            setConfirmedWordCount(text.trim().split(/\s+/).filter(Boolean).length);
           }
           // Tarea 8.1: si este corte lo pidió autoStopListening(), le
           // devuelve el texto final ya transcripto -- quien llamó decide
@@ -198,15 +232,16 @@ export function useSpeechRecognition({
 
       mediaRecorderRef.current = recorder;
       setTranscript("");
+      setConfirmedWordCount(0);
       // timeslice: sin esto, ondataavailable solo dispara una vez al
       // frenar la grabación entera -- con él, vamos juntando chunks que la
       // transcripción parcial puede ir usando mientras se sigue grabando.
       recorder.start(CHUNK_TIMESLICE_MS);
       startPartialTranscription(recorder.mimeType || mimeType);
       setListening(true);
-      setShowTextInput(true);
     } catch (err) {
       console.error("No se pudo acceder al micrófono:", err);
+      closeMicAnalyser();
     } finally {
       startingRef.current = false;
     }
@@ -244,5 +279,5 @@ export function useSpeechRecognition({
     });
   };
 
-  return { listening, transcribing, toggleListening, autoStopListening };
+  return { listening, transcribing, toggleListening, autoStopListening, getMicLevel, confirmedWordCount };
 }

@@ -34,6 +34,15 @@ type MoodLogEntry = { at: string; mood: Mood; origin: MoodOrigin };
 let cached: StoredMood | null = null;
 let decayLogged = false;
 
+// Quién quiere enterarse al instante de un cambio (la píldora de ánimo de
+// la barra). El decaimiento por tiempo no avisa: quien muestra el ánimo
+// vuelve a leer getCachedMood() cada tanto.
+const listeners = new Set<(mood: Mood) => void>();
+export function onMoodChange(listener: (mood: Mood) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 function isExpired(stored: StoredMood) {
   return Date.now() - new Date(stored.setAt).getTime() > MOOD_DECAY_MS;
 }
@@ -80,6 +89,7 @@ export async function setMood(mood: string, origin: MoodOrigin = "charla") {
   const value: StoredMood = { mood: normalized as Mood, setAt: new Date().toISOString() };
   cached = value;
   decayLogged = false;
+  listeners.forEach((listener) => listener(value.mood));
   await store.set(STORE_KEY, value);
   await store.save();
   console.log(`[Ánimo] ${normalized} (por ${origin})`);

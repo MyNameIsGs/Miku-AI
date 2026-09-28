@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Miku · Memoria</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=Dela+Gothic+One&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Zen Kaku Gothic New','Yu Gothic','Segoe UI',sans-serif;color:#EAF4F3;background:#12161a}
+a{color:#39C5BB}a:hover{color:#7FE3DA}
+input::placeholder{color:#7E9B98}
+</style>
+</helmet>
+<div style="position: relative; width: 750px; height: 720px; overflow: hidden; background-color: #12161a; background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 24px 24px">
+
+<header style="position: absolute; left: 0; top: 0; width: 750px; height: 40px; box-sizing: border-box; padding: 0 4px 0 14px; display: flex; align-items: center; justify-content: space-between; background: rgba(9,20,23,0.92); border-bottom: 1px solid rgba(57,197,187,0.3)">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 6px">
+<span style="font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 15px; letter-spacing: 0.08em; color: #39C5BB">MIKU</span>
+<span style="font-family: 'Chakra Petch','Bahnschrift',monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; color: #F0508F">CH·01</span>
+</div>
+<div style="width: 1px; height: 18px; background: rgba(57,197,187,0.3)"></div>
+<div style="display: flex; align-items: center; gap: 7px; font-family: 'Chakra Petch','Bahnschrift',monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: #9DB9B6">
+<span style="width: 7px; height: 7px; border-radius: 50%; background: #39C5BB"></span>
+<span>EN ESPERA</span>
+</div>
+</div>
+<nav aria-label="Controles de la ventana" style="display: flex; align-items: center; gap: 0">
+<button aria-label="Apps y carpetas" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 0; border-radius: 10px; color: #9DB9B6; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"></rect><rect x="14" y="4" width="6" height="6" rx="1.5"></rect><rect x="4" y="14" width="6" height="6" rx="1.5"></rect><rect x="14" y="14" width="6" height="6" rx="1.5"></rect></svg></button>
+<button aria-label="Memoria" aria-pressed="true" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; background: rgba(57,197,187,0.16); border: 0; border-radius: 10px; color: #39C5BB; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5V18c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V4.5c-3-.5-6 0-8 1.5z"></path><path d="M12 6v13.5"></path></svg></button>
+<button aria-label="Configuración" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 0; border-radius: 10px; color: #9DB9B6; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
+<button aria-label="Silenciar voz" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 0; border-radius: 10px; color: #9DB9B6; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10H4z"></path><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"></path></svg></button>
+<div style="width: 1px; height: 18px; margin: 0 4px; background: rgba(57,197,187,0.3)"></div>
+<button aria-label="Minimizar" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 0; border-radius: 10px; color: #9DB9B6; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 12h12"></path></svg></button>
+<button aria-label="Cerrar" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 0; border-radius: 10px; color: #9DB9B6; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</nav>
+</header>
+
+<section aria-labelledby="mem-title" style="position: absolute; left: 12px; top: 52px; width: 726px; height: 656px; box-sizing: border-box; padding: 18px 20px 20px 20px; display: flex; flex-direction: column; gap: 16px; background: rgba(9,20,23,0.96); border: 1px solid rgba(57,197,187,0.3); border-radius: 22px">
+
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div style="display: flex; align-items: baseline; gap: 12px">
+<h1 id="mem-title" style="margin: 0; font-family: 'Dela Gothic One','Arial Black',sans-serif; font-size: 24px; font-weight: 400; letter-spacing: 0.02em; color: #EAF4F3">Memoria</h1>
+<span style="font-family: 'Chakra Petch','Bahnschrift',monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; color: #F0508F">ARCHIVO</span>
+</div>
+<button aria-label="Cerrar memoria" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 1px solid rgba(157,185,182,0.25); border-radius: 12px; color: #9DB9B6; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+
+<div role="tablist" aria-label="Secciones de memoria" style="display: flex; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid rgba(57,197,187,0.18)">
+<button role="tab" aria-selected="true" style="height: 36px; padding: 0 14px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; font-weight: 700; color: #06221F; background: #39C5BB; border: 0; border-radius: 999px; cursor: pointer">Conocimiento</button>
+<button role="tab" aria-selected="false" style="height: 36px; padding: 0 14px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; color: #9DB9B6; background: transparent; border: 1px solid rgba(157,185,182,0.22); border-radius: 999px; cursor: pointer">Recuerdos</button>
+<button role="tab" aria-selected="false" style="height: 36px; padding: 0 14px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; color: #9DB9B6; background: transparent; border: 1px solid rgba(157,185,182,0.22); border-radius: 999px; cursor: pointer">Personalidad</button>
+<button role="tab" aria-selected="false" style="height: 36px; padding: 0 14px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; color: #9DB9B6; background: transparent; border: 1px solid rgba(157,185,182,0.22); border-radius: 999px; cursor: pointer">Diario</button>
+<button role="tab" aria-selected="false" style="height: 36px; padding: 0 14px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; color: #9DB9B6; background: transparent; border: 1px solid rgba(157,185,182,0.22); border-radius: 999px; cursor: pointer">Tacto</button>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #9DB9B6; max-width: 380px; text-wrap: pretty">Saber práctico que puedes corregir u olvidar. Sus recuerdos, su personalidad y su diario son suyos: se leen, no se editan.</p>
+<div style="position: relative; width: 260px; flex-shrink: 0">
+<label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Buscar por significado</label>
+<span style="position: absolute; left: 12px; top: 11px; color: #7E9B98"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg></span>
+<input id="q" type="search" placeholder="Buscar por significado" style="width: 100%; height: 38px; box-sizing: border-box; padding: 0 12px 0 36px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 14px; color: #EAF4F3; background: rgba(234,244,243,0.05); border: 1px solid rgba(157,185,182,0.22); border-radius: 10px; outline: none">
+</div>
+</div>
+
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; flex-grow: 1">
+<sc-for list="{{entries}}" as="e" hint-placeholder-count="5">
+<li style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: rgba(234,244,243,0.035); border: 1px solid rgba(157,185,182,0.14); border-radius: 12px">
+<span style="font-family: 'Chakra Petch','Bahnschrift',monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: #F0508F; width: 20px">{{e.n}}</span>
+<span style="flex-grow: 1; font-size: 14px; line-height: 1.5; color: #EAF4F3">{{e.text}}</span>
+<div style="display: flex; gap: 6px; flex-shrink: 0">
+<button style="height: 32px; padding: 0 10px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 13px; color: #39C5BB; background: transparent; border: 1px solid rgba(57,197,187,0.4); border-radius: 8px; cursor: pointer">Corregir</button>
+<button style="height: 32px; padding: 0 10px; font-family: 'Zen Kaku Gothic New','Yu Gothic',sans-serif; font-size: 13px; color: #9DB9B6; background: transparent; border: 1px solid rgba(157,185,182,0.25); border-radius: 8px; cursor: pointer">Olvidar</button>
+</div>
+</li>
+</sc-for>
+</ul>
+
+<div style="display: flex; align-items: center; justify-content: space-between; font-family: 'Chakra Petch','Bahnschrift',monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: #7E9B98">
+<span>CONOCIMIENTO.MD · [N] ENTRADAS</span>
+<span>EN CADA CHARLA USA LAS 6 MÁS CERCANAS</span>
+</div>
+
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":750,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const texts = [
+      'Sebastián usa varias cuentas de Gmail: al revisar el correo, mirar todas.',
+      'Prefiere la voz de Edge (es-MX-DaliaNeural); Piper y Kokoro quedaron descartadas.',
+      'Su GPU es una RTX 5070 Ti de 16 GB.',
+      'Su teléfono es un Redmagic 11 Pro.',
+      'Entre las 0:00 y las 7:00 los avisos se guardan para el resumen.'
+    ];
+    return { entries: texts.map((text, i) => ({ text, n: String(i + 1).padStart(2, '0') })) };
+  }
+}
+</script>
+</body>
+</html>

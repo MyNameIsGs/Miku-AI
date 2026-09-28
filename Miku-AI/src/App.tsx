@@ -61,6 +61,9 @@ import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { ConfigPanel } from "./components/ConfigPanel";
+import { TopBar } from "./components/TopBar";
+import { ControlsPanel } from "./components/ControlsPanel";
+import { Caption, CaptionMode } from "./components/Caption";
 import { useConnections } from "./hooks/useConnections";
 import {
   loadQuirks,
@@ -81,7 +84,7 @@ import {
   VOICE_VOLUME_MIN,
 } from "./config/constants";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
-import { runToolCallingCycle } from "./lib/openrouter";
+import { runToolCallingCycle, ToolEvent } from "./lib/openrouter";
 import {
   parseMovementMarker,
   parseHandGestureMarker,
@@ -130,7 +133,6 @@ function App() {
   const [freeCamera, setFreeCamera] = useState(false);
   const [clickThrough, setClickThrough] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [showTextInput, setShowTextInput] = useState(false);
   const { isVoiceReady, downloadProgress, handleCloseApp, registerBeforeSync } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
@@ -296,22 +298,6 @@ function App() {
   };
 
   useEffect(() => {
-    const el = transcriptRef.current;
-    if (!el) return;
-    const maxHeight = 80;
-    el.style.height = "auto";
-    const newHeight = Math.min(el.scrollHeight, maxHeight);
-    el.style.height = `${newHeight}px`;
-    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
-  }, [transcript, showTextInput]);
-
-  useEffect(() => {
-    if (showTextInput && transcriptRef.current) {
-      transcriptRef.current.focus();
-    }
-  }, [showTextInput]);
-
-  useEffect(() => {
     if (controlsRef.current) {
       controlsRef.current.enabled = freeCamera;
     }
@@ -333,7 +319,7 @@ function App() {
     const sendRegions = () => {
       const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
       document
-        .querySelectorAll(".config-panel, .app-launcher-panel, .transcript-box")
+        .querySelectorAll(".config-panel, .app-launcher-panel, .controls-panel, .toolbar-menu")
         .forEach((el) => {
           const r = el.getBoundingClientRect();
           regions.push({ x: r.left, y: r.top, width: r.width, height: r.height });
@@ -378,11 +364,17 @@ function App() {
   const speechRecognition = useSpeechRecognition({
     isVoiceReady,
     setTranscript,
-    setShowTextInput,
   });
 
   const [llmResponse, setLlmResponse] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  // Caja de subtítulo (diseño v1): mientras piensa muestra el eco de lo que
+  // le dijiste, las tools que va usando y, si hace falta, un aviso de
+  // reintento; mientras revela su respuesta, la última palabra va resaltada.
+  const [userEcho, setUserEcho] = useState("");
+  const [toolTrail, setToolTrail] = useState<ToolEvent[]>([]);
+  const [thinkingNote, setThinkingNote] = useState<string | null>(null);
+  const [replyRevealing, setReplyRevealing] = useState(false);
   // Punto 7: un archivo arrastrándose sobre la ventana (ver handleFileDrop).
   const [fileDragOver, setFileDragOver] = useState(false);
 
@@ -631,6 +623,9 @@ function App() {
     // hablando, queda registrado que él le escribió encima).
     const talkSignals = takeTalkSignals();
     sleep.wakeUp("le hablaron");
+    setUserEcho(userMessage);
+    setToolTrail([]);
+    setThinkingNote(null);
     setIsThinking(true);
     idleQuirks.lastInteractionTimeRef.current = performance.now();
     // Tarea 8.7: fire-and-forget a propósito -- no se espera, para no
@@ -760,8 +755,15 @@ function App() {
           { role: "user", content: userContent },
         ],
         (attempt, max, delay) => {
-          setLlmResponse(
+          setThinkingNote(
             `Miku está saturada del lado del proveedor, reintentando en ${delay / 1000}s... (intento ${attempt}/${max})`,
+          );
+        },
+        (event) => {
+          setToolTrail((trail) =>
+            trail.some((t) => t.id === event.id)
+              ? trail.map((t) => (t.id === event.id ? event : t))
+              : [...trail, event],
           );
         },
       );
@@ -933,12 +935,14 @@ function App() {
         if (!revealStarted) {
           revealStarted = true;
           setIsThinking(false);
+          setReplyRevealing(true);
           marks.audioStart = performance.now();
           recordLatency(marks, voiceMutedRef.current);
         }
         noteRevealProgress(liveReply, partial);
         setLlmResponse(partial);
       }, messageVolume);
+      setReplyRevealing(false);
       endReply(liveReply);
 
       // Tarea 8.1: solo tras una respuesta conversacional real (no un
@@ -953,6 +957,7 @@ function App() {
       setLlmResponse("Hubo un error al conectar con el modelo.");
     } finally {
       setIsThinking(false);
+      setReplyRevealing(false);
     }
   }
 
@@ -1393,6 +1398,17 @@ function App() {
     }
   };
 
+  const captionMode: CaptionMode | null =
+    avatarState === "listening"
+      ? "listening"
+      : isThinking
+        ? "thinking"
+        : replyRevealing
+          ? "speaking"
+          : llmResponse
+            ? "reply"
+            : null;
+
   return (
     <div
       className={`app-container ${gameMode.visual !== "shown" ? `game-${gameMode.visual}` : ""}`}
@@ -1406,204 +1422,66 @@ function App() {
       onDrop={handleFileDrop}
     >
       {fileDragOver && <div className="file-drop-hint">Suéltalo para que Miku lo vea</div>}
-      {showToolbar && (
-        <div
-          className="toolbar"
+      {/* La barra aparece al pasar el mouse, y además se queda mientras
+          Miku escucha o piensa (ahí vive el estado que antes era una
+          insignia aparte) o con un panel abierto (su botón queda marcado). */}
+      {(showToolbar ||
+        avatarState === "listening" ||
+        avatarState === "thinking" ||
+        showConfig ||
+        showMemoryPanel ||
+        showAppLauncher ||
+        showQuirksPanel) && (
+        <TopBar
+          avatarState={avatarState}
           onMouseDown={handleToolbarMouseDown}
           onMouseMove={handleToolbarMouseMove}
-          onMouseUp={() => {
+          onPressEnd={() => {
             toolbarPressRef.current = null;
           }}
-          onMouseLeave={() => {
-            toolbarPressRef.current = null;
-          }}
-        >
-          <span className="toolbar-grip" title="Arrastrar para mover a Miku">
-            ⠿
-          </span>
-          {/* Los botones de alternar van como íconos (con su explicación al
-              pasar el mouse): con texto no entraban los 13 en 750 px, y los
-              de la izquierda quedaban cortados fuera de la barra. */}
-          <button
-            className={`icon-btn ${freeCamera ? "active" : ""}`}
-            onClick={() => setFreeCamera((v) => !v)}
-            title="Cámara libre (mover la vista con el mouse)"
-          >
-            🎥
-          </button>
-          <button className="icon-btn" onClick={handleSaveCamera} title="Guardar la posición de la cámara">
-            💾
-          </button>
-          <button
-            className={`icon-btn ${clickThrough ? "active" : ""}`}
-            onClick={() => setClickThrough((v) => !v)}
-            title="Bloquear a Miku: los clics pasan a lo que hay detrás (Ctrl+Shift+M)"
-          >
-            🔒
-          </button>
-          <button
-            className={`icon-btn ${voiceMuted ? "active" : ""}`}
-            onClick={() => setVoiceMuted((v) => !v)}
-            title={voiceMuted ? "Miku está silenciada (clic para volver a oírla)" : "Silenciar la voz de Miku"}
-          >
-            {voiceMuted ? "🔇" : "🔊"}
-          </button>
-          {speech.isSpeaking && (
-            <button
-              className="icon-btn"
-              onClick={() => {
-                noteInterruption("botón");
-                speech.stopSpeaking();
-              }}
-              title="Cortar lo que está diciendo ahora"
-            >
-              ⏹
-            </button>
-          )}
-          <button
-            className={`icon-btn ${speechRecognition.listening ? "active" : ""}`}
-            onClick={speechRecognition.toggleListening}
-            disabled={!isVoiceReady}
-            title={
-              !isVoiceReady
-                ? "Esperando al servidor de voz..."
-                : speechRecognition.listening
-                  ? "Escuchando... (clic para terminar)"
-                  : "Hablarle a Miku (micrófono)"
-            }
-          >
-            🎤
-          </button>
-          <button
-            className={showTextInput ? "active" : ""}
-            onClick={() => isVoiceReady && setShowTextInput((v) => !v)}
-            disabled={!isVoiceReady}
-            title={
-              !isVoiceReady ? "Esperando al servidor de voz..." : undefined
-            }
-          >
-            Texto
-          </button>
-          <button
-            className={showConfig ? "active" : ""}
-            onClick={() => setShowConfig((v) => !v)}
-          >
-            Config
-          </button>
-          <button
-            className={showAppLauncher ? "active" : ""}
-            onClick={() => setShowAppLauncher((v) => !v)}
-          >
-            Apps
-          </button>
-          <button
-            className={showQuirksPanel ? "active" : ""}
-            onClick={() => setShowQuirksPanel((v) => !v)}
-          >
-            Quirks
-          </button>
-          <button
-            className={showMemoryPanel ? "active" : ""}
-            onClick={() => setShowMemoryPanel((v) => !v)}
-          >
-            Memoria
-          </button>
-          <button
-            className={`icon-btn ${hideResponseText ? "active" : ""}`}
-            onClick={() => setHideResponseText((v) => !v)}
-            title={
-              hideResponseText
-                ? "El texto de respuesta está oculto (clic para mostrarlo)"
-                : "Ocultar el texto de respuesta (para sacar capturas limpias)"
-            }
-          >
-            🙈
-          </button>
-          <button className="close-btn" onClick={handleCloseApp}>
-            Cerrar
-          </button>
-        </div>
+          voiceMuted={voiceMuted}
+          onToggleVoiceMuted={() => setVoiceMuted((v) => !v)}
+          showAppLauncher={showAppLauncher}
+          onToggleAppLauncher={() => setShowAppLauncher((v) => !v)}
+          showMemoryPanel={showMemoryPanel}
+          onToggleMemoryPanel={() => setShowMemoryPanel((v) => !v)}
+          showConfig={showConfig}
+          onToggleConfig={() => setShowConfig((v) => !v)}
+          freeCamera={freeCamera}
+          onToggleFreeCamera={() => setFreeCamera((v) => !v)}
+          onSaveCamera={handleSaveCamera}
+          clickThrough={clickThrough}
+          onToggleClickThrough={() => setClickThrough((v) => !v)}
+          onClose={handleCloseApp}
+        />
       )}
 
-      {showTextInput && (
-        <div className="transcript-box">
-          {attachedImage && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                marginBottom: "4px",
-              }}
-            >
-              <img
-                src={attachedImage}
-                alt="Imagen adjunta"
-                style={{
-                  height: "40px",
-                  width: "40px",
-                  objectFit: "cover",
-                  borderRadius: "4px",
-                }}
-              />
-              <button
-                onClick={() => setAttachedImage(null)}
-                title="Quitar imagen"
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
-          <textarea
-            ref={transcriptRef}
-            autoFocus
-            value={transcript}
-            disabled={!isVoiceReady}
-            placeholder={
-              !isVoiceReady
-                ? "Iniciando sistema de voz..."
-                : "Escribe un mensaje o usa el micrófono... (Ctrl+V para pegar una imagen)"
-            }
-            rows={1}
-            onChange={(e) => setTranscript(e.target.value)}
-            onPaste={handlePasteImage}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSendTranscript();
-              }
-            }}
-          />
-          <button
-            className="attach-image-btn"
-            onClick={handlePickImage}
-            disabled={!isVoiceReady}
-            title="Adjuntar imagen"
-          >
-            📎
-          </button>
-          <button
-            className="send-button"
-            onClick={() => handleSendTranscript()}
-            disabled={!isVoiceReady || isThinking}
-          >
-            Enviar
-          </button>
-          <button
-            className="close-transcript-btn"
-            onClick={() => setShowTextInput(false)}
-            title="Cerrar ventana de texto"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      <ControlsPanel
+        avatarState={avatarState}
+        isVoiceReady={isVoiceReady}
+        isThinking={isThinking}
+        listening={speechRecognition.listening}
+        transcribing={speechRecognition.transcribing}
+        onToggleListening={speechRecognition.toggleListening}
+        onStopSpeaking={() => {
+          noteInterruption("botón");
+          speech.stopSpeaking();
+        }}
+        getMicLevel={speechRecognition.getMicLevel}
+        speechLevelRef={speech.speechLevelRef}
+        // Mientras escucha, lo que vas diciendo se ve en la caja de
+        // subtítulo, no en el campo.
+        transcript={speechRecognition.listening || speechRecognition.transcribing ? "" : transcript}
+        setTranscript={setTranscript}
+        transcriptRef={transcriptRef}
+        onPaste={handlePasteImage}
+        onSend={() => handleSendTranscript()}
+        attachedImage={attachedImage}
+        onRemoveImage={() => setAttachedImage(null)}
+        onPickImage={handlePickImage}
+        hideResponseText={hideResponseText}
+        onToggleHideResponseText={() => setHideResponseText((v) => !v)}
+      />
 
       {showAppLauncher && (
         <AppLauncherPanel
@@ -1645,26 +1523,29 @@ function App() {
           connections={connections}
           streamMode={streamMode}
           gameMode={gameMode}
+          actionsDisabled={appLauncher.config.actionsDisabled}
+          setActionsDisabled={appLauncher.setActionsDisabled}
+          onOpenQuirks={() => {
+            setShowConfig(false);
+            setShowQuirksPanel(true);
+          }}
+          onOpenAppLauncher={() => {
+            setShowConfig(false);
+            setShowAppLauncher(true);
+          }}
+          onClose={() => setShowConfig(false)}
         />
       )}
-      {/* "hablando" no lleva insignia -- ya se ve directo (boca moviéndose
-          + texto revelándose), agregarla es redundante. Sebastián lo pidió
-          sacar tras ver las tres juntas. */}
-      {(avatarState === "listening" || avatarState === "thinking") && (
-        <div className={`avatar-state-badge avatar-state-${avatarState}`}>
-          {avatarState === "listening" && "🎙️ Escuchando..."}
-          {avatarState === "thinking" && "💭 Pensando..."}
-        </div>
-      )}
-      {!hideResponseText && isThinking && (
-        <div className={`response-box ${showTextInput ? "with-input" : ""}`}>
-          Pensando...
-        </div>
-      )}
-      {!hideResponseText && !isThinking && llmResponse && (
-        <div className={`response-box ${showTextInput ? "with-input" : ""}`}>
-          {llmResponse}
-        </div>
+      {!hideResponseText && captionMode && (
+        <Caption
+          mode={captionMode}
+          transcript={transcript}
+          confirmedWordCount={speechRecognition.confirmedWordCount}
+          userEcho={userEcho}
+          tools={toolTrail}
+          note={thinkingNote}
+          text={llmResponse}
+        />
       )}
 
       {!isMikuReady && (

@@ -1,5 +1,17 @@
 import { RefObject, useRef, useState } from "react";
 
+// Cuánto "suena" cada forma de boca, 0-1: alimenta las teclas de piano del
+// panel de controles mientras habla (diseño v1). Sale de los mismos visemas
+// que mueven la boca, sin analizar el audio aparte.
+const VISEME_LEVEL: Record<string, number> = {
+  aa: 1,
+  oh: 0.85,
+  ee: 0.7,
+  ou: 0.6,
+  ih: 0.5,
+  neutral: 0,
+};
+
 const VISEME_MAP: Record<string, string> = {
   A: "neutral",
   B: "ih",
@@ -66,6 +78,10 @@ export function useSpeech({
   // que arranca un audio nuevo y se limpia cuando termina, así que siempre
   // apunta como mucho a uno solo, nunca a uno viejo ya terminado.
   const stopCurrentRef = useRef<(() => void) | null>(null);
+
+  // Nivel de su voz ahora mismo (0-1), ver VISEME_LEVEL. Un ref: se lee en
+  // cada cuadro desde la tira de teclas, sin re-renderizar.
+  const speechLevelRef = useRef(0);
 
   async function speakImmediately(
     text: string,
@@ -137,6 +153,7 @@ export function useSpeech({
           ? (VISEME_MAP[activeCue.value] ?? "neutral")
           : "neutral";
         setViseme(targetShape);
+        speechLevelRef.current = VISEME_LEVEL[targetShape] ?? 0;
         updateRevealedText();
 
         animationFrameId = requestAnimationFrame(updateMouthFromVisemes);
@@ -168,6 +185,7 @@ export function useSpeech({
           finished = true;
           cancelAnimationFrame(animationFrameId);
           resetVisemes();
+          speechLevelRef.current = 0;
           URL.revokeObjectURL(audioUrl);
           setExpression("neutral");
           isSpeakingRef.current = false;
@@ -205,7 +223,7 @@ export function useSpeech({
     expression: string,
     // Opcional: se llama con el texto revelado hasta el momento, en sync
     // con el audio (ver updateRevealedText más arriba) -- solo lo usa
-    // askMiku en App.tsx para el response-box; los quirks idle y los
+    // askMiku en App.tsx para la caja de subtítulo; los quirks idle y los
     // recordatorios no muestran texto, así que no lo necesitan.
     onReveal?: (revealedText: string) => void,
     // [VOZ_VOLUMEN] de esta respuesta, 0-1 (1 = normal).
@@ -238,5 +256,5 @@ export function useSpeech({
     stopCurrentRef.current?.();
   }
 
-  return { speak, isSpeaking, stopSpeaking };
+  return { speak, isSpeaking, stopSpeaking, speechLevelRef };
 }

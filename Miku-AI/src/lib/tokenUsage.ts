@@ -119,9 +119,8 @@ export function recordUsage(kind: CallKind, usage: unknown) {
   scheduleSave();
 }
 
-// Punto 4 del plan: lo de hoy, en una línea, para el panel de Config. Suma
-// lo ya guardado y lo que todavía no se guardó.
-export async function describeTodayUsage(): Promise<string> {
+// Totales de hoy: suma lo ya guardado y lo que todavía no se guardó.
+async function todayTotals(): Promise<DayUsage> {
   const day = localDay();
   const totals: DayUsage = {};
   const merge = (usage: DayUsage | undefined) => {
@@ -140,10 +139,27 @@ export async function describeTodayUsage(): Promise<string> {
     // Sin lo guardado, al menos lo de esta sesión.
   }
   merge(pending[day]);
-  const entries = Object.entries(totals) as [CallKind, Totals][];
-  if (entries.length === 0) return "Hoy: todavía ninguna llamada al modelo.";
-  const calls = entries.reduce((sum, [, t]) => sum + t.calls, 0);
-  const cost = entries.reduce((sum, [, t]) => sum + t.cost, 0);
-  const [topKind] = entries.sort((a, b) => b[1].cost - a[1].cost || b[1].prompt - a[1].prompt)[0];
-  return `Hoy: ${calls} llamadas al modelo, US$${cost.toFixed(3)}; lo que más gasta: ${topKind}.`;
+  return totals;
+}
+
+// Módulo "04 HOY" del panel de Configuración (diseño v1): costo y tokens
+// del día por separado, más el detalle por tipo de llamada.
+export type TodayUsage = {
+  calls: number;
+  cost: number;
+  tokens: number;
+  byKind: { kind: CallKind; calls: number; tokens: number; cost: number }[];
+};
+
+export async function getTodayUsage(): Promise<TodayUsage> {
+  const entries = Object.entries(await todayTotals()) as [CallKind, Totals][];
+  const byKind = entries
+    .map(([kind, t]) => ({ kind, calls: t.calls, tokens: t.prompt + t.completion, cost: t.cost }))
+    .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens);
+  return {
+    calls: byKind.reduce((sum, k) => sum + k.calls, 0),
+    cost: byKind.reduce((sum, k) => sum + k.cost, 0),
+    tokens: byKind.reduce((sum, k) => sum + k.tokens, 0),
+    byKind,
+  };
 }
