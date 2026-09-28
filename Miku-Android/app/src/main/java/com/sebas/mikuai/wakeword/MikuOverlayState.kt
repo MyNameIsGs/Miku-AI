@@ -12,8 +12,15 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 sealed class MikuOverlayPhase {
     data object Idle : MikuOverlayPhase()
-    data object Listening : MikuOverlayPhase()
-    data object Thinking : MikuOverlayPhase()
+
+    /** [partial]: lo que el reconocedor va entendiendo mientras hablas. */
+    data class Listening(val partial: String = "") : MikuOverlayPhase()
+
+    /**
+     * [heard]: lo que dijiste (eco «TÚ · …»); [tools]: el rastro de tools
+     * del ciclo actual, en orden (ronda 2 de diseño).
+     */
+    data class Thinking(val heard: String = "", val tools: List<OverlayTool> = emptyList()) : MikuOverlayPhase()
 
     /**
      * [reply] recién se completa cuando el audio de la voz de Miku ya está
@@ -24,11 +31,25 @@ sealed class MikuOverlayPhase {
     data class Responding(val heard: String, val reply: String) : MikuOverlayPhase()
 }
 
+data class OverlayTool(val name: String, val done: Boolean)
+
 object MikuOverlayState {
     private val _phase = MutableStateFlow<MikuOverlayPhase>(MikuOverlayPhase.Idle)
     val phase: StateFlow<MikuOverlayPhase> = _phase.asStateFlow()
 
     fun update(phase: MikuOverlayPhase) {
         _phase.value = phase
+    }
+
+    /** Suma o termina una tool en el rastro, si sigue pensando. */
+    fun toolEvent(name: String, done: Boolean) {
+        val current = _phase.value as? MikuOverlayPhase.Thinking ?: return
+        val tools = if (!done) {
+            current.tools + OverlayTool(name, false)
+        } else {
+            val i = current.tools.indexOfLast { it.name == name && !it.done }
+            if (i < 0) current.tools else current.tools.toMutableList().also { it[i] = it[i].copy(done = true) }
+        }
+        _phase.value = current.copy(tools = tools)
     }
 }

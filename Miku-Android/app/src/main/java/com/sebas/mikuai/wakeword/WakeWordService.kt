@@ -335,7 +335,7 @@ class WakeWordService : Service() {
         stopCapture() // soltamos el micrófono del wake-word antes de que lo tome el reconocedor de voz
         vibrateConfirm()
         updateNotification(statusText(R.string.wakeword_status_command))
-        MikuOverlayState.update(MikuOverlayPhase.Listening)
+        MikuOverlayState.update(MikuOverlayPhase.Listening())
         showOverlay()
         startSpeechRecognition()
     }
@@ -366,13 +366,15 @@ class WakeWordService : Service() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+            // La pantalla flotante muestra lo que va entendiendo (ronda 2).
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
 
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle) {
                 val text = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
                 if (!text.isNullOrBlank()) {
-                    MikuOverlayState.update(MikuOverlayPhase.Thinking)
+                    MikuOverlayState.update(MikuOverlayPhase.Thinking(heard = text))
                     handleVoiceCommand(text)
                 } else {
                     MikuOverlayState.update(MikuOverlayPhase.Idle)
@@ -389,7 +391,12 @@ class WakeWordService : Service() {
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {}
-            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onPartialResults(partialResults: Bundle?) {
+                val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!partial.isNullOrBlank() && MikuOverlayState.phase.value is MikuOverlayPhase.Listening) {
+                    MikuOverlayState.update(MikuOverlayPhase.Listening(partial))
+                }
+            }
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
 
@@ -418,7 +425,9 @@ class WakeWordService : Service() {
                 val memory = repo.loadMemory()
                 val activePendientes = repo.loadActivePendientes()
                 val prompt = Prompts.buildVoicePrompt(memory, activePendientes)
-                val raw = repo.chatWithTools(prompt, emptyList(), text)
+                val raw = repo.chatWithTools(prompt, emptyList(), text) { name, done ->
+                    MikuOverlayState.toolEvent(name, done)
+                }
                 val parsed = MarkerParser.parse(raw)
 
                 // Idea #8.7: briefing automático al sentarse -- si es la
