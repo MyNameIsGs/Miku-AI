@@ -67,6 +67,7 @@ import { isQuietHours } from "./lib/quietHours";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { FileDropHint } from "./components/FileDropHint";
+import { FreeCameraHint } from "./components/FreeCameraHint";
 import { Caption, CaptionMode, RetryInfo } from "./components/Caption";
 import { useConnections } from "./hooks/useConnections";
 import {
@@ -326,7 +327,7 @@ function App() {
     const sendRegions = () => {
       const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
       document
-        .querySelectorAll(".m-panel, .controls-panel, .toolbar-menu, .m-dialog-layer, .caption-error")
+        .querySelectorAll(".m-panel, .controls-panel, .toolbar-menu, .m-dialog-layer, .caption-error, .free-camera-pill")
         .forEach((el) => {
           const r = el.getBoundingClientRect();
           regions.push({ x: r.left, y: r.top, width: r.width, height: r.height });
@@ -1526,6 +1527,12 @@ function App() {
       onDrop={handleFileDrop}
     >
       {fileDragOver && <FileDropHint />}
+      {freeCamera && (
+        <FreeCameraHint
+          onDone={() => setFreeCamera(false)}
+          raised={controlsMotion.mounted && controlsMotion.phase === "enter"}
+        />
+      )}
       {/* La barra aparece solo al pasar el mouse (pedido de Sebastián),
           aunque Miku esté escuchando o pensando. */}
       {barMotion.mounted && (
