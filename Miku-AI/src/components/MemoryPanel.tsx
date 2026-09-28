@@ -243,7 +243,7 @@ function KnowledgeSection() {
                   autoFocus
                 />
                 <div className="mem-row-actions">
-                  <button className="mem-btn accent" onClick={() => handleSave(entry)} disabled={!draft.trim()}>
+                  <button className="mem-btn m-btn-primary" onClick={() => handleSave(entry)} disabled={!draft.trim()}>
                     Guardar
                   </button>
                   <button className="mem-btn" onClick={() => setEditing(null)}>
