@@ -1329,6 +1329,11 @@ a:hover {
   color: var(--m-dim);
 }
 
+.mem-readonly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .mem-readonly {
   margin: 0;
   padding: 14px 16px;

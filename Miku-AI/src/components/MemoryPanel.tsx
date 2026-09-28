@@ -5,9 +5,9 @@ import {
   deleteKnowledgeEntry,
   KNOWLEDGE_TOP_K,
   loadKnowledgeEntries,
-  searchKnowledge,
   updateKnowledgeEntry,
 } from "../lib/knowledge";
+import { matchesQuery } from "../lib/textSearch";
 import {
   deleteDesignedReaction,
   DesignedTouchReaction,
@@ -78,21 +78,27 @@ export function MemoryPanel({ onClose, motion }: MemoryPanelProps) {
       {tab === "tacto" && <TouchSection />}
       {tab === "diario" && (
         <ReadOnlyFile
+          key="diario"
           file="diario.md"
           hint="Lo que Miku escribe cada noche sobre su día. Es suyo: se lee, no se edita. Lo más reciente va arriba."
+          unit="section"
           newestFirst
         />
       )}
       {tab === "memorias" && (
         <ReadOnlyFile
+          key="memorias"
           file="memories.md"
           hint="Lo que Miku recuerda de ti y de lo que vivieron. Siempre lo tiene presente completo. Es suyo: se lee, no se edita."
+          unit="paragraph"
         />
       )}
       {tab === "personalidad" && (
         <ReadOnlyFile
+          key="personalidad"
           file="personality.md"
           hint="Cómo es Miku, según ella misma. Siempre lo tiene presente completo. Es suyo: se lee, no se edita."
+          unit="line"
         />
       )}
     </div>
@@ -110,12 +116,36 @@ function Footer({ left, right }: { left: string; right?: string }) {
 
 const entryNumber = (i: number) => String(i + 1).padStart(2, "0");
 
+// Buscador de cada pestaña: por texto, sin importar tildes ni mayúsculas
+// (ver lib/textSearch.ts, por qué no por significado).
+function SearchBox({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="mem-search">
+      <label htmlFor={id} className="visually-hidden">
+        Buscar
+      </label>
+      <span className="mem-search-icon">
+        <IconSearch size={16} />
+      </span>
+      <input id={id} type="search" placeholder="Buscar" value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
+  return (
+    <div className="m-empty">
+      <p className="m-empty-title">Nada con «{query.trim()}»</p>
+      <p className="m-empty-text">Busca palabras que aparezcan en el texto (las tildes no importan).</p>
+      <button className="m-btn m-btn-small" onClick={onClear}>
+        Borrar búsqueda
+      </button>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Conocimiento
-
-// Espera tras la última tecla antes de buscar por significado.
-const SEARCH_DEBOUNCE_MS = 350;
-const SEARCH_RESULTS = 10;
 
 function KnowledgeSection() {
   const [entries, setEntries] = useState<string[] | null>(null);
@@ -125,10 +155,6 @@ function KnowledgeSection() {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
-  // null = sin búsqueda; si no, las entradas encontradas (por significado,
-  // o por texto si el servidor de voz no responde).
-  const [results, setResults] = useState<string[] | null>(null);
-  const [searchByText, setSearchByText] = useState(false);
 
   const reload = async () => {
     try {
@@ -141,34 +167,6 @@ function KnowledgeSection() {
   useEffect(() => {
     reload();
   }, []);
-
-  useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setResults(null);
-      return;
-    }
-    let cancelled = false;
-    const id = window.setTimeout(async () => {
-      try {
-        const found = await searchKnowledge(q, SEARCH_RESULTS);
-        if (!cancelled) {
-          setResults(found);
-          setSearchByText(false);
-        }
-      } catch {
-        const lower = q.toLowerCase();
-        if (!cancelled) {
-          setResults((entries ?? []).filter((e) => e.toLowerCase().includes(lower)).reverse());
-          setSearchByText(true);
-        }
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(id);
-    };
-  }, [query, entries]);
 
   const run = async (action: () => Promise<void>) => {
     setError(null);
@@ -195,8 +193,8 @@ function KnowledgeSection() {
     await run(() => deleteKnowledgeEntry(entry));
   };
 
-  // Sin búsqueda: las más recientes arriba.
-  const shown = results ?? (entries ? [...entries].reverse() : null);
+  // Las más recientes arriba; con búsqueda, solo las que coinciden.
+  const shown = entries ? [...entries].reverse().filter((e) => matchesQuery(e, query)) : null;
 
   return (
     <>
@@ -205,21 +203,7 @@ function KnowledgeSection() {
           Saber práctico que puedes corregir u olvidar. Sus recuerdos, su personalidad y su diario son suyos: se
           leen, no se editan.
         </p>
-        <div className="mem-search">
-          <label htmlFor="mem-q" className="visually-hidden">
-            Buscar por significado
-          </label>
-          <span className="mem-search-icon">
-            <IconSearch size={16} />
-          </span>
-          <input
-            id="mem-q"
-            type="search"
-            placeholder="Buscar por significado"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <SearchBox id="mem-q" value={query} onChange={setQuery} />
       </div>
 
       <div className="m-panel-body">
@@ -236,18 +220,7 @@ function KnowledgeSection() {
             </p>
           </div>
         )}
-        {results?.length === 0 && entries?.length !== 0 && (
-          <div className="m-empty">
-            <p className="m-empty-title">Nada cercano a «{query.trim()}»</p>
-            <p className="m-empty-text">La búsqueda es por significado: prueba con otras palabras.</p>
-            <button className="m-btn m-btn-small" onClick={() => setQuery("")}>
-              Borrar búsqueda
-            </button>
-          </div>
-        )}
-        {searchByText && results && results.length > 0 && (
-          <p className="mem-empty">El buscador por significado no responde; filtré por texto.</p>
-        )}
+        {shown?.length === 0 && entries?.length !== 0 && <NoMatches query={query} onClear={() => setQuery("")} />}
         <ul className={`mem-list ${editing ? "is-editing" : ""}`}>
           {shown?.map((entry, i) =>
             editing === entry ? (
@@ -509,9 +482,32 @@ function TouchSection() {
 // ---------------------------------------------------------------------------
 // Solo lectura
 
-function ReadOnlyFile({ file, hint, newestFirst = false }: { file: string; hint: string; newestFirst?: boolean }) {
+// Qué se muestra como un resultado al buscar: un recuerdo (párrafo), un
+// rasgo de personalidad (línea) o una noche del diario (sección "## fecha").
+type SearchUnit = "paragraph" | "line" | "section";
+
+function splitUnits(text: string, unit: SearchUnit): string[] {
+  const pattern = unit === "section" ? /\n(?=## )/ : unit === "line" ? /\n/ : /\n\s*\n/;
+  return text
+    .split(pattern)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function ReadOnlyFile({
+  file,
+  hint,
+  unit,
+  newestFirst = false,
+}: {
+  file: string;
+  hint: string;
+  unit: SearchUnit;
+  newestFirst?: boolean;
+}) {
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -531,18 +527,39 @@ function ReadOnlyFile({ file, hint, newestFirst = false }: { file: string; hint:
     };
   }, [file, newestFirst]);
 
+  const searching = query.trim() !== "";
+  // El encabezado del diario ("# Diario de Miku" + su aclaración) no es un resultado.
+  const matches =
+    searching && content ? splitUnits(content, unit).filter((u) => !u.startsWith("# ") && matchesQuery(u, query)) : [];
+
   return (
     <>
       <div className="mem-intro">
         <p className="mem-hint">{hint}</p>
+        {content?.trim() && <SearchBox id={`mem-q-${file}`} value={query} onChange={setQuery} />}
       </div>
       <div className="m-panel-body">
         {error && <p className="mem-error">{error}</p>}
         {content === null && !error && <p className="mem-empty">Cargando…</p>}
         {content !== null && !content.trim() && <p className="mem-empty">Todavía está vacío.</p>}
-        {content?.trim() && <pre className="mem-readonly">{content.trim()}</pre>}
+        {content?.trim() && !searching && <pre className="mem-readonly">{content.trim()}</pre>}
+        {searching && matches.length === 0 && content?.trim() && (
+          <NoMatches query={query} onClear={() => setQuery("")} />
+        )}
+        {matches.length > 0 && (
+          <div className="mem-readonly-list">
+            {matches.map((m, i) => (
+              <pre key={`${i}:${m}`} className="mem-readonly">
+                {m}
+              </pre>
+            ))}
+          </div>
+        )}
       </div>
-      <Footer left={`${file.toUpperCase()} · SOLO LECTURA`} />
+      <Footer
+        left={`${file.toUpperCase()} · SOLO LECTURA`}
+        right={searching ? `${matches.length} ${matches.length === 1 ? "COINCIDENCIA" : "COINCIDENCIAS"}` : undefined}
+      />
     </>
   );
 }
