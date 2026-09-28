@@ -7,4 +7,7 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Ronda 2 de diseño: fondo de la app y acento (ver ui/theme/Color.kt). -->
+    <color name="miku_bg">#FF0B1517</color>
+    <color name="miku_teal">#FF39C5BB</color>
 </resources>

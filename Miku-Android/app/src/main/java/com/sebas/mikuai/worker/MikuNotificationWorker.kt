@@ -56,7 +56,8 @@ class MikuNotificationWorker(
         )
 
         val notification = NotificationCompat.Builder(applicationContext, MikuApp.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_stat_miku)
+            .setColor(0xFF39C5BB.toInt())
             .setContentTitle("Miku")
             .setContentText(message.take(80))
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))

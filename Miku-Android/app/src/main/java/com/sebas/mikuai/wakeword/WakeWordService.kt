@@ -725,7 +725,8 @@ class WakeWordService : Service() {
         )
 
         return NotificationCompat.Builder(applicationContext, MikuApp.WAKEWORD_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_stat_miku)
+            .setColor(0xFF39C5BB.toInt())
             .setContentTitle("Miku")
             .setContentText(text)
             .setContentIntent(pendingIntent)
@@ -760,7 +761,8 @@ class WakeWordService : Service() {
         )
 
         val notification = NotificationCompat.Builder(applicationContext, MikuApp.OVERLAY_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_stat_miku)
+            .setColor(0xFF39C5BB.toInt())
             .setContentTitle("Miku")
             .setContentText(statusText(R.string.wakeword_status_command))
             .setPriority(NotificationCompat.PRIORITY_HIGH)

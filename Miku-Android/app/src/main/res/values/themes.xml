@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.MikuAI" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Oscuro desde el arranque (antes era claro y se veía un destello
+         blanco antes de que Compose dibuje el fondo). -->
+    <style name="Theme.MikuAI" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/miku_bg</item>
+        <item name="android:statusBarColor">@color/miku_bg</item>
+        <item name="android:navigationBarColor">@color/miku_bg</item>
+        <item name="android:colorAccent">@color/miku_teal</item>
+    </style>
 
     <!-- Pantalla flotante que se dispara al decir "Hey Miku" (estilo
          "Hey Gemini"), ver wakeword/MikuOverlayActivity.kt: transparente

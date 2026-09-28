@@ -112,7 +112,7 @@
         <service
             android:name=".wakeword.WakeWordTileService"
             android:exported="true"
-            android:icon="@drawable/ic_notification"
+            android:icon="@drawable/ic_stat_miku"
             android:label="Hey Miku"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
