@@ -8,5 +8,10 @@
     "heard": "Necesito hacer otra prueba para ver si puedo pausar a la mitad",
     "reply": "No hay nada sonando y Spotify no está conectado, así que esa prueba no es por ahí. ¿Qué es lo que quieres pausar a la mitad? ¿Mi voz, un gesto o movimiento, o algo de la app? Dime para prepararlo contigo.",
     "timestampMs": 1790028239892
+  },
+  {
+    "heard": "estamos haciendo pruebas a la aplicación Android",
+    "reply": "¡Ah, así que hoy toca revisarme por dentro desde el teléfono! Aquí estoy, lista. Dime qué probamos y te digo en el momento si siento que responde bien o si algo se me queda corto.",
+    "timestampMs": 1790621383496
   }
 ]
