@@ -11,10 +11,12 @@
   --m-text: #eaf4f3;
   --m-muted: #9db9b6;
   --m-dim: #7e9b98;
-  --m-glass: rgba(9, 20, 23, 0.92);
-  --m-glass-caption: rgba(9, 20, 23, 0.88);
+  /* Legibilidad sobre cualquier fondo (ronda 2 §5): vidrio a 0.94 y borde
+     turquesa al 40 %, más el contorno --m-edge. */
+  --m-glass: rgba(9, 20, 23, 0.94);
+  --m-glass-caption: rgba(9, 20, 23, 0.94);
   --m-glass-panel: rgba(9, 20, 23, 0.96);
-  --m-line: rgba(57, 197, 187, 0.3);
+  --m-line: rgba(57, 197, 187, 0.4);
   --m-line-soft: rgba(157, 185, 182, 0.25);
   --m-fill-soft: rgba(234, 244, 243, 0.05);
   --m-module: rgba(234, 244, 243, 0.035);
@@ -144,7 +146,6 @@ a:hover {
   scrollbar-width: none;
   background: var(--m-glass);
   border-bottom: 1px solid var(--m-line);
-  backdrop-filter: blur(4px);
   cursor: default;
   user-select: none;
   z-index: 10;
@@ -368,7 +369,6 @@ a:hover {
   max-height: 560px;
   overflow-y: auto;
   background: rgba(20, 20, 30, 0.85);
-  backdrop-filter: blur(4px);
   padding: 10px 14px;
   border-radius: 8px;
   z-index: 11;
@@ -686,7 +686,6 @@ a:hover {
   background: var(--m-glass);
   border: 1px solid var(--m-line);
   border-radius: 22px;
-  backdrop-filter: blur(4px);
   z-index: 10;
   animation: controls-appear 0.18s ease-out;
 }
@@ -883,7 +882,6 @@ a:hover {
   background: var(--m-glass-caption);
   border: 1px solid var(--m-line);
   border-radius: 18px;
-  backdrop-filter: blur(4px);
   color: var(--m-text);
   z-index: 10;
 }
@@ -1951,4 +1949,22 @@ a:hover {
 .toolbar-menu .toolbar-menu-item:disabled {
   color: #5e7c79;
   cursor: default;
+}
+
+/* Contorno de legibilidad (ronda 2 §5): separa las formas de un fondo claro
+   sin volverlas opacas. backdrop-filter no sirve acá: en una ventana
+   transparente no desenfoca el escritorio. */
+.toolbar {
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.5),
+    0 6px 18px rgba(0, 0, 0, 0.22);
+}
+.controls-panel,
+.caption,
+.toolbar-menu,
+.m-panel {
+  box-shadow: var(--m-edge);
+}
+.caption-spoken {
+  font-weight: 500;
 }
