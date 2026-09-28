@@ -13,6 +13,34 @@ import { fetchOpenRouterWithRetry } from "../openrouter";
 // cuándo buscar queda en el tool calling normal, no en el plugin.
 const MAX_RESULTS = 3;
 
+// Motores del plugin web, en orden: si uno falla se prueba el siguiente.
+// Sin VPN, desde la ubicación de Sebastián, el de por defecto (Exa,
+// undefined) responde 500 al instante; Parallel funciona con y sin VPN y es
+// el más barato (medido 2026-09-28). Mismo orden que BuscarEnWeb.kt.
+const ENGINES: (string | undefined)[] = ["parallel", "perplexity", undefined];
+
+const SYSTEM_PROMPT =
+  "Eres una herramienta de búsqueda web. Responde la consulta de forma breve y factual, citando las fuentes con enlaces markdown. Si la búsqueda no trae nada útil, dilo en vez de inventar una respuesta. No des precios en vivo ni asumas que se puede reservar nada con esta información -- son datos de referencia, no en tiempo real.";
+
+// El texto de la búsqueda con un motor, o error con el motivo de OpenRouter
+// (antes un 500 se leía como "no encontré nada útil").
+async function searchWith(consulta: string, engine: string | undefined): Promise<string> {
+  const response = await fetchOpenRouterWithRetry({
+    model: OPENROUTER_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: consulta },
+    ],
+    plugins: [{ id: "web", ...(engine ? { engine } : {}), max_results: MAX_RESULTS }],
+  }, { kind: "buscar en web" });
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.choices) {
+    throw new Error(`OpenRouter ${response.status}: ${data?.error?.message ?? "respuesta sin contenido"}`);
+  }
+  return data.choices[0]?.message?.content ?? "";
+}
+
 export const buscarEnWeb: ToolDefinition = {
   schema: {
     type: "function",
@@ -39,31 +67,19 @@ export const buscarEnWeb: ToolDefinition = {
       return "Error: no se especificó qué buscar.";
     }
 
-    try {
-      const response = await fetchOpenRouterWithRetry({
-        model: OPENROUTER_MODEL,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Eres una herramienta de búsqueda web. Responde la consulta de forma breve y factual, citando las fuentes con enlaces markdown. Si la búsqueda no trae nada útil, dilo en vez de inventar una respuesta. No des precios en vivo ni asumas que se puede reservar nada con esta información -- son datos de referencia, no en tiempo real.",
-          },
-          { role: "user", content: consulta },
-        ],
-        plugins: [{ id: "web", max_results: MAX_RESULTS }],
-      }, { kind: "buscar en web" });
-
-      const data = await response.json();
-      const content: string | undefined = data.choices?.[0]?.message?.content;
-
-      if (!content || !content.trim()) {
-        return `No encontré nada útil buscando "${consulta}".`;
+    let lastError = "";
+    for (const engine of ENGINES) {
+      try {
+        const content = await searchWith(consulta, engine);
+        if (!content.trim()) {
+          return `No encontré nada útil buscando "${consulta}".`;
+        }
+        return content;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        console.warn(`[Buscar en web] falló con ${engine ?? "exa"}: ${lastError}`);
       }
-      return content;
-    } catch (err) {
-      return `Error al buscar en la web: ${
-        err instanceof Error ? err.message : String(err)
-      }`;
     }
+    return `Error al buscar en la web: ${lastError}. Si Sebastián te pregunta por el error, dile este mensaje tal cual.`;
   },
 };

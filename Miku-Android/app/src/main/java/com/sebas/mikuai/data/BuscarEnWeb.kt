@@ -24,16 +24,28 @@ object BuscarEnWeb {
             return "Error: no se especificó qué buscar."
         }
 
-        return try {
-            val content = orApi.webSearch(SYSTEM_PROMPT, consulta, MAX_RESULTS)
-            if (content.isBlank()) {
-                "No encontré nada útil buscando \"$consulta\"."
-            } else {
-                content
+        // Si un motor falla se prueba el siguiente (ver ENGINES).
+        var lastError: Exception? = null
+        for (engine in ENGINES) {
+            try {
+                val content = orApi.webSearch(SYSTEM_PROMPT, consulta, MAX_RESULTS, engine)
+                return if (content.isBlank()) {
+                    "No encontré nada útil buscando \"$consulta\"."
+                } else {
+                    content
+                }
+            } catch (e: Exception) {
+                Log.w("BuscarEnWeb", "Falló la búsqueda \"$consulta\" con ${engine ?: "exa"}", e)
+                lastError = e
             }
-        } catch (e: Exception) {
-            Log.w("BuscarEnWeb", "Falló la búsqueda \"$consulta\"", e)
-            "Error al buscar en la web: ${e.message}. Si Sebastián te pregunta por el error, dile este mensaje tal cual."
         }
+        return "Error al buscar en la web: ${lastError?.message}. Si Sebastián te pregunta por el error, dile este mensaje tal cual."
     }
+
+    // Motores del plugin web de OpenRouter, en orden. Sin VPN, desde la
+    // ubicación de Sebastián, el de por defecto (Exa, null) responde 500 al
+    // instante; Parallel funciona con y sin VPN y es el más barato (medido
+    // 2026-09-28, desde el celular). Perplexity y Exa quedan de respaldo.
+    // Mismo orden que lib/tools/buscarEnWeb.ts de desktop.
+    private val ENGINES = listOf("parallel", "perplexity", null)
 }

@@ -102,6 +102,9 @@ class OpenRouterApi(private val apiKey: String) {
         systemPrompt: String,
         consulta: String,
         maxResults: Int,
+        // Motor de búsqueda del plugin ("parallel", "perplexity"...); null =
+        // el de OpenRouter por defecto (Exa).
+        engine: String? = null,
         attempt: Int = 1
     ): String = withContext(Dispatchers.IO) {
         val messages = JSONArray().apply {
@@ -109,15 +112,17 @@ class OpenRouterApi(private val apiKey: String) {
             put(JSONObject().apply { put("role", "user"); put("content", consulta) })
         }
 
-        val bodyJson = JSONObject().apply {
+        val bodyText = JSONObject().apply {
             put("model", MODEL)
             put("max_tokens", 4000)
             put("messages", messages)
             put("plugins", JSONArray().put(JSONObject().apply {
                 put("id", "web")
+                if (engine != null) put("engine", engine)
                 put("max_results", maxResults)
             }))
-        }.toString().toRequestBody("application/json".toMediaType())
+        }.toString()
+        val bodyJson = bodyText.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
             .url(OR_URL)
@@ -132,7 +137,7 @@ class OpenRouterApi(private val apiKey: String) {
         // fetchOpenRouterWithRetry del lado desktop).
         if (response.code == 429 && attempt < 4) {
             delay(1500L * attempt)
-            return@withContext webSearch(systemPrompt, consulta, maxResults, attempt + 1)
+            return@withContext webSearch(systemPrompt, consulta, maxResults, engine, attempt + 1)
         }
         // El motivo real viaja en el error (el cuerpo de OpenRouter): antes
         // solo decía el código, o reventaba en "No value for choices", y
