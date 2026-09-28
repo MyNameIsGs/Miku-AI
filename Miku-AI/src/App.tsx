@@ -322,7 +322,7 @@ function App() {
     const sendRegions = () => {
       const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
       document
-        .querySelectorAll(".m-panel, .app-launcher-panel, .controls-panel, .toolbar-menu, .m-dialog-layer")
+        .querySelectorAll(".m-panel, .controls-panel, .toolbar-menu, .m-dialog-layer")
         .forEach((el) => {
           const r = el.getBoundingClientRect();
           regions.push({ x: r.left, y: r.top, width: r.width, height: r.height });
@@ -1463,6 +1463,7 @@ function App() {
   const configMotion = usePresenceMotion(showConfig, { exitMs: 160 });
   const memoryMotion = usePresenceMotion(showMemoryPanel, { exitMs: 160 });
   const quirksMotion = usePresenceMotion(showQuirksPanel, { exitMs: 160 });
+  const appsMotion = usePresenceMotion(showAppLauncher, { exitMs: 160 });
 
   const captionMode: CaptionMode | null =
     avatarState === "listening"
@@ -1553,8 +1554,9 @@ function App() {
         />
       )}
 
-      {showAppLauncher && (
+      {appsMotion.mounted && (
         <AppLauncherPanel
+          motion={appsMotion.phase}
           discoveredApps={appLauncher.discoveredApps}
           customApps={appLauncher.customApps}
           config={appLauncher.config}
