@@ -80,11 +80,26 @@ describe("[MOVIMIENTO]", () => {
 
 describe("[GESTO_MANO]", () => {
   it("lee cada mano y la duración", () => {
-    expect(parseHandGestureMarker("[GESTO_MANO: izq=paz, der=puño, duracion=1s]")).toEqual({
-      left: "paz",
-      right: "puño",
+    expect(parseHandGestureMarker("[GESTO_MANO: izq=handPeace, der=manoSuave, duracion=1s]")).toEqual({
+      left: "handPeace",
+      right: "manoSuave",
       durationMs: 1000,
     });
+  });
+
+  it("encuentra un gesto propio con tilde o ñ (se guardaba como 'corazn' y se buscaba 'corazón')", () => {
+    const created = parseCreateHandGestureMarker("[CREAR_GESTO_MANO: nombre=corazón, indice=80]");
+    const used = parseHandGestureMarker("[GESTO_MANO: izq=corazón, der=puño]");
+    expect(created?.name).toBe("corazon");
+    expect(used?.left).toBe(created?.name);
+    expect(used?.right).toBe("puno");
+  });
+
+  it("[CREAR_QUIRK] guarda las manos con el mismo nombre que el gesto creado", () => {
+    const quirk = parseCreateQuirkMarker("[CREAR_QUIRK: nombre=saludo_niña, mano_izq=corazón]");
+    expect(quirk?.name).toBe("saludo_nina");
+    expect(quirk?.handLeft).toBe("corazon");
+    expect(parseQuirkReadyMarker("[QUIRK_LISTO: saludo_niña]")).toBe("saludo_nina");
   });
 
   it("acepta una sola mano y usa la duración por defecto", () => {

@@ -18,6 +18,18 @@ import {
   HandShape,
 } from "../types";
 
+// Nombre de un gesto o quirk propio, igual al guardarlo y al buscarlo:
+// sin tildes (ó -> o, ñ -> n) y solo letras, números y guion bajo. Antes
+// las tildes se borraban al crear ("corazón" -> "corazn") pero no al usar
+// el gesto, así que [GESTO_MANO: izq=corazón] no lo encontraba.
+export function normalizeGestureName(raw: string): string {
+  return raw
+    .trim()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9_]/g, "");
+}
+
 export function parseMovementMarker(text: string): ParsedMovement | null {
   const match = text.match(/\[MOVIMIENTO:\s*([\s\S]*?)\]/i);
   if (!match) return null;
@@ -82,8 +94,8 @@ export function parseHandGestureMarker(text: string): ParsedHandGesture | null {
       if (!Number.isNaN(num) && num > 0) durationMs = num * 1000;
       continue;
     }
-    if (key === "izq" && rawValue) left = rawValue;
-    if (key === "der" && rawValue) right = rawValue;
+    if (key === "izq") left = normalizeGestureName(rawValue) || left;
+    if (key === "der") right = normalizeGestureName(rawValue) || right;
   }
 
   return left || right ? { left, right, durationMs } : null;
@@ -111,7 +123,7 @@ export function parseCreateHandGestureMarker(
     const key = rawKey.toLowerCase();
 
     if (key === "nombre") {
-      name = rawValue.replace(/[^a-zA-Z0-9_]/g, "");
+      name = normalizeGestureName(rawValue);
       continue;
     }
     if (key === "animado") {
@@ -195,7 +207,7 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
     const key = rawKey.toLowerCase();
 
     if (key === "nombre") {
-      name = rawValue.replace(/[^a-zA-Z0-9_]/g, "");
+      name = normalizeGestureName(rawValue);
       continue;
     }
     if (key === "duracion") {
@@ -215,12 +227,12 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
       if (!Number.isNaN(num)) revertAfterCycles = Math.max(1, Math.min(8, num));
       continue;
     }
-    if (key === "mano_izq" && rawValue) {
-      handLeft = rawValue;
+    if (key === "mano_izq") {
+      handLeft = normalizeGestureName(rawValue) || handLeft;
       continue;
     }
-    if (key === "mano_der" && rawValue) {
-      handRight = rawValue;
+    if (key === "mano_der") {
+      handRight = normalizeGestureName(rawValue) || handRight;
       continue;
     }
 
@@ -243,7 +255,7 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
 export function parseQuirkReadyMarker(text: string): string | null {
   const match = text.match(/\[QUIRK_LISTO:\s*([\s\S]*?)\]/i);
   if (!match) return null;
-  const name = match[1].trim().replace(/[^a-zA-Z0-9_]/g, "");
+  const name = normalizeGestureName(match[1]);
   return name || null;
 }
 
