@@ -44,7 +44,7 @@ import { useSleep } from "./hooks/useSleep";
 import { useMusicSway } from "./hooks/useMusicSway";
 import { useWindowWind } from "./hooks/useWindowWind";
 import { useMoodFaceDesign } from "./hooks/useMoodFaceDesign";
-import { readDroppedFile } from "./lib/droppedFile";
+import { readDroppedFile, isSurelyUnreadableType } from "./lib/droppedFile";
 import { recordLatency } from "./lib/latencyLog";
 import { useTouchReactions } from "./hooks/useTouchReactions";
 import { consumeTouchSummary } from "./lib/touchLog";
@@ -396,6 +396,8 @@ function App() {
   const [controlsFocused, setControlsFocused] = useState(false);
   // Punto 7: un archivo arrastrándose sobre la ventana (ver handleFileDrop).
   const [fileDragOver, setFileDragOver] = useState(false);
+  // Lo que se arrastra seguro no se puede leer (ver isSurelyUnreadableType).
+  const [fileDragUnsupported, setFileDragUnsupported] = useState(false);
 
   // Idea #18: indicador visual de "escuchando/pensando/hablando" en el
   // avatar de desktop -- equivalente al ícono pulsante de la pantalla
@@ -458,6 +460,8 @@ function App() {
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     if (!fileDragOver) setFileDragOver(true);
+    const unsupported = isSurelyUnreadableType(e.dataTransfer.items[0]?.type ?? "");
+    if (unsupported !== fileDragUnsupported) setFileDragUnsupported(unsupported);
   };
   const handleFileDrop = async (e: React.DragEvent) => {
     if (!e.dataTransfer.types.includes("Files")) return;
@@ -1526,7 +1530,7 @@ function App() {
       }}
       onDrop={handleFileDrop}
     >
-      {fileDragOver && <FileDropHint />}
+      {fileDragOver && <FileDropHint unsupported={fileDragUnsupported} />}
       {freeCamera && (
         <FreeCameraHint
           onDone={() => setFreeCamera(false)}

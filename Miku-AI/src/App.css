@@ -2907,3 +2907,16 @@ a:hover {
   background: var(--m-teal-press);
   transform: scale(0.97);
 }
+
+/* Soltar: tipo que Miku no puede abrir (propuesta aprobada de la ronda 2). */
+.file-drop-hint.unsupported {
+  border-color: var(--m-pink);
+}
+.file-drop-hint.unsupported .file-drop-icon {
+  background: var(--m-pink);
+  color: var(--m-on-pink);
+  box-shadow: 0 0 0 8px rgba(240, 80, 143, 0.16);
+}
+.file-drop-hint.unsupported .file-drop-label {
+  color: var(--m-pink-text);
+}

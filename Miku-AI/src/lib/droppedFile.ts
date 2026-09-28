@@ -20,6 +20,21 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+// Mientras se arrastra (dragover) el navegador no da el nombre, solo el
+// tipo MIME, y a veces vacío. Se marca como no legible solo lo que seguro no
+// es imagen ni texto; si el tipo es dudoso o desconocido, se asume que sí
+// (al soltar, readDroppedFile decide de verdad). Ojo: .ts llega como
+// video/mp2t y es texto.
+export function isSurelyUnreadableType(mime: string): boolean {
+  if (!mime || mime === "video/mp2t") return false;
+  return (
+    mime.startsWith("audio/") ||
+    mime.startsWith("video/") ||
+    mime === "application/pdf" ||
+    /^application\/(zip|x-zip|x-7z|x-rar|vnd\.rar|gzip|x-tar|x-msdownload|x-msdos-program|vnd\.ms-|vnd\.openxmlformats|vnd\.oasis)/.test(mime)
+  );
+}
+
 export async function readDroppedFile(file: File): Promise<DroppedContent> {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (file.type.startsWith("image/")) {
