@@ -62,6 +62,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.sebas.mikuai.BuildConfig
+import com.sebas.mikuai.data.MiUbicacion
 import com.sebas.mikuai.data.SecurePrefs
 import com.sebas.mikuai.ui.theme.*
 import com.sebas.mikuai.voice.ModelDownloadManager
@@ -110,6 +111,20 @@ fun SettingsScreen(
         }
         activity?.lifecycle?.addObserver(observer)
         onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
+
+    // Google Maps, paso 2: permiso para la tool mi_ubicacion.
+    var hasLocation by remember { mutableStateOf(MiUbicacion.hasPermission(context)) }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        hasLocation = MiUbicacion.hasPermission(context)
+        // El servicio de "Hey Miku" toma el tipo ubicación al arrancar:
+        // se reinicia para que mi_ubicacion funcione también por voz.
+        if (hasLocation && WakeWordPrefs.isEnabled(context)) {
+            WakeWordService.stop(context)
+            WakeWordService.start(context)
+        }
     }
 
     val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
@@ -319,6 +334,22 @@ fun SettingsScreen(
                 Divider()
                 AccountsRow("Google Calendar", calendarAccounts, calendarConnecting, calendarError, onConnect = connectCalendar) {
                     accountsOf = "calendar"
+                }
+                Divider()
+                SettingRow(
+                    title = "Ubicación",
+                    subtitle = if (hasLocation) "Miku puede saber dónde estás cuando se lo pides." else "Para «¿dónde estoy?» y las rutas desde donde estás.",
+                    icon = MikuIcons.Pin,
+                ) {
+                    if (hasLocation) {
+                        DoneTag()
+                    } else {
+                        PillButton("Permitir", accent = true) {
+                            locationPermissionLauncher.launch(
+                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                            )
+                        }
+                    }
                 }
             }
 

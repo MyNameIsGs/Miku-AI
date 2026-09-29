@@ -207,6 +207,14 @@ object Tools {
         )
         put(
             buildTool(
+                name = "mi_ubicacion",
+                description = "Dónde está Sebastián ahora: dirección aproximada y coordenadas, desde el GPS del celular. Úsala cuando haga falta saber dónde está (\"¿dónde estoy?\", \"cerca de mí\", el origen de un viaje).",
+                properties = JSONObject(),
+                required = emptyList(),
+            )
+        )
+        put(
+            buildTool(
                 name = "revisar_correo",
                 description = "Revisa los correos más recientes de TODAS las cuentas de Gmail que Sebastián tenga conectadas -- solo lectura, nunca envía, borra ni modifica nada. Devuelve de qué cuenta vino cada uno, remitente, asunto, fecha y un fragmento corto. Úsala cuando Sebastián pida revisar el correo, o cuando quieras fijarte si llegó algo con una fecha de entrega o cita que valga la pena anotar con anotar_pendiente.",
                 properties = JSONObject().apply {
@@ -346,6 +354,7 @@ object Tools {
                 }
                 "buscar_en_web" -> BuscarEnWeb.execute(openRouter, args.optString("consulta", ""))
                 "abrir_mapa" -> abrirMapa(context, args)
+                "mi_ubicacion" -> MiUbicacion.execute(context)
                 "revisar_correo" -> {
                     val dias = if (args.has("dias") && args.get("dias") is Number) {
                         args.getInt("dias").coerceAtLeast(1)

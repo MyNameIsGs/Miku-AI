@@ -2,6 +2,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { obtenerHoraActual } from "./obtenerHoraActual";
 import { abrirUrl } from "./abrirUrl";
 import { abrirMapa } from "./abrirMapa";
+import { miUbicacion } from "./miUbicacion";
 import { buscarEnWeb } from "./buscarEnWeb";
 import { controlMedios } from "./controlMedios";
 import { ajustarVolumen } from "./ajustarVolumen";
@@ -37,6 +38,7 @@ const STATIC_TOOLS: ToolDefinition[] = [
   obtenerHoraActual,
   abrirUrl,
   abrirMapa,
+  miUbicacion,
   buscarEnWeb,
   controlMedios,
   ajustarVolumen,

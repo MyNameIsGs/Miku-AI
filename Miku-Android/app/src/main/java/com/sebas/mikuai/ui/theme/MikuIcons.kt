@@ -60,4 +60,5 @@ object MikuIcons {
     )
     val Battery = strokeIcon("battery", roundRect(3f, 7f, 16f, 10f, 2.5f), "M22 11v2M7 10.5v3M11 10.5v3")
     val Layers = strokeIcon("layers", roundRect(4f, 4f, 12f, 12f, 2f), "M8 20h10a2 2 0 0 0 2-2V8")
+    val Pin = strokeIcon("pin", "M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z", circle(12f, 9.8f, 2.3f))
 }

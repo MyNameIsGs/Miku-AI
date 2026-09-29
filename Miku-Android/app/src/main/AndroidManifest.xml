@@ -30,6 +30,13 @@
          Configuración (no se puede pedir con un diálogo normal). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Tool mi_ubicacion (data/MiUbicacion.kt). FOREGROUND_SERVICE_LOCATION
+         deja que el servicio de "Hey Miku" la lea mientras corre (ver
+         startForegroundWithNotification en WakeWordService.kt). -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
     <application
         android:name=".MikuApp"
         android:allowBackup="true"
@@ -78,7 +85,7 @@
         <service
             android:name=".wakeword.WakeWordService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|location" />
 
         <!-- Idea #6: widget de pantalla de inicio, botón "Hablar con
              Miku" (ver wakeword/MikuWidgetProvider.kt). -->

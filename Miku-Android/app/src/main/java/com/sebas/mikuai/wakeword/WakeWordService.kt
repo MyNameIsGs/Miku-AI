@@ -31,6 +31,7 @@ import com.sebas.mikuai.R
 import com.sebas.mikuai.data.CalendarApi
 import com.sebas.mikuai.data.CalendarAuth
 import com.sebas.mikuai.data.CalendarWatcher
+import com.sebas.mikuai.data.MiUbicacion
 import com.sebas.mikuai.data.GmailApi
 import com.sebas.mikuai.data.GmailAuth
 import com.sebas.mikuai.data.GitHubApi
@@ -831,10 +832,20 @@ class WakeWordService : Service() {
     private fun startForegroundWithNotification(text: String) {
         val notification = buildNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                FOREGROUND_NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            )
+            // Con permiso de ubicación, también de tipo ubicación: así
+            // mi_ubicacion funciona desde "Hey Miku". Android puede
+            // rechazarlo (p. ej. si arranca con el teléfono, sin la app a
+            // la vista): entonces sigue solo con micrófono, en vez de
+            // cerrarse; mi_ubicacion cae a la última ubicación conocida.
+            val withLocation = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            try {
+                startForeground(
+                    FOREGROUND_NOTIFICATION_ID, notification,
+                    if (MiUbicacion.hasPermission(this)) withLocation else ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            } catch (e: Exception) {
+                startForeground(FOREGROUND_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            }
         } else {
             startForeground(FOREGROUND_NOTIFICATION_ID, notification)
         }

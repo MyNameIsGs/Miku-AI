@@ -17,6 +17,7 @@ mod screen_capture;
 mod oauth_loopback;
 mod gmail_auth;
 mod music_beat;
+mod location;
 
 #[tauri::command]
 fn log_to_terminal(msg: String) {
@@ -270,6 +271,7 @@ pub fn run() {
             game_mode::game_mode_hide,
             game_mode::game_mode_show,
             game_mode::game_mode_is_hidden,
+            location::mi_ubicacion,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,
