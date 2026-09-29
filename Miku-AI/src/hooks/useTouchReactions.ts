@@ -23,6 +23,7 @@ import { getReachResolver, getSelfViewCapturer } from "../lib/selfViewStore";
 import { parseFaceMarker } from "../lib/faceParts";
 import { OPENROUTER_MODEL } from "../config/constants";
 import { buildTouchReactionPrompt } from "../prompts/touchReactionPrompt";
+import { localIsoDate } from "../lib/dates";
 
 type UseTouchReactionsParams = {
   vrmRef: RefObject<VRM | null>;
@@ -371,7 +372,7 @@ export function useTouchReactions({
 
         const { world, personality, memories } = await loadMemoryContext();
         const today = new Date();
-        const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const todayIso = localIsoDate(today);
         const prompt = buildTouchReactionPrompt({
           world,
           personality,

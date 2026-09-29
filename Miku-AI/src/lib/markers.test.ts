@@ -8,6 +8,7 @@ import {
   parseMoodPush,
   parseMovementMarker,
   parseQuirkReadyMarker,
+  parseVoiceMarkers,
   stripMarkers,
 } from "./markers";
 import { parseFaceMarker, parseRequestedFace, decodeFace } from "./faceParts";
@@ -326,5 +327,23 @@ describe("parseMarkers", () => {
     const result = parseMarkers("[CREAR_GESTO_MANO: nombre=garra, indice=80][GESTO_MANO: der=garra]", 0, 0);
     expect(result.createHandGesture?.name).toBe("garra");
     expect(result.handGesture?.right).toBe("garra");
+  });
+});
+
+describe("parseVoiceMarkers", () => {
+  it("toma el último de cada uno y recorta a los límites", () => {
+    expect(parseVoiceMarkers("[VOZ_PITCH: 5][VOZ_PITCH: 999][VOZ_RATE: -2][VOZ_VOLUMEN: 10]", 0, 15)).toEqual({
+      pitch: VOICE_PITCH_MAX,
+      rate: -2,
+      volume: 0.3,
+    });
+  });
+
+  it("sin marcadores, la voz de base y volumen normal", () => {
+    expect(parseVoiceMarkers("Hola", 10, 15)).toEqual({ pitch: 10, rate: 15, volume: 1 });
+  });
+
+  it("bajito: VOZ_VOLUMEN 60 es 0.6", () => {
+    expect(parseVoiceMarkers("[VOZ_VOLUMEN: 60]", 0, 0).volume).toBe(0.6);
   });
 });

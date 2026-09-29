@@ -12,6 +12,7 @@ import {
   saveSleepDesign,
 } from "../lib/sleepStore";
 import { buildSleepDesignPrompt } from "../prompts/sleepPrompt";
+import { localIsoDate } from "../lib/dates";
 
 // Punto 3 del plan: Miku se duerme cuando Sebastián no está, y se despierta
 // cuando vuelve. Cómo se duerme y cómo se despierta lo diseña ella la
@@ -110,7 +111,7 @@ export function useSleep({
 
       const { world, personality, memories } = await loadMemoryContext();
       const now = new Date();
-      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const todayIso = localIsoDate(now);
       const timeLabel = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       const prompt = buildSleepDesignPrompt({ world, personality, memories, todayIso, timeLabel, moment });
       const result = await designWithSelfView(prompt, "diseñar sueño");

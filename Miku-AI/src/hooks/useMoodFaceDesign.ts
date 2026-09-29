@@ -15,6 +15,7 @@ import {
   saveMoodFace,
 } from "../lib/moodFaceStore";
 import { buildMoodFacePrompt } from "../prompts/moodFacePrompt";
+import { localIsoDate } from "../lib/dates";
 
 // Miku diseña su cara de reposo para cada ánimo (pedido de Sebastián). La
 // primera vez que está en reposo con un ánimo que todavía no diseñó, se le
@@ -78,7 +79,7 @@ export function useMoodFaceDesign({
     try {
       const { world, personality, memories } = await loadMemoryContext();
       const now = new Date();
-      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const todayIso = localIsoDate(now);
       const prev = getPreviousMoodFace(mood);
       const previous = prev
         ? { face: prev.face === "ninguna" ? "que no se te notara en la cara" : describeFace(prev.face), byUser: prev.byUser }

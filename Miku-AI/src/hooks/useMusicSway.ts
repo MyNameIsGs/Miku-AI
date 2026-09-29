@@ -15,6 +15,7 @@ import {
   saveCategoryDance,
 } from "../lib/musicStore";
 import { buildCategoryDancePrompt } from "../prompts/musicPrompt";
+import { localIsoDate } from "../lib/dates";
 
 // Punto 5b del plan: Miku se mueve con la música que suena en la PC. El
 // ritmo lo detecta Rust escuchando la salida de audio (ver
@@ -235,7 +236,7 @@ export function useMusicSway({
     try {
       const { world, personality, memories } = await loadMemoryContext();
       const now = new Date();
-      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const todayIso = localIsoDate(now);
       const prompt = buildCategoryDancePrompt({
         world,
         personality,

@@ -79,3 +79,14 @@ export async function loadRecentChatHistory(): Promise<{ turns: ChatMessage[][];
     return null;
   }
 }
+
+// Los turnos guardados, aplanados a la forma que espera la API: tool_calls
+// y tool_call_id pasan tal cual cuando corresponden (el grupo assistant +
+// tools de un turno viaja entero, ver lib/openrouter.ts).
+export function toApiMessages(turns: ChatMessage[][]): object[] {
+  return turns.flat().map((m) => {
+    if (m.role === "tool") return { role: "tool", content: m.content, tool_call_id: m.tool_call_id };
+    if (m.role === "assistant") return { role: "assistant", content: m.content, ...(m.tool_calls ? { tool_calls: m.tool_calls } : {}) };
+    return { role: "user", content: m.content };
+  });
+}

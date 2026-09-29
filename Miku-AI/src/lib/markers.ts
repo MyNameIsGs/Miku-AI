@@ -5,6 +5,7 @@ import {
   VOICE_PITCH_MAX,
   VOICE_RATE_MIN,
   VOICE_RATE_MAX,
+  VOICE_VOLUME_MIN,
 } from "../config/constants";
 import {
   BONE_RANGES_DEG,
@@ -295,6 +296,30 @@ export function parseMoodMarker(text: string): string | null {
   return parseMoodPush(text)?.mood ?? null;
 }
 
+// [VOZ_PITCH], [VOZ_RATE] y [VOZ_VOLUMEN: 30-100] de esta respuesta (el
+// último de cada uno), recortados a sus límites. Sin marcador: la voz de
+// base (volumen 1 = normal).
+export function parseVoiceMarkers(
+  reply: string,
+  basePitch: number,
+  baseRate: number,
+): { pitch: number; rate: number; volume: number } {
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const last = (re: RegExp) => {
+    const matches = [...reply.matchAll(re)];
+    const value = matches.length > 0 ? Number(matches[matches.length - 1][1]) : NaN;
+    return Number.isNaN(value) ? null : value;
+  };
+  const pitch = last(/\[VOZ_PITCH:\s*(-?\d+(?:\.\d+)?)\]/gi);
+  const rate = last(/\[VOZ_RATE:\s*(-?\d+(?:\.\d+)?)\]/gi);
+  const volume = last(/\[VOZ_VOLUMEN:\s*(\d+(?:\.\d+)?)\]/gi);
+  return {
+    pitch: pitch === null ? basePitch : clamp(pitch, VOICE_PITCH_MIN, VOICE_PITCH_MAX),
+    rate: rate === null ? baseRate : clamp(rate, VOICE_RATE_MIN, VOICE_RATE_MAX),
+    volume: volume === null ? 1 : clamp(volume, VOICE_VOLUME_MIN, 100) / 100,
+  };
+}
+
 export function stripMarkers(text: string): string {
   return text
     .replace(/\[GUARDAR_PERSONALIDAD:[\s\S]*?\]/g, "")
@@ -382,30 +407,7 @@ export function parseMarkers(
 
   const mood = parseMoodMarker(reply);
 
-  const clamp = (value: number, min: number, max: number) =>
-    Math.max(min, Math.min(max, value));
-
-  const pitchMatches = [
-    ...reply.matchAll(/\[VOZ_PITCH:\s*(-?\d+(?:\.\d+)?)\]/gi),
-  ];
-  let messagePitch = basePitch;
-  if (pitchMatches.length > 0) {
-    const parsed = Number(pitchMatches[pitchMatches.length - 1][1]);
-    if (!Number.isNaN(parsed)) {
-      messagePitch = clamp(parsed, VOICE_PITCH_MIN, VOICE_PITCH_MAX);
-    }
-  }
-
-  const rateMatches = [
-    ...reply.matchAll(/\[VOZ_RATE:\s*(-?\d+(?:\.\d+)?)\]/gi),
-  ];
-  let messageRate = baseRate;
-  if (rateMatches.length > 0) {
-    const parsed = Number(rateMatches[rateMatches.length - 1][1]);
-    if (!Number.isNaN(parsed)) {
-      messageRate = clamp(parsed, VOICE_RATE_MIN, VOICE_RATE_MAX);
-    }
-  }
+  const { pitch: messagePitch, rate: messageRate } = parseVoiceMarkers(reply, basePitch, baseRate);
 
   const movement = parseMovementMarker(reply);
 
