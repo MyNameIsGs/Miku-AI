@@ -211,10 +211,37 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
         .output()
         .map_err(|e| format!("git commit: {}", e))?;
 
-    let push = Command::new("git")
+    let mut push = Command::new("git")
         .args(["-C", &repo_root, "push"])
         .output()
         .map_err(|e| format!("git push: {}", e))?;
+
+    // GitHub puede tener commits que esta PC no tiene: el ánimo compartido
+    // se escribe directo por la API (ver src/lib/sharedMood.ts), y el
+    // celular escribe su memoria igual. Sin esto el push se rechazaba, y
+    // la memoria de la PC quedaba sin subir (pasó el 2026-09-29). Se
+    // traen, se pone lo de la PC encima y se reintenta. Si chocaran (los
+    // dos cambiaron las mismas líneas), se cancela sin tocar nada: queda
+    // commiteado local y se reintenta en el próximo sync.
+    if !push.status.success() {
+        let pull = Command::new("git")
+            .args(["-C", &repo_root, "pull", "--rebase", "--autostash", "--quiet"])
+            .output()
+            .map_err(|e| format!("git pull: {}", e))?;
+        if !pull.status.success() {
+            let _ = Command::new("git")
+                .args(["-C", &repo_root, "rebase", "--abort"])
+                .output();
+            return Err(format!(
+                "git pull --rebase falló: {}",
+                String::from_utf8_lossy(&pull.stderr)
+            ));
+        }
+        push = Command::new("git")
+            .args(["-C", &repo_root, "push"])
+            .output()
+            .map_err(|e| format!("git push: {}", e))?;
+    }
 
     if !push.status.success() {
         return Err(format!(
