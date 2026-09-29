@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="1024" height="1024">
+  <!-- Ícono de escritorio de Miku-AI (2026-09-29): el mismo "cebollín" del
+       ícono de Android (ic_launcher_foreground.xml), sobre un cuadrado
+       redondeado del mismo fondo. En Android la máscara del sistema muestra
+       solo el centro del lienzo de 108; acá se encuadra esa misma zona. -->
+  <rect x="18" y="18" width="72" height="72" rx="16" fill="#0E1D20"/>
+  <g transform="translate(54 54) rotate(-30) scale(0.85) translate(-54 -54)">
+    <g transform="rotate(-16 54 56)">
+      <path fill="#2A9D95" d="M51.5,26 H51.5 A4.5,4.5 0 0 1 56,30.5 V53.5 A4.5,4.5 0 0 1 51.5,58 H51.5 A4.5,4.5 0 0 1 47,53.5 V30.5 A4.5,4.5 0 0 1 51.5,26 Z"/>
+    </g>
+    <g transform="rotate(16 54 56)">
+      <path fill="#2A9D95" d="M56.5,26 H56.5 A4.5,4.5 0 0 1 61,30.5 V53.5 A4.5,4.5 0 0 1 56.5,58 H56.5 A4.5,4.5 0 0 1 52,53.5 V30.5 A4.5,4.5 0 0 1 56.5,26 Z"/>
+    </g>
+    <path fill="#39C5BB" d="M54,20 H54 A5,5 0 0 1 59,25 V53 A5,5 0 0 1 54,58 H54 A5,5 0 0 1 49,53 V25 A5,5 0 0 1 54,20 Z"/>
+    <path fill="#EAF4F3" d="M54,54 H54 A6,6 0 0 1 60,60 V78 A6,6 0 0 1 54,84 H54 A6,6 0 0 1 48,78 V60 A6,6 0 0 1 54,54 Z"/>
+    <path fill="#F0508F" d="M49.5,52 H58.5 A3,3 0 0 1 61.5,55 V55 A3,3 0 0 1 58.5,58 H49.5 A3,3 0 0 1 46.5,55 V55 A3,3 0 0 1 49.5,52 Z"/>
+  </g>
+</svg>
