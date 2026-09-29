@@ -62,6 +62,7 @@ import { FileDropHint } from "./components/FileDropHint";
 import { FreeCameraHint } from "./components/FreeCameraHint";
 import { Caption, CaptionMode, RetryInfo } from "./components/Caption";
 import { createAskMiku, IMAGE_ONLY_MESSAGE } from "./chat/askMiku";
+import { ensureAutostartOnFirstRun } from "./lib/autostart";
 import { useConnections } from "./hooks/useConnections";
 import {
   loadQuirks,
@@ -354,28 +355,51 @@ function App() {
       setMinimizeAnim(null);
     }, 350);
   };
+  // Esconderla si está a la vista, traerla si está escondida: lo usan
+  // Ctrl+Shift+H y el clic en su ícono de la bandeja (ver tray.rs).
+  const toggleHidden = () => {
+    invoke<boolean>("game_mode_is_hidden")
+      .then((hidden) => {
+        if (!hidden) {
+          handleMinimize();
+          return;
+        }
+        invoke("game_mode_show").catch(console.error);
+        setMinimizeAnim("appearing");
+        window.setTimeout(() => setMinimizeAnim(null), 600);
+      })
+      .catch(console.error);
+  };
   useEffect(() => {
     let isPressed = false;
     register("CommandOrControl+Shift+H", (event) => {
       if (event.state === "Pressed" && !isPressed) {
         isPressed = true;
-        invoke<boolean>("game_mode_is_hidden")
-          .then((hidden) => {
-            if (!hidden) {
-              handleMinimize();
-              return;
-            }
-            invoke("game_mode_show").catch(console.error);
-            setMinimizeAnim("appearing");
-            window.setTimeout(() => setMinimizeAnim(null), 600);
-          })
-          .catch(console.error);
+        toggleHidden();
       } else if (event.state === "Released") {
         isPressed = false;
       }
     }).catch((err) => console.error("Error registrando atajo:", err));
     return () => {
       unregister("CommandOrControl+Shift+H").catch(() => {});
+    };
+  }, []);
+
+  // Ícono de la bandeja (tray.rs): clic = esconder/traer; "Salir" cierra
+  // como el botón de la barra (el ref, para usar siempre el de este render).
+  // Arrancar con Windows: la primera vez que se abre la app instalada se
+  // prende solo (ver lib/autostart.ts); después manda el interruptor.
+  useEffect(() => {
+    ensureAutostartOnFirstRun();
+  }, []);
+  const closeAppRef = useRef(handleCloseApp);
+  closeAppRef.current = handleCloseApp;
+  useEffect(() => {
+    const unlistenToggle = listen("tray-toggle", () => toggleHidden());
+    const unlistenQuit = listen("tray-quit", () => closeAppRef.current());
+    return () => {
+      unlistenToggle.then((unlisten) => unlisten());
+      unlistenQuit.then((unlisten) => unlisten());
     };
   }, []);
 

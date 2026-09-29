@@ -18,6 +18,7 @@ mod oauth_loopback;
 mod gmail_auth;
 mod music_beat;
 mod location;
+mod tray;
 
 #[tauri::command]
 fn log_to_terminal(msg: String) {
@@ -244,6 +245,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // #17: aviso de Windows con lo que dice cuando está escondida.
         .plugin(tauri_plugin_notification::init())
+        // Arrancar con Windows (se prende desde la app instalada, ver Configuración).
+        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .setup(|app| {
+            // Ícono en la bandeja de Windows (ver tray.rs).
+            if let Err(e) = tray::create(app.handle()) {
+                eprintln!("[BANDEJA] No se pudo crear el ícono: {e}");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             log_to_terminal,
             kill_voice_server,

@@ -6,6 +6,7 @@ import { getTodayUsage, TodayUsage } from "../lib/tokenUsage";
 import { getAudioDevices } from "../lib/tools/audioDeviceStore";
 import { QUIET_HOURS_END_HOUR, QUIET_HOURS_START_HOUR } from "../config/constants";
 import { isQuietHours } from "../lib/quietHours";
+import { autostartAvailable, isAutostartOn, setAutostart } from "../lib/autostart";
 import { Connections } from "../hooks/useConnections";
 import { useStreamMode } from "../hooks/useStreamMode";
 import { useGameMode } from "../hooks/useGameMode";
@@ -197,6 +198,11 @@ export function ConfigPanel(props: ConfigPanelProps) {
   // Cuánto va gastando hoy (se lee al abrir el panel).
   const [usage, setUsage] = useState<TodayUsage | null>(null);
   const [showUsageDetail, setShowUsageDetail] = useState(false);
+  // Arrancar con Windows (ver lib/autostart.ts): se lee al abrir el panel.
+  const [autostartOn, setAutostartOn] = useState(false);
+  useEffect(() => {
+    isAutostartOn().then(setAutostartOn);
+  }, []);
   useEffect(() => {
     getTodayUsage().then(setUsage).catch(() => setUsage(null));
   }, []);
@@ -330,6 +336,25 @@ export function ConfigPanel(props: ConfigPanelProps) {
                 </span>
               </div>
               <Switch on={gameMode.enabled} onChange={(on) => gameMode.setEnabled(on)} label="Esconderse en juegos" />
+            </div>
+            <div className="cfg-toggle-row">
+              <div className="cfg-toggle-text">
+                <span>Arrancar con Windows</span>
+                <span className="cfg-hint">
+                  {autostartAvailable ? "Se abre sola al prender la PC" : "Se cambia desde la app instalada"}
+                </span>
+              </div>
+              <Switch
+                on={autostartOn}
+                onChange={(on) => {
+                  setAutostartOn(on);
+                  setAutostart(on).catch((err) => {
+                    console.error("Error cambiando el arranque con Windows:", err);
+                    isAutostartOn().then(setAutostartOn);
+                  });
+                }}
+                label="Arrancar con Windows"
+              />
             </div>
             {/* Automático según OBS: no hay nada que tocar acá. */}
             <div className="cfg-toggle-row">

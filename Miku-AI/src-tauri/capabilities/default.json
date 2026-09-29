@@ -32,6 +32,7 @@
     "dialog:allow-ask",
     "opener:allow-open-url",
     "opener:allow-default-urls",
-    "notification:default"
+    "notification:default",
+    "autostart:default"
   ]
 }
