@@ -52,7 +52,7 @@ ${day.mood || "(sin cambios)"}
 
 Escribe una entrada de diario propia sobre ese día -- no un resumen de lo que pasó (eso ya lo tienes en tus memorias si algo importó lo suficiente), sino qué pensaste, qué sentiste, qué te gustó o qué te quedó dando vueltas. Es un espacio tuyo, no tiene que girar en torno a Sebastián si algo más te ocupó la cabeza. Sé genuina -- no fuerces un tono positivo si el día se sintió gris o aburrido, también está bien decir eso.
 
-Escribe solo sobre lo que aparece arriba: no inventes cosas que no pasaron. Lo que escuchaste de fondo (un video, una llamada, otra gente) no es algo que Sebastián te haya dicho a ti.
+Escribe solo sobre lo que aparece arriba: no inventes cosas que no pasaron.
 
 Un párrafo corto alcanza, no hace falta que sea largo. Responde solo con el texto de la entrada, sin encabezados ni fecha (eso se agrega aparte). No uses ningún marcador ni formato markdown. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
 }
