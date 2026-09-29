@@ -1,7 +1,6 @@
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
-import { localIsoDate } from "./dates";
 import { DiaryEntry, parseDiary } from "./diaryEntries";
 
 // Tarea 8.9: diario nocturno propio de Miku -- reflexión suya sobre la
@@ -18,8 +17,6 @@ const SEED_DIARY = `# Diario de Miku
 
 const STORE_KEY = "lastDiaryDate";
 
-const todayLocalIso = () => localIsoDate();
-
 async function diaryPath(): Promise<string> {
   const dataDir = await appDataDir();
   const memoryDir = await join(dataDir, "memory");
@@ -32,25 +29,25 @@ export async function readDiaryEntries(): Promise<DiaryEntry[]> {
   return (await exists(path)) ? parseDiary(await readTextFile(path)) : [];
 }
 
-export async function hasWrittenDiaryToday(): Promise<boolean> {
+// El último día que ya escribió (o que se saltó por no haber pasado nada).
+export async function getLastDiaryDate(): Promise<string | null> {
   const store = await load(".settings.dat", { autoSave: false });
-  const lastDate = await store.get<string>(STORE_KEY);
-  return lastDate === todayLocalIso();
+  return (await store.get<string>(STORE_KEY)) ?? null;
 }
 
-export async function markDiaryWrittenToday() {
+export async function markDiaryDone(date: string) {
   const store = await load(".settings.dat", { autoSave: false });
-  await store.set(STORE_KEY, todayLocalIso());
+  await store.set(STORE_KEY, date);
   await store.save();
 }
 
-export async function appendDiaryEntry(text: string) {
+export async function appendDiaryEntry(text: string, date: string) {
   const path = await diaryPath();
   if (!(await exists(path))) {
     await writeTextFile(path, SEED_DIARY);
   }
   const current = await readTextFile(path);
-  const dateHeader = `## ${todayLocalIso()}`;
+  const dateHeader = `## ${date}`;
   const updated = `${current.trim()}\n\n${dateHeader}\n\n${text.trim()}\n`;
   await writeTextFile(path, updated);
 }

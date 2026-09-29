@@ -1,76 +1,87 @@
-import { RefObject, useRef } from "react";
-import { OPENROUTER_MODEL } from "../config/constants";
-import { hasWrittenDiaryToday, markDiaryWrittenToday, appendDiaryEntry } from "../lib/diary";
+import { useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { OPENROUTER_MODEL, REPO_ROOT } from "../config/constants";
+import { appendDiaryEntry, getLastDiaryDate, markDiaryDone } from "../lib/diary";
+import { pendingDiaryDate, summarizeDay } from "../lib/diaryDay";
+import { readDayTurns } from "../lib/dayLog";
+import { localIsoDate, spanishDateLabel } from "../lib/dates";
 import { loadMemoryContext } from "../lib/memory";
-import { buildDiaryPrompt } from "../prompts/diaryPrompt";
+import { readMoodLog } from "../lib/mood";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
-import { ChatMessage } from "../types";
+import { readPhoneVoiceHistory } from "../lib/phoneVoiceHistory";
+import { buildDiaryPrompt } from "../prompts/diaryPrompt";
 
-type UseDiaryParams = {
-  conversationHistoryRef: RefObject<ChatMessage[][]>;
-};
+// Tarea 8.9, a hora fija desde 2026-09-29 (ver lib/diaryDay.ts): cada
+// minuto se mira si le toca escribir; a las 23:00 escribe el de hoy, y si
+// anoche la PC estaba apagada, al abrirse escribe el de ayer. Un día sin
+// nada (ni charla, ni voz en el celular, ni cambios de ánimo) no genera
+// una entrada vacía. Se marca como hecho recién cuando salió bien: si
+// falla (sin internet), lo reintenta más tarde.
 
-// Reduce el historial de turnos a un texto legible simple -- solo lo que
-// se dijeron los dos, sin marcadores ni el ruido de las vueltas de tool
-// calling (esas quedan afuera a propósito, no aportan nada a una
-// reflexión sobre cómo se sintió el día).
-function summarizeConversation(turns: ChatMessage[][]): string {
-  const lines: string[] = [];
-  for (const turn of turns) {
-    for (const msg of turn) {
-      if (msg.role === "user") {
-        const text = typeof msg.content === "string" ? msg.content : "(mensaje con imagen adjunta)";
-        if (text.trim()) lines.push(`Sebastián: ${text}`);
-      } else if (msg.role === "assistant" && !msg.tool_calls) {
-        const text = typeof msg.content === "string" ? msg.content : "";
-        if (text.trim()) lines.push(`Miku: ${text}`);
-      }
+const CHECK_MS = 60 * 1000;
+// Al abrir, un rato antes del primer intento (que termine de arrancar).
+const FIRST_CHECK_MS = 90 * 1000;
+const RETRY_AFTER_FAIL_MS = 30 * 60 * 1000;
+
+let inFlight = false;
+let retryAt = 0;
+
+async function maybeWriteDiary() {
+  if (inFlight || Date.now() < retryAt) return;
+  const now = new Date();
+  const date = pendingDiaryDate(now, await getLastDiaryDate());
+  if (!date) return;
+
+  inFlight = true;
+  try {
+    const [turns, phone, moods] = await Promise.all([readDayTurns(), readPhoneVoiceHistory(), readMoodLog()]);
+    const day = summarizeDay(date, turns, phone, moods);
+    if (!day.hasActivity) {
+      console.log(`[Diario] ${date}: no pasó nada, no hay entrada.`);
+      await markDiaryDone(date);
+      return;
     }
+
+    const [y, m, d] = date.split("-").map(Number);
+    const { personality, world, memories } = await loadMemoryContext();
+    const prompt = buildDiaryPrompt({
+      world,
+      personality,
+      memories,
+      dateLabel: spanishDateLabel(new Date(y, m - 1, d)),
+      late: date !== localIsoDate(now),
+      day,
+    });
+    const response = await fetchOpenRouterWithRetry(
+      { model: OPENROUTER_MODEL, messages: [{ role: "system", content: prompt }] },
+      { kind: "diario" },
+    );
+    const data = await response.json();
+    const text: string = (data.choices?.[0]?.message?.content ?? "").trim();
+    if (!text) throw new Error("respuesta vacía");
+
+    await appendDiaryEntry(text, date);
+    await markDiaryDone(date);
+    console.log(`[Diario] Escribió la entrada del ${date}.`);
+    // Que llegue a GitHub ya, no recién al cerrar la app.
+    invoke("sync_memory_to_github", { repoRoot: REPO_ROOT }).catch((err) =>
+      console.error("[SYNC] Error al sincronizar el diario:", err),
+    );
+  } catch (err) {
+    console.error("[Diario] No se pudo escribir, se reintenta en 30 min:", err);
+    retryAt = Date.now() + RETRY_AFTER_FAIL_MS;
+  } finally {
+    inFlight = false;
   }
-  return lines.join("\n");
 }
 
-// Tarea 8.9: diario nocturno propio de Miku -- se llama desde
-// useVoiceServer (registerBeforeSync) al cerrar la app, ANTES de
-// sync_memory_to_github, para que diario.md quede incluido en ese mismo
-// commit. Solo escribe si hubo actividad real en la sesión (sin eso, un
-// día sin uso no genera una entrada vacía) y como mucho una vez por día
-// (ver hasWrittenDiaryToday).
-export function useDiary({ conversationHistoryRef }: UseDiaryParams) {
-  const inFlightRef = useRef(false);
-
-  async function maybeWriteDiaryEntry() {
-    if (inFlightRef.current) return;
-    if (conversationHistoryRef.current.length === 0) return;
-    if (await hasWrittenDiaryToday()) return;
-
-    inFlightRef.current = true;
-    // Mismo criterio que el resto de los chequeos de fondo: se marca ANTES
-    // de terminar, mejor perderse la entrada de hoy que reintentar en cada
-    // cierre si algo falla.
-    await markDiaryWrittenToday();
-
-    try {
-      const { personality, world, memories } = await loadMemoryContext();
-      const conversationSummary = summarizeConversation(conversationHistoryRef.current);
-      const prompt = buildDiaryPrompt({ world, personality, memories, conversationSummary });
-
-      const response = await fetchOpenRouterWithRetry({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "system", content: prompt }],
-      }, { kind: "diario" });
-      const data = await response.json();
-      const reply: string = (data.choices?.[0]?.message?.content ?? "").trim();
-
-      if (reply) {
-        await appendDiaryEntry(reply);
-      }
-    } catch (err) {
-      console.error("Error escribiendo el diario nocturno:", err);
-    } finally {
-      inFlightRef.current = false;
-    }
-  }
-
-  return { maybeWriteDiaryEntry };
+export function useDiary() {
+  useEffect(() => {
+    const first = window.setTimeout(maybeWriteDiary, FIRST_CHECK_MS);
+    const timer = window.setInterval(maybeWriteDiary, CHECK_MS);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
+  }, []);
 }

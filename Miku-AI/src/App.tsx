@@ -116,7 +116,7 @@ function App() {
   const [freeCamera, setFreeCamera] = useState(false);
   const [clickThrough, setClickThrough] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const { isVoiceReady, downloadProgress, handleCloseApp, registerBeforeSync } = useVoiceServer();
+  const { isVoiceReady, downloadProgress, handleCloseApp } = useVoiceServer();
   const { phrase: loadingPhrase, visible: loadingPhraseVisible } = useLoadingPhrase(
     !isVoiceReady,
     3000,
@@ -602,15 +602,8 @@ function App() {
     voiceRateRef,
   });
 
-  // Tarea 8.9: diario nocturno -- se engancha a useVoiceServer para correr
-  // ANTES de sync_memory_to_github al cerrar la app. registerBeforeSync es
-  // estable (useCallback con []), así que este efecto solo corre una vez
-  // en la práctica, pero igual se re-registra si por algo cambiara la
-  // referencia de maybeWriteDiaryEntry entre renders.
-  const diary = useDiary({ conversationHistoryRef });
-  useEffect(() => {
-    registerBeforeSync(diary.maybeWriteDiaryEntry);
-  }, [registerBeforeSync, diary.maybeWriteDiaryEntry]);
+  // Tarea 8.9: diario, a las 23:00 (o al abrir, si anoche estaba apagada).
+  useDiary();
 
   const avatarState: "idle" | "listening" | "thinking" | "speaking" =
     speechRecognition.listening || speechRecognition.transcribing

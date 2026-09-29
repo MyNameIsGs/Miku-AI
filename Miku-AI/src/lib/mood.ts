@@ -73,6 +73,17 @@ function fromStored(raw: unknown): MoodState {
   };
 }
 
+// Para el diario (ver diaryDay.ts): cada cambio con su hora en ms.
+export async function readMoodLog(): Promise<{ at: number; mood: string; origin: string; level?: string; source?: string }[]> {
+  try {
+    const store = await load(".settings.dat", { autoSave: false });
+    const log = (await store.get<MoodLogEntry[]>(LOG_KEY)) ?? [];
+    return log.map((e) => ({ ...e, at: new Date(e.at).getTime() }));
+  } catch {
+    return [];
+  }
+}
+
 async function appendLog(entry: MoodLogEntry) {
   try {
     const store = await load(".settings.dat", { autoSave: false });

@@ -10,6 +10,7 @@ import { getActivePendientes, loadPendientes } from "../lib/pendientes";
 import { describeCurrentMood, getCurrentMood, getMoodLevel, pushMood } from "../lib/mood";
 import { beginReply, endReply, noteInterruption, noteRevealProgress } from "../lib/talkSignals";
 import { saveChatHistory, toApiMessages } from "../lib/chatHistory";
+import { appendDayTurn } from "../lib/dayLog";
 import { localIsoDate, spanishDateLabel } from "../lib/dates";
 import { isStreamModeActive } from "../lib/streamMode";
 import { describeGameContext } from "../lib/gameSessions";
@@ -357,6 +358,8 @@ export function createAskMiku(deps: AskMikuDeps) {
           conversationHistoryRef.current.slice(-MAX_HISTORY_TURNS);
       }
       saveChatHistory(conversationHistoryRef.current);
+      // Para el diario de la noche (ver lib/diaryDay.ts).
+      appendDayTurn(userMessage === IMAGE_ONLY_MESSAGE ? "(te mandó una imagen)" : userMessage, reply);
 
       // El texto ya NO se muestra completo de una -- se revela en sync con
       // el audio (ver onReveal en useSpeech.ts), para inmersión. "Pensando..."
