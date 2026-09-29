@@ -88,6 +88,7 @@ import {
   VOICE_RATE_MAX,
   VOICE_VOLUME_MIN,
   QUIET_HOURS_END_HOUR,
+  POSE_HOLD_MAX_MS,
 } from "./config/constants";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
 import { runToolCallingCycle, ToolEvent } from "./lib/openrouter";
@@ -177,7 +178,6 @@ function App() {
   const fingerBonesRef = useRef<Record<string, THREE.Object3D | null>>({});
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const selfImageCaptureAtRef = useRef<number | null>(null);
-  const lastSelfImageRef = useRef<string | null>(null);
   const pendingSelfDescriptionRef = useRef<string | null>(null);
   // Fase 7: mismo patrón que los tres refs de arriba, pero separado para
   // la foto/descripción de un quirk en evaluación -- así no se pisa con la
@@ -786,10 +786,6 @@ function App() {
         return { role: "user", content: m.content };
       });
 
-      // Si hay una imagen de sí misma pendiente de un movimiento anterior,
-      // se adjunta aquí -- así ve cómo quedó antes de responder este turno.
-      const selfImage = lastSelfImageRef.current;
-      lastSelfImageRef.current = null;
       const contentParts: ChatContentPart[] = [
         { type: "text", text: userMessage },
       ];
@@ -798,13 +794,6 @@ function App() {
           type: "image_url",
           image_url: { url: imageDataUrl },
         });
-      }
-      if (selfImage) {
-        contentParts.push({
-          type: "text",
-          text: "(Así quedó tu cuerpo después de tu último movimiento: frente, tu izquierda, espalda y tu derecha.)",
-        });
-        contentParts.push({ type: "image_url", image_url: { url: selfImage } });
       }
       const userContent: ChatContent =
         contentParts.length > 1 ? contentParts : userMessage;
@@ -899,10 +888,10 @@ function App() {
       // propio cuerpo cuenta junto con [MOVIMIENTO].
       const reachMovement = resolveReach(reply, explicitMovement);
       if (explicitMovement) {
-        movement.scheduleMovement(explicitMovement, "response");
+        movement.scheduleMovement(explicitMovement, "response", POSE_HOLD_MAX_MS, true);
       }
       if (reachMovement) {
-        movement.scheduleMovement(reachMovement, "response");
+        movement.scheduleMovement(reachMovement, "response", POSE_HOLD_MAX_MS, true);
       }
       const parsedMovement: ParsedMovement | null =
         explicitMovement && reachMovement
@@ -933,6 +922,8 @@ function App() {
             parsedHandGesture.left,
             parsedHandGesture.durationMs,
             "response",
+            POSE_HOLD_MAX_MS,
+            true,
           );
         }
         if (parsedHandGesture.right) {
@@ -941,6 +932,8 @@ function App() {
             parsedHandGesture.right,
             parsedHandGesture.durationMs,
             "response",
+            POSE_HOLD_MAX_MS,
+            true,
           );
         }
       }
@@ -1171,12 +1164,10 @@ function App() {
       now >= selfImageCaptureAtRef.current
     ) {
       selfImageCaptureAtRef.current = null;
-      try {
-        lastSelfImageRef.current = captureSelfPhoto(renderer);
-      } catch (err) {
-        console.error("Error capturando imagen de sí misma:", err);
-      }
-      // Junto con la foto: cómo quedó de verdad, medido en la pose.
+      // Cómo quedó de verdad, medido en la pose (texto). Ya no va una foto
+      // automática después de cada movimiento (2026-09-28, pedido de
+      // Sebastián: la comentaba en cada mensaje sin necesidad y costaba
+      // una imagen por turno): si quiere verse, usa la tool mirarme.
       appendMeasuredBody(pendingSelfDescriptionRef);
     }
 

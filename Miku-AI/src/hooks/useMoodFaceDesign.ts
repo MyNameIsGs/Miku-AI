@@ -4,15 +4,23 @@ import { loadMemoryContext } from "../lib/memory";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { getSelfViewCapturer } from "../lib/selfViewStore";
 import { getCachedMood } from "../lib/mood";
-import { parseFaceMarker } from "../lib/faceParts";
-import { MOODS_WITH_FACE, MoodWithFace, getMoodFace, loadMoodFaces, saveMoodFace } from "../lib/moodFaceStore";
+import { describeFace, parseFaceMarker } from "../lib/faceParts";
+import {
+  MOODS_WITH_FACE,
+  MoodWithFace,
+  getMoodFace,
+  getPreviousMoodFace,
+  loadMoodFaces,
+  saveMoodFace,
+} from "../lib/moodFaceStore";
 import { buildMoodFacePrompt } from "../prompts/moodFacePrompt";
 
 // Miku diseña su cara de reposo para cada ánimo (pedido de Sebastián). La
 // primera vez que está en reposo con un ánimo que todavía no diseñó, se le
 // pregunta; ve cómo le queda en una foto de su cara (con la cara puesta
-// como vista previa, en la capa de fondo de useFace) y puede ajustarla una
-// vez. Como mucho 4 consultas en total (una por ánimo).
+// como vista previa, en la capa de fondo de useFace) y puede ajustarla y
+// volver a verse hasta REVIEW_ROUNDS veces. Una vez por ánimo, y otra cada
+// vez que se pide rediseñarla (ella en un silencio, o Sebastián en Memoria).
 
 const MOOD_WORDS: Record<MoodWithFace, string> = {
   happy: "contenta",
@@ -26,6 +34,8 @@ const REST_BEFORE_ASKING_MS = 5000;
 // Cuánto dejar la vista previa puesta antes de la foto (la cara se funde).
 const PREVIEW_SETTLE_MS = 900;
 const RETRY_AFTER_MS = 30 * 60 * 1000;
+// Cuántas veces puede verse y ajustar antes de que quede guardada.
+const REVIEW_ROUNDS = 3;
 
 type UseMoodFaceDesignParams = {
   previewFaceRef: RefObject<string | null>;
@@ -63,7 +73,11 @@ export function useMoodFaceDesign({
       const { world, personality, memories } = await loadMemoryContext();
       const now = new Date();
       const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const prompt = buildMoodFacePrompt({ world, personality, memories, todayIso, moodWords: MOOD_WORDS[mood] });
+      const prev = getPreviousMoodFace(mood);
+      const previous = prev
+        ? { face: prev.face === "ninguna" ? "que no se te notara en la cara" : describeFace(prev.face), byUser: prev.byUser }
+        : null;
+      const prompt = buildMoodFacePrompt({ world, personality, memories, todayIso, moodWords: MOOD_WORDS[mood], previous });
       const first = await ask([{ role: "system", content: prompt }]);
       await processMemoryMarkers(first);
 
@@ -76,27 +90,37 @@ export function useMoodFaceDesign({
       if (!face) throw new Error(`respuesta sin [CARA] ni [SIN_CARA]: ${first.slice(0, 160)}`);
 
       // Que se vea cómo le queda: la cara puesta como vista previa, una foto.
+      // Puede ajustarla y volver a verse hasta REVIEW_ROUNDS veces (antes
+      // era una sola revisión, y la cara de "contenta" quedó rara: un guiño
+      // a medias y ojos felices al 30 %).
       const capture = getSelfViewCapturer();
       if (capture) {
         try {
-          previewFaceRef.current = face;
-          await new Promise((resolve) => setTimeout(resolve, PREVIEW_SETTLE_MS));
-          const { image } = capture("frente", "cara", null);
-          const second = await ask([
+          const messages: object[] = [
             { role: "system", content: prompt },
             { role: "assistant", content: first },
-            {
+          ];
+          for (let round = 1; round <= REVIEW_ROUNDS; round++) {
+            previewFaceRef.current = face;
+            await new Promise((resolve) => setTimeout(resolve, PREVIEW_SETTLE_MS));
+            const { image } = capture("frente", "cara", null);
+            const last = round === REVIEW_ROUNDS;
+            messages.push({
               role: "user",
               content: [
                 {
                   type: "text",
-                  text: "Así se ve tu cara con eso puesto. Si te convence, responde solo [LISTO]. Si quieres ajustarla, responde otra vez con [CARA: ...] completa: reemplaza a la anterior. No repitas [GUARDAR_MEMORIA].",
+                  text: `Así se ve tu cara con eso puesto. Mírala como la vería otra persona: ¿se ve como la cara de alguien ${MOOD_WORDS[mood]} y en calma, de verdad? Fíjate si algo se ve raro, forzado o desparejo entre un lado y el otro. Si te convence, responde solo [LISTO]. Si no, responde con [CARA: ...] completa: reemplaza a la anterior${last ? " (es la última vez que te ves antes de que quede guardada)" : " y vas a volver a verte"}. No repitas [GUARDAR_MEMORIA].`,
                 },
                 { type: "image_url", image_url: { url: image } },
               ],
-            },
-          ]);
-          face = parseFaceMarker(second) ?? face;
+            });
+            const reply = await ask(messages);
+            const adjusted = parseFaceMarker(reply);
+            if (!adjusted) break; // [LISTO]
+            face = adjusted;
+            messages.push({ role: "assistant", content: reply });
+          }
         } catch (err) {
           console.warn("[Cara] No se pudo mostrarle cómo le queda; queda la primera versión:", err);
         } finally {

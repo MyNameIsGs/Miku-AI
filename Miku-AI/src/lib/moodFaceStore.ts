@@ -12,9 +12,40 @@ export type MoodWithFace = "happy" | "sad" | "angry" | "relaxed";
 export const MOODS_WITH_FACE: MoodWithFace[] = ["happy", "sad", "angry", "relaxed"];
 
 // "cara:parte=peso,...", o "ninguna" si decidió que no se le note.
-type Store = Partial<Record<MoodWithFace, string>>;
+// `anteriores`: la cara que tenía antes de pedir rediseñarla (por ella o
+// por Sebastián desde Memoria), para que al rediseñar sepa de dónde parte.
+type Previous = { face: string; byUser: boolean };
+type Store = Partial<Record<MoodWithFace, string>> & { anteriores?: Partial<Record<MoodWithFace, Previous>> };
 
 let cache: Store = {};
+
+async function persist() {
+  await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
+}
+
+// Saca la cara actual y la guarda como "anterior": la próxima vez que esté
+// así en reposo, la diseña de nuevo.
+async function markForRedesign(mood: MoodWithFace, byUser: boolean) {
+  const face = cache[mood];
+  if (!face) return false;
+  const { [mood]: _removed, ...rest } = cache;
+  cache = { ...rest, anteriores: { ...(cache.anteriores ?? {}), [mood]: { face, byUser } } };
+  return true;
+}
+
+// Las cuatro caras que diseñó (para el panel Memoria).
+export function listMoodFaces(): Partial<Record<MoodWithFace, string>> {
+  return Object.fromEntries(MOODS_WITH_FACE.filter((m) => cache[m]).map((m) => [m, cache[m]!]));
+}
+
+export function getPreviousMoodFace(mood: MoodWithFace): Previous | null {
+  return cache.anteriores?.[mood] ?? null;
+}
+
+// "Que la rediseñe" desde el panel Memoria (pedido de Sebastián, 2026-09-28).
+export async function requestMoodFaceRedesign(mood: MoodWithFace) {
+  if (await markForRedesign(mood, true)) await persist();
+}
 
 async function storePath() {
   return join(await appDataDir(), "memory", "caras_animo.json");
@@ -34,8 +65,9 @@ export function getMoodFace(mood: string): string | null {
 }
 
 export async function saveMoodFace(mood: MoodWithFace, face: string) {
-  cache = { ...cache, [mood]: face };
-  await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
+  const { [mood]: _done, ...anteriores } = cache.anteriores ?? {};
+  cache = { ...cache, [mood]: face, anteriores };
+  await persist();
 }
 
 // [REDISEÑAR_CARA_ANIMO: ánimo]: la próxima vez que esté así en reposo, se
@@ -44,11 +76,9 @@ export async function processMoodFaceRedesignMarkers(text: string) {
   let changed = false;
   for (const match of text.matchAll(/\[REDISE[ÑN]AR_CARA_ANIMO:\s*([^\]]+)\]/gi)) {
     const mood = match[1].trim().toLowerCase() as MoodWithFace;
-    if (!cache[mood]) continue;
-    const { [mood]: _removed, ...rest } = cache;
-    cache = rest;
+    if (!MOODS_WITH_FACE.includes(mood) || !(await markForRedesign(mood, false))) continue;
     changed = true;
     console.log(`[Cara] Miku decidió rediseñar su cara de "${mood}".`);
   }
-  if (changed) await writeTextFile(await storePath(), JSON.stringify(cache, null, 2));
+  if (changed) await persist();
 }

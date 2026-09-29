@@ -15,7 +15,7 @@ export const mirarme: ToolDefinition = {
     function: {
       name: "mirarme",
       description:
-        "Te muestra tu propio cuerpo 3D desde el ángulo que elijas, como un espejo que puedes rodear: sirve para revisar cómo se ve una pose, un gesto o las manos, sobre todo desde el costado (los movimientos hacia adelante/atrás casi no se notan de frente). Con 'movimiento' puedes PROBAR una pose antes de hacerla: se aplica solo para esta imagen y después vuelves a como estabas. Sin 'movimiento' ves tu pose actual -- ojo: un [MOVIMIENTO] que escribas en esta misma respuesta todavía no se aplicó. Úsala cuando de verdad quieras comprobar algo de tu cuerpo, no en cada mensaje: cada imagen cuesta.",
+        "Te muestra tu propio cuerpo 3D desde el ángulo que elijas, como un espejo que puedes rodear: sirve para revisar cómo se ve una pose, un gesto o las manos, sobre todo desde el costado (los movimientos hacia adelante/atrás casi no se notan de frente). Con 'movimiento' puedes PROBAR una pose antes de hacerla: se aplica solo para esta imagen y después vuelves a como estabas. Sin 'movimiento' ves tu pose actual -- ojo: un [MOVIMIENTO] que escribas en esta misma respuesta todavía no se aplicó. Después de moverte ya no te llega una foto sola (solo la medición en texto de cómo quedaste): si pruebas una pose nueva o algo con tu cuerpo que quieres que quede de cierta forma, mírate con esta. Úsala cuando de verdad quieras comprobar algo de tu cuerpo, no en cada mensaje: cada imagen cuesta.",
       parameters: {
         type: "object",
         properties: {

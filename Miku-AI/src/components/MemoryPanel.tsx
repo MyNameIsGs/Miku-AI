@@ -8,6 +8,8 @@ import {
   updateKnowledgeEntry,
 } from "../lib/knowledge";
 import { matchesQuery } from "../lib/textSearch";
+import { describeFace } from "../lib/faceParts";
+import { listMoodFaces, MOODS_WITH_FACE, MoodWithFace, requestMoodFaceRedesign } from "../lib/moodFaceStore";
 import {
   deleteDesignedReaction,
   DesignedTouchReaction,
@@ -24,7 +26,7 @@ type MemoryPanelProps = {
   motion?: MotionPhase;
 };
 
-type Tab = "conocimiento" | "memorias" | "personalidad" | "diario" | "tacto";
+type Tab = "conocimiento" | "memorias" | "personalidad" | "diario" | "tacto" | "caras";
 
 // Orden de la maqueta (docs/diseno-ui-v1/Memoria.dc.html).
 const TABS: { id: Tab; label: string }[] = [
@@ -33,6 +35,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "personalidad", label: "Personalidad" },
   { id: "diario", label: "Diario" },
   { id: "tacto", label: "Tacto" },
+  { id: "caras", label: "Caras" },
 ];
 
 // Miku decide cada vez más cosas por su cuenta (qué aprender, cómo
@@ -76,6 +79,7 @@ export function MemoryPanel({ onClose, motion }: MemoryPanelProps) {
 
       {tab === "conocimiento" && <KnowledgeSection />}
       {tab === "tacto" && <TouchSection />}
+      {tab === "caras" && <MoodFacesSection />}
       {tab === "diario" && (
         <ReadOnlyFile
           key="diario"
@@ -474,6 +478,90 @@ function TouchSection() {
       <Footer
         left={`REACCIONES AL TACTO · ${designedCount} DE ${zones.length} DISEÑADAS`}
         right="LAS DISEÑA ELLA LA PRIMERA VEZ QUE LA TOCAS"
+      />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Caras de ánimo (la que pone en reposo según cómo se siente)
+
+const MOOD_LABELS: Record<MoodWithFace, string> = {
+  happy: "Contenta",
+  sad: "Triste",
+  angry: "Enojada",
+  relaxed: "Relajada",
+};
+
+function MoodFacesSection() {
+  const [faces, setFaces] = useState(listMoodFaces());
+  const [confirmMood, setConfirmMood] = useState<MoodWithFace | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRedesign = async (mood: MoodWithFace) => {
+    setConfirmMood(null);
+    setError(null);
+    try {
+      await requestMoodFaceRedesign(mood);
+    } catch (err) {
+      setError(String(err));
+    }
+    setFaces(listMoodFaces());
+  };
+
+  const designedCount = MOODS_WITH_FACE.filter((m) => faces[m]).length;
+
+  return (
+    <>
+      <div className="mem-intro">
+        <p className="mem-hint">
+          La cara que pone cuando no habla, según su ánimo. La diseñó ella viéndose. Si alguna no se ve natural, pídele que
+          la rediseñe: la próxima vez que esté así, la diseña de nuevo, sabiendo que se lo pediste.
+        </p>
+      </div>
+      <div className="m-panel-body">
+        {error && <p className="mem-error">{error}</p>}
+        <ul className="mem-touch-grid">
+          {MOODS_WITH_FACE.map((mood) => {
+            const face = faces[mood];
+            const state = !face ? "RESPALDO · AÚN NO LA DISEÑA" : face === "ninguna" ? "ELIGIÓ QUE NO SE NOTE" : "DISEÑADA POR ELLA";
+            return (
+              <li key={mood} className="mem-row mem-touch-row">
+                <div className="mem-row-text mem-touch">
+                  <span>{MOOD_LABELS[mood]}</span>
+                  <span className={`mem-touch-state ${face ? "own" : ""}`}>{state}</span>
+                  {face && face !== "ninguna" && <span className="mem-touch-meta">{describeFace(face)}</span>}
+                </div>
+                <button
+                  className="mem-btn"
+                  onClick={() => setConfirmMood(mood)}
+                  disabled={!face}
+                  title={face ? undefined : "Todavía no la diseñó: la diseña la primera vez que esté así"}
+                >
+                  Que la rediseñe
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      {confirmMood && (
+        <ConfirmDialog
+          title={`¿Que rediseñe su cara de «${MOOD_LABELS[confirmMood].toLowerCase()}»?`}
+          confirmLabel="Que la rediseñe"
+          tone="primary"
+          onConfirm={() => handleRedesign(confirmMood)}
+          onCancel={() => setConfirmMood(null)}
+        >
+          <p className="m-dialog-text">
+            La próxima vez que esté {MOOD_LABELS[confirmMood].toLowerCase()} y en silencio, la diseña de nuevo viéndose.
+            Mientras tanto usa la cara básica.
+          </p>
+        </ConfirmDialog>
+      )}
+      <Footer
+        left={`CARAS DE ÁNIMO · ${designedCount} DE ${MOODS_WITH_FACE.length} DISEÑADAS`}
+        right="LAS DISEÑA ELLA LA PRIMERA VEZ QUE ESTÁ ASÍ"
       />
     </>
   );

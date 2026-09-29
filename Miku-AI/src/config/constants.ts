@@ -79,6 +79,11 @@ export const DIRECT_QUIRK_RUN_CHANCE = 0.5;
 
 export const DEFAULT_MOVEMENT_DURATION_MS = 1000;
 export const DEFAULT_HAND_GESTURE_DURATION_MS = 400;
+// Cuánto sostiene una pose o un gesto de mano de la charla antes de volver
+// sola, suave, al reposo (pedido de Sebastián, 2026-09-28: con la mano en
+// la mejilla se quedaba mucho rato). Si vuelve a mover ese hueso o esa
+// mano antes, el reloj empieza de nuevo.
+export const POSE_HOLD_MAX_MS = 120000;
 
 export const EXPRESSION_SMOOTHING = 0.08;
 export const GAZE_SMOOTHING = 0.03;

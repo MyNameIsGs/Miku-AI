@@ -171,10 +171,13 @@ export function useMovement({
   // quirks idle), después de duracion+autoRevertDelayMs el hueso vuelve
   // solo a lo que tenía ANTES de este movimiento (no al reposo absoluto,
   // respeta una pose permanente que estuviera sostenida).
+  // revertToRest: la vuelta va al reposo en vez de a la pose de antes (las
+  // poses de la charla, ver POSE_HOLD_MAX_MS).
   function scheduleMovement(
     parsed: ParsedMovement,
     origin: MovementOrigin,
     autoRevertDelayMs?: number,
+    revertToRest = false,
   ) {
     const now = performance.now();
     for (const { bone, axis, intensity } of parsed.entries) {
@@ -213,9 +216,14 @@ export function useMovement({
       if (autoRevertDelayMs !== undefined) {
         pendingQuirkRevertsRef.current[key] = {
           revertAt: now + parsed.durationMs + autoRevertDelayMs,
-          revertToValue: parsed.animated ? restRad : currentValue,
+          revertToValue: parsed.animated || revertToRest ? restRad : currentValue,
           revertDuration: parsed.durationMs,
         };
+      } else {
+        // Un movimiento nuevo sin vuelta programada manda sobre una vuelta
+        // vieja del mismo hueso: si no, esa vuelta le arrebataría la pose
+        // nueva cuando se cumpliera.
+        delete pendingQuirkRevertsRef.current[key];
       }
     }
   }
@@ -286,9 +294,10 @@ export function useMovement({
     origin: MovementOrigin,
     // Mismo criterio que scheduleMovement: si se pasa, un gesto animado
     // se apaga solo (2x su duración) en vez de wigglear para siempre.
-    // Solo lo usan los quirks idle -- un gesto de mano en una respuesta
-    // normal de conversación sigue sin límite.
+    // Lo usan los quirks idle (solo para gestos animados) y, con
+    // revertStatic, los gestos de la charla (POSE_HOLD_MAX_MS).
     autoRevertDelayMs?: number,
+    revertStatic = false,
   ) {
     const def = getHandGestureDefinition(presetName);
     if (!def) return;
@@ -298,7 +307,7 @@ export function useMovement({
     // nuevo para este lado reemplaza el estado anterior, sea animado o no.
     animatedHandSidesRef.current[side] = def.animated;
 
-    if (def.animated && autoRevertDelayMs !== undefined) {
+    if ((def.animated || revertStatic) && autoRevertDelayMs !== undefined) {
       pendingHandRevertsRef.current[side] = {
         revertAt: performance.now() + durationMs + autoRevertDelayMs,
         revertDuration: durationMs,
