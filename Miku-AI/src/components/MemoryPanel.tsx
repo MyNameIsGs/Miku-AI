@@ -9,7 +9,7 @@ import {
 } from "../lib/knowledge";
 import { matchesQuery } from "../lib/textSearch";
 import { describeFace } from "../lib/faceParts";
-import { listMoodFaces, MOODS_WITH_FACE, MoodWithFace, requestMoodFaceRedesign } from "../lib/moodFaceStore";
+import { FaceKey, listMoodFaces, MOODS_WITH_FACE, requestMoodFaceRedesign } from "../lib/moodFaceStore";
 import {
   deleteDesignedReaction,
   DesignedTouchReaction,
@@ -486,19 +486,25 @@ function TouchSection() {
 // ---------------------------------------------------------------------------
 // Caras de ánimo (la que pone en reposo según cómo se siente)
 
-const MOOD_LABELS: Record<MoodWithFace, string> = {
+const MOOD_LABELS: Record<FaceKey, string> = {
   happy: "Contenta",
+  happy_muy: "Muy contenta",
   sad: "Triste",
+  sad_muy: "Muy triste",
   angry: "Enojada",
+  angry_muy: "Muy enojada",
   relaxed: "Relajada",
+  relaxed_muy: "Muy relajada",
 };
+// Orden del panel: cada ánimo seguido de su "muy".
+const FACE_ORDER: FaceKey[] = MOODS_WITH_FACE.flatMap((m) => [m, `${m}_muy` as FaceKey]);
 
 function MoodFacesSection() {
   const [faces, setFaces] = useState(listMoodFaces());
-  const [confirmMood, setConfirmMood] = useState<MoodWithFace | null>(null);
+  const [confirmMood, setConfirmMood] = useState<FaceKey | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleRedesign = async (mood: MoodWithFace) => {
+  const handleRedesign = async (mood: FaceKey) => {
     setConfirmMood(null);
     setError(null);
     try {
@@ -509,20 +515,20 @@ function MoodFacesSection() {
     setFaces(listMoodFaces());
   };
 
-  const designedCount = MOODS_WITH_FACE.filter((m) => faces[m]).length;
+  const designedCount = FACE_ORDER.filter((m) => faces[m]).length;
 
   return (
     <>
       <div className="mem-intro">
         <p className="mem-hint">
-          La cara que pone cuando no habla, según su ánimo. La diseñó ella viéndose. Si alguna no se ve natural, pídele que
+          La cara que pone cuando no habla, según su ánimo: una para cada ánimo y otra para cuando lo siente mucho (con un poco, la cara no cambia). Las diseña ella viéndose. Si alguna no se ve natural, pídele que
           la rediseñe: la próxima vez que esté así, la diseña de nuevo, sabiendo que se lo pediste.
         </p>
       </div>
       <div className="m-panel-body">
         {error && <p className="mem-error">{error}</p>}
         <ul className="mem-touch-grid">
-          {MOODS_WITH_FACE.map((mood) => {
+          {FACE_ORDER.map((mood) => {
             const face = faces[mood];
             const state = !face ? "RESPALDO · AÚN NO LA DISEÑA" : face === "ninguna" ? "ELIGIÓ QUE NO SE NOTE" : "DISEÑADA POR ELLA";
             return (
@@ -560,7 +566,7 @@ function MoodFacesSection() {
         </ConfirmDialog>
       )}
       <Footer
-        left={`CARAS DE ÁNIMO · ${designedCount} DE ${MOODS_WITH_FACE.length} DISEÑADAS`}
+        left={`CARAS DE ÁNIMO · ${designedCount} DE ${FACE_ORDER.length} DISEÑADAS`}
         right="LAS DISEÑA ELLA LA PRIMERA VEZ QUE ESTÁ ASÍ"
       />
     </>

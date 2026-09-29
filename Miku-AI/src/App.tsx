@@ -96,10 +96,10 @@ import {
   parseMovementMarker,
   parseHandGestureMarker,
   parseCreateHandGestureMarker,
-  parseMoodMarker,
+  parseMoodPush,
   stripMarkers,
 } from "./lib/markers";
-import { getCurrentMood, setMood } from "./lib/mood";
+import { describeCurrentMood, getCurrentMood, getMoodLevel, pushMood } from "./lib/mood";
 import { describeSelfMovement, uint8ToBase64 } from "./lib/proprioception";
 import { loadPendientes, getActivePendientes } from "./lib/pendientes";
 
@@ -738,6 +738,9 @@ function App() {
       // EXPRESION si esta respuesta no trae una expresión puntual propia
       // (ver más abajo, donde se usa en vez del "neutral" fijo de antes).
       const currentMood = await getCurrentMood();
+      // Con qué expresión habla si no pide una: la de su ánimo solo cuando
+      // ya le llega a la cara (un poco contenta no cambia la cara).
+      const restingExpression = getMoodLevel() === "normal" || getMoodLevel() === "muy" ? currentMood : "neutral";
       // Tarea 8.3: qué estaba usando Sebastián (sin contar esta ventana).
       const activeWindow = await invoke<{
         title: string;
@@ -755,7 +758,7 @@ function App() {
         todayLabel,
         todayIso,
         activePendientes,
-        currentMood,
+        currentMood: describeCurrentMood(),
         activeWindow,
         streamModeActive: isStreamModeActive(),
         relevantKnowledge,
@@ -838,14 +841,16 @@ function App() {
         parseFaceMarker(reply) ??
         (expressionMatches.length > 0
           ? expressionMatches[expressionMatches.length - 1][1].toLowerCase()
-          : currentMood);
+          : restingExpression);
 
       // Tarea 8.10: si esta respuesta cambió su humor de base, se
       // persiste para las próximas conversaciones -- fire-and-forget, no
       // hace falta esperar para seguir con el resto de la respuesta.
-      const newMood = parseMoodMarker(reply);
-      if (newMood) {
-        setMood(newMood).catch((err) =>
+      // Modelo nuevo (moodModel.ts): empuja el ánimo, con lo que ella dijo
+      // de cuánto la afecta y cuánto le dura.
+      const moodPush = parseMoodPush(reply);
+      if (moodPush) {
+        pushMood(moodPush.mood, "charla", { amount: moodPush.amount, duration: moodPush.duration }).catch((err) =>
           console.error("Error guardando el estado de ánimo:", err),
         );
       }

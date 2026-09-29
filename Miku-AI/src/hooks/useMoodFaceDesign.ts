@@ -3,10 +3,11 @@ import { OPENROUTER_MODEL } from "../config/constants";
 import { loadMemoryContext } from "../lib/memory";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
 import { getSelfViewCapturer } from "../lib/selfViewStore";
-import { getCachedMood } from "../lib/mood";
+import { getRestingFaceKey } from "../lib/mood";
 import { describeFace, parseFaceMarker } from "../lib/faceParts";
 import {
-  MOODS_WITH_FACE,
+  FACE_KEYS,
+  FaceKey,
   MoodWithFace,
   getMoodFace,
   getPreviousMoodFace,
@@ -22,12 +23,17 @@ import { buildMoodFacePrompt } from "../prompts/moodFacePrompt";
 // volver a verse hasta REVIEW_ROUNDS veces. Una vez por ánimo, y otra cada
 // vez que se pide rediseñarla (ella en un silencio, o Sebastián en Memoria).
 
-const MOOD_WORDS: Record<MoodWithFace, string> = {
+const BASE_WORDS: Record<MoodWithFace, string> = {
   happy: "contenta",
   sad: "triste",
   angry: "enojada",
   relaxed: "relajada",
 };
+// Una cara por nivel (ver moodFaceStore.ts): "happy" = contenta,
+// "happy_muy" = muy contenta.
+const MOOD_WORDS = Object.fromEntries(
+  FACE_KEYS.map((k) => [k, k.endsWith("_muy") ? `muy ${BASE_WORDS[k.replace(/_muy$/, "") as MoodWithFace]}` : BASE_WORDS[k as MoodWithFace]]),
+) as Record<FaceKey, string>;
 // Cada cuánto se revisa, y cuánto en reposo antes de preguntar.
 const CHECK_EVERY_MS = 3000;
 const REST_BEFORE_ASKING_MS = 5000;
@@ -55,7 +61,7 @@ export function useMoodFaceDesign({
   const lastCheckRef = useRef(0);
   const notRestSinceRef = useRef(0);
   const inFlightRef = useRef(false);
-  const retryAfterRef = useRef<Partial<Record<MoodWithFace, number>>>({});
+  const retryAfterRef = useRef<Partial<Record<FaceKey, number>>>({});
 
   useEffect(() => {
     loadMoodFaces();
@@ -67,7 +73,7 @@ export function useMoodFaceDesign({
     return String(data.choices?.[0]?.message?.content ?? "");
   }
 
-  async function design(mood: MoodWithFace) {
+  async function design(mood: FaceKey) {
     inFlightRef.current = true;
     try {
       const { world, personality, memories } = await loadMemoryContext();
@@ -77,7 +83,11 @@ export function useMoodFaceDesign({
       const previous = prev
         ? { face: prev.face === "ninguna" ? "que no se te notara en la cara" : describeFace(prev.face), byUser: prev.byUser }
         : null;
-      const prompt = buildMoodFacePrompt({ world, personality, memories, todayIso, moodWords: MOOD_WORDS[mood], previous });
+      const baseKey = mood.replace(/_muy$/, "") as FaceKey;
+      const baseFace = mood !== baseKey ? getMoodFace(baseKey) : null;
+      const normalLevelFace =
+        baseFace && baseFace !== "ninguna" ? { words: MOOD_WORDS[baseKey], face: describeFace(baseFace) } : null;
+      const prompt = buildMoodFacePrompt({ world, personality, memories, todayIso, moodWords: MOOD_WORDS[mood], previous, normalLevelFace });
       const first = await ask([{ role: "system", content: prompt }]);
       await processMemoryMarkers(first);
 
@@ -110,7 +120,7 @@ export function useMoodFaceDesign({
               content: [
                 {
                   type: "text",
-                  text: `Así se ve tu cara con eso puesto. Mírala como la vería otra persona: ¿se ve como la cara de alguien ${MOOD_WORDS[mood]} y en calma, de verdad? Fíjate si algo se ve raro, forzado o desparejo entre un lado y el otro. Si te convence, responde solo [LISTO]. Si no, responde con [CARA: ...] completa: reemplaza a la anterior${last ? " (es la última vez que te ves antes de que quede guardada)" : " y vas a volver a verte"}. No repitas [GUARDAR_MEMORIA].`,
+                  text: `Así se ve tu cara con eso puesto. Mírala como la vería otra persona: ¿se ve como la cara de alguien ${MOOD_WORDS[mood]} y en silencio, de verdad? Fíjate si algo se ve raro, forzado o desparejo entre un lado y el otro. Si te convence, responde solo [LISTO]. Si no, responde con [CARA: ...] completa: reemplaza a la anterior${last ? " (es la última vez que te ves antes de que quede guardada)" : " y vas a volver a verte"}. No repitas [GUARDAR_MEMORIA].`,
                 },
                 { type: "image_url", image_url: { url: image } },
               ],
@@ -144,9 +154,11 @@ export function useMoodFaceDesign({
     if (now - lastCheckRef.current < CHECK_EVERY_MS) return;
     lastCheckRef.current = now;
     if (inFlightRef.current || !atRest || now - notRestSinceRef.current < REST_BEFORE_ASKING_MS) return;
-    const mood = getCachedMood();
-    if (!(MOODS_WITH_FACE as string[]).includes(mood)) return;
-    const m = mood as MoodWithFace;
+    // La cara del nivel en que está ahora: nada con "un poco" (la cara no
+    // cambia); "happy" contenta, "happy_muy" muy contenta.
+    const key = getRestingFaceKey();
+    if (!(FACE_KEYS as string[]).includes(key)) return;
+    const m = key as FaceKey;
     if (getMoodFace(m) || Date.now() < (retryAfterRef.current[m] ?? 0)) return;
     design(m);
   }

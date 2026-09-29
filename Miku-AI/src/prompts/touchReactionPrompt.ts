@@ -25,7 +25,7 @@ export interface BuildTouchReactionPromptParams {
 // A8: el tacto le cambia el ánimo solo si ella lo dice. Mismo texto en el
 // diseño y en la revisión.
 const MOOD_EFFECT_OPTION =
-  "Si que te haga esto, estando como estás, te cambia el ánimo (te calma, te alegra, te molesta, te pone triste...), agrega [ESTADO_ANIMO: happy|angry|sad|relaxed|neutral] con cómo te deja: queda como parte de tu reacción y va a pasar cada vez. Si no te cambia nada, no lo pongas. Lo decides tú.";
+  "Si que te haga esto, estando como estás, te cambia el ánimo (te calma, te alegra, te molesta, te pone triste...), agrega [ESTADO_ANIMO: happy|angry|sad|relaxed|neutral, cuanto=poco|bastante|mucho, dura=un_rato|unas_horas|todo_el_dia] con cómo te deja, cuánto y cuánto te dura (si no lo dices: poco y un rato). Queda como parte de tu reacción: cada vez que te lo haga te empuja un poco hacia ese ánimo; repetido muy seguido cada vez te mueve menos, y si es demasiado seguido te termina molestando. Si no te cambia nada, no lo pongas. Lo decides tú.";
 
 export function buildTouchReactionPrompt({
   world,

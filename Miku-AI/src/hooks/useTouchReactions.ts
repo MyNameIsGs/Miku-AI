@@ -15,9 +15,10 @@ import {
   saveReactionVariant,
 } from "../lib/touchReactionsStore";
 import { loadMemoryContext } from "../lib/memory";
-import { Mood, getCachedMood, getCurrentMood, setMood } from "../lib/mood";
+import { Mood, getCachedMood, getCurrentMood, pushMood } from "../lib/mood";
+import { MoodAmount, MoodDuration } from "../lib/moodModel";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
-import { parseMoodMarker, parseMovementMarker } from "../lib/markers";
+import { parseMoodPush, parseMovementMarker } from "../lib/markers";
 import { getReachResolver, getSelfViewCapturer } from "../lib/selfViewStore";
 import { parseFaceMarker } from "../lib/faceParts";
 import { OPENROUTER_MODEL } from "../config/constants";
@@ -52,8 +53,13 @@ type Reaction = {
   // Cuánto se sostiene la pose antes de volver sola (y la expresión).
   holdMs: number;
   description: string;
-  // A8: a qué ánimo la deja este tacto, si ella decidió que la afecta.
+  // A8: a qué ánimo la deja este tacto, si ella decidió que la afecta, y
+  // (modelo nuevo, moodModel.ts) cuánto y cuánto le dura, si lo dijo.
   moodEffect?: string | null;
+  moodAmount?: MoodAmount | null;
+  moodDuration?: MoodDuration | null;
+  // Qué toque es ("tacto:cabeza"...): para acostumbrarse y hartarse.
+  moodSource?: string;
 };
 
 // Ánimo en palabras, para contárselo.
@@ -201,8 +207,11 @@ function describeForDesign(key: TouchReactionKey, side: "left" | "right" | null)
 export function interpretDesign(reply: string): {
   movement: ParsedMovement | null;
   expression: string | null;
-  // A8: si decidió que este tacto le cambia el ánimo ([ESTADO_ANIMO]).
+  // A8: si decidió que este tacto le cambia el ánimo ([ESTADO_ANIMO]), y
+  // cuánto y cuánto le dura, si lo dijo.
   moodEffect: string | null;
+  moodAmount: MoodAmount | null;
+  moodDuration: MoodDuration | null;
 } {
   const explicitMovement = parseMovementMarker(reply);
   const reachMovement = getReachResolver()?.(reply, explicitMovement) ?? null;
@@ -214,12 +223,15 @@ export function interpretDesign(reply: string): {
           animated: explicitMovement?.animated ?? false,
         }
       : null;
+  const moodPush = parseMoodPush(reply);
   const expressionMatch = reply.match(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/i);
   const face = parseFaceMarker(reply);
   return {
     movement,
     expression: face ?? (expressionMatch ? expressionMatch[1].toLowerCase() : null),
-    moodEffect: parseMoodMarker(reply),
+    moodEffect: moodPush?.mood ?? null,
+    moodAmount: moodPush?.amount ?? null,
+    moodDuration: moodPush?.duration ?? null,
   };
 }
 
@@ -381,15 +393,26 @@ export function useTouchReactions({
         // Si además dijo que, estando así, le cambia el ánimo, se guarda la
         // misma reacción con ese efecto (con "igual" se perdería).
         if (base && mood !== "neutral" && /\[IGUAL_QUE_SIEMPRE\]/i.test(firstReply)) {
-          const sameMoodEffect = parseMoodMarker(firstReply);
+          const samePush = parseMoodPush(firstReply);
+          const sameMoodEffect = samePush?.mood ?? null;
           const { variantes: _omit, ...baseOnly } = base;
           await saveReactionVariant(
             key,
             mood,
-            sameMoodEffect ? { ...baseOnly, moodEffect: sameMoodEffect, createdAt: new Date().toISOString() } : "igual",
+            sameMoodEffect
+              ? {
+                  ...baseOnly,
+                  moodEffect: sameMoodEffect,
+                  moodAmount: samePush?.amount ?? null,
+                  moodDuration: samePush?.duration ?? null,
+                  createdAt: new Date().toISOString(),
+                }
+              : "igual",
           );
           console.log(`[Tacto] Estando ${mood}, Miku reacciona igual que siempre a "${key}"${sameMoodEffect ? ` (y la deja ${sameMoodEffect})` : ""}.`);
-          if (sameMoodEffect && sameMoodEffect !== getCachedMood()) await setMood(sameMoodEffect, "tacto");
+          if (sameMoodEffect) {
+            await pushMood(sameMoodEffect, "tacto", { amount: samePush?.amount, duration: samePush?.duration, source: `tacto:${key}` });
+          }
           await processMemoryMarkers(firstReply);
           return;
         }
@@ -421,6 +444,8 @@ export function useTouchReactions({
                 movement: revised.movement,
                 expression: revised.expression ?? design.expression,
                 moodEffect: revised.moodEffect ?? design.moodEffect,
+                moodAmount: revised.moodEffect ? revised.moodAmount : design.moodAmount,
+                moodDuration: revised.moodEffect ? revised.moodDuration : design.moodDuration,
               };
               revisedReply = secondReply;
             }
@@ -439,12 +464,16 @@ export function useTouchReactions({
           side: SIDED_KEYS.includes(key) ? side : null,
           createdAt: new Date().toISOString(),
           moodEffect: design.moodEffect,
+          moodAmount: design.moodAmount,
+          moodDuration: design.moodDuration,
         };
         if (mood === "neutral") await saveDesignedReaction(key, designed);
         else await saveReactionVariant(key, mood, designed);
         // Lo diseñó para este toque: si decidió que le cambia el ánimo, ya
         // la cambia (sin esperar al próximo).
-        if (design.moodEffect && design.moodEffect !== getCachedMood()) await setMood(design.moodEffect, "tacto");
+        if (design.moodEffect) {
+          await pushMood(design.moodEffect, "tacto", { amount: design.moodAmount, duration: design.moodDuration, source: `tacto:${key}` });
+        }
         console.log(
           `[Tacto] Miku diseñó su reacción para "${key}"${mood !== "neutral" ? ` estando ${mood}` : ""}${revisedReply ? " (y la ajustó al verse)" : ""}:`,
           revisedReply ?? firstReply,
@@ -471,9 +500,10 @@ export function useTouchReactions({
   ): Reaction {
     const mood = getCachedMood();
     const found = getReactionForMood(key, mood);
+    const moodSource = `tacto:${key}`;
     if (!found) {
       requestDesign(key, side);
-      return fallback;
+      return { ...fallback, moodSource };
     }
     if (found.needsVariant) requestDesign(key, side, mood);
     const designed = found.reaction;
@@ -486,23 +516,31 @@ export function useTouchReactions({
       holdMs: fallback.holdMs,
       description: fallback.description,
       moodEffect: designed.moodEffect ?? null,
+      moodAmount: designed.moodAmount ?? null,
+      moodDuration: designed.moodDuration ?? null,
+      moodSource,
     };
   }
 
-  // Lo que se anota del toque (se lo cuento en la próxima charla), con el
-  // cambio de ánimo si lo hubo.
+  // Lo que se anota del toque (se lo cuento en la próxima charla). Cómo
+  // la dejó de ánimo lo ve en el prompt (su ánimo de ahora, con su nivel).
   function touchNote(reaction: Reaction): string {
-    return reaction.moodEffect && reaction.moodEffect !== getCachedMood()
-      ? `${reaction.description} (y eso te dejó ${MOOD_WORDS[reaction.moodEffect as Mood] ?? reaction.moodEffect})`
-      : reaction.description;
+    return reaction.moodEffect ? `${reaction.description} (eso te movió el ánimo)` : reaction.description;
   }
 
-  // A8: el tacto le cambia el ánimo solo si ella lo decidió al diseñar la
-  // reacción (y solo si no está ya así).
+  // A8 + modelo nuevo: el tacto empuja el ánimo si ella lo decidió al
+  // diseñar la reacción, con lo que dijo de cuánto y cuánto dura (si no,
+  // poco y un rato). Empuja siempre, aunque ya esté así: la repetición
+  // cuenta para acostumbrarse y hartarse (moodModel.ts). El hartazgo por
+  // muchos toques la molesta un poco si su reacción no dice otra cosa.
   function applyMoodEffect(reaction: Reaction) {
-    if (reaction.moodEffect && reaction.moodEffect !== getCachedMood()) {
-      setMood(reaction.moodEffect, "tacto").catch((err) => console.error("Error cambiando el ánimo:", err));
-    }
+    const effect = reaction.moodEffect ?? (reaction.moodSource === "tacto:harta" ? "angry" : null);
+    if (!effect) return;
+    pushMood(effect, "tacto", {
+      amount: reaction.moodAmount,
+      duration: reaction.moodDuration,
+      source: reaction.moodSource,
+    }).catch((err) => console.error("Error cambiando el ánimo:", err));
   }
 
   function detect(clientX: number, clientY: number): TouchHit | null {

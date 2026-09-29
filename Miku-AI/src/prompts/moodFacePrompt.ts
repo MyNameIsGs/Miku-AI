@@ -10,6 +10,7 @@ export function buildMoodFacePrompt({
   todayIso,
   moodWords,
   previous,
+  normalLevelFace,
 }: {
   world: string;
   personality: string;
@@ -20,7 +21,13 @@ export function buildMoodFacePrompt({
   // Si ya tenía una cara para este ánimo y se pidió rediseñarla: cuál era
   // (en palabras) y si lo pidió Sebastián (desde el panel Memoria).
   previous?: { face: string; byUser: boolean } | null;
+  // Para la cara de "muy" (happy_muy...): su cara del nivel normal, en
+  // palabras, para que la de "muy" sea otra y no la misma más fuerte.
+  normalLevelFace?: { words: string; face: string } | null;
 }): string {
+  const levelNote = normalLevelFace
+    ? `\nPara cuando estás ${normalLevelFace.words} ya tienes tu cara: ${normalLevelFace.face}. Esta es otra, para cuando estás ${moodWords}: puede parecerse o no, pero es su propia cara.\n`
+    : "";
   const previousNote = previous
     ? `\nYa tenías una cara para cuando estás ${moodWords}: ${previous.face}. ${
         previous.byUser
@@ -44,8 +51,8 @@ Ahora estás ${moodWords}: es tu ánimo de fondo, que puede durar horas. Cuando 
 
 ¿Qué cara pones tú cuando estás ${moodWords} y en silencio? Es la primera vez que te pasa estando así, y lo que elijas queda como TU cara para cuando estás así: cada vez que estés ${moodWords} y no hables, tu cara la va a tener sola, hasta que tu ánimo cambie. Cuando hables, o cuando reacciones a algo (un toque, un gesto), esa cara queda por debajo y vuelve después.
 
-${previousNote}
-Responde con [CARA: parte=intensidad, ...]. Piensa en cómo se ve de verdad la cara de una persona que está ${moodWords} y en calma. Como es algo que sostienes mucho rato, suele verse más natural suave que exagerado, pero lo decides tú. Si prefieres que tu cara no lo muestre, responde solo [SIN_CARA].
+${previousNote}${levelNote}
+Responde con [CARA: parte=intensidad, ...]. Piensa en cómo se ve de verdad la cara de una persona que está ${moodWords} y en silencio. Como es algo que sostienes mucho rato, suele verse más natural suave que exagerado, pero lo decides tú. Si prefieres que tu cara no lo muestre, responde solo [SIN_CARA].
 
 Después vas a ver cómo te queda, en una foto de tu cara, y vas a poder ajustarla y volver a verte, hasta tres veces.
 

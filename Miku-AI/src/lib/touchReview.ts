@@ -80,6 +80,8 @@ export async function reviewTouchReaction(key: TouchReactionKey): Promise<Review
       createdAt: new Date().toISOString(),
       // Si no dijo nada del ánimo al revisarla, se conserva lo que tenía.
       moodEffect: design.moodEffect ?? reaction.moodEffect ?? null,
+      moodAmount: design.moodEffect ? design.moodAmount : (reaction.moodAmount ?? null),
+      moodDuration: design.moodEffect ? design.moodDuration : (reaction.moodDuration ?? null),
     });
     console.log(`[Tacto] Miku mejoró su reacción a "${key}":`, reply);
     return "mejorada";

@@ -44,6 +44,8 @@ export async function designWithSelfView(
           movement: revised.movement,
           expression: revised.expression ?? design.expression,
           moodEffect: revised.moodEffect ?? design.moodEffect,
+          moodAmount: revised.moodEffect ? revised.moodAmount : design.moodAmount,
+          moodDuration: revised.moodEffect ? revised.moodDuration : design.moodDuration,
         };
         replies.push(secondReply);
       }

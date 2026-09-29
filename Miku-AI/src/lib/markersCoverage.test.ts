@@ -15,7 +15,7 @@ const EXAMPLES: Record<string, string> = {
   OLVIDAR_CONOCIMIENTO: "[OLVIDAR_CONOCIMIENTO: algo]",
   MEMORIA_IMPORTANTE: "[MEMORIA_IMPORTANTE: 2026-09-28 — algo]",
   EXPRESION: "[EXPRESION: happy]",
-  ESTADO_ANIMO: "[ESTADO_ANIMO: relaxed]",
+  ESTADO_ANIMO: "[ESTADO_ANIMO: relaxed, cuanto=bastante, dura=unas_horas]",
   CARA: "[CARA: boca_sonrisa=100]",
   VOZ_PITCH: "[VOZ_PITCH: -4.5]",
   VOZ_RATE: "[VOZ_RATE: 10]",

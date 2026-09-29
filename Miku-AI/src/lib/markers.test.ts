@@ -5,6 +5,7 @@ import {
   parseHandGestureMarker,
   parseMarkers,
   parseMoodMarker,
+  parseMoodPush,
   parseMovementMarker,
   parseQuirkReadyMarker,
   stripMarkers,
@@ -204,6 +205,20 @@ describe("[ESTADO_ANIMO]", () => {
 
   it("ignora ánimos fuera del vocabulario", () => {
     expect(parseMoodMarker("[ESTADO_ANIMO: feliz]")).toBeNull();
+  });
+
+  it("lee cuánto la afecta y cuánto le dura (modelo nuevo), también con tildes o espacios", () => {
+    expect(parseMoodPush("[ESTADO_ANIMO: happy, cuanto=mucho, dura=todo el día]")).toEqual({
+      mood: "happy",
+      amount: "mucho",
+      duration: "todo_el_dia",
+    });
+    expect(parseMoodPush("[ESTADO_ANIMO: sad]")).toEqual({ mood: "sad", amount: null, duration: null });
+    expect(parseMoodPush("[ESTADO_ANIMO: sad, cuanto=muchisimo]")?.amount).toBeNull();
+  });
+
+  it("el formato largo no se lee en voz alta", () => {
+    expect(stripMarkers("Hola [ESTADO_ANIMO: happy, cuanto=poco, dura=un_rato] ya")).toBe("Hola  ya");
   });
 });
 

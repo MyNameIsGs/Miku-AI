@@ -7,7 +7,7 @@ import {
   DOUBLE_BLINK_CHANCE,
 } from "../config/constants";
 import { FACE_PARTS, decodeFace, faceExpressionName, registerFaceParts } from "../lib/faceParts";
-import { getCachedMood } from "../lib/mood";
+import { getRestingFaceKey } from "../lib/mood";
 import { getMoodFace } from "../lib/moodFaceStore";
 
 const GAZE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -48,11 +48,12 @@ export const RESTING_MOOD_FACES: Record<string, Record<string, number>> = {
 type UseFaceParams = {
   vrmRef: RefObject<VRM | null>;
   gazeTargetObjectRef: RefObject<THREE.Object3D | null>;
-  // Su ánimo actual (por defecto, el guardado; el banco pasa el suyo).
+  // Qué cara de reposo le toca según su ánimo y su nivel ("neutral",
+  // "happy", "happy_muy"...; por defecto, el guardado; el banco pasa el suyo).
   getRestingMood?: () => string;
 };
 
-export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getCachedMood }: UseFaceParams) {
+export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getRestingFaceKey }: UseFaceParams) {
   const activeExpressionRef = useRef<string>("neutral");
   // Escrito por quien reproduce el audio (hoy speak() en App.tsx), leído
   // aquí para pausar la mirada errante mientras Miku habla.
@@ -223,17 +224,21 @@ export function useFace({ vrmRef, gazeTargetObjectRef, getRestingMood = getCache
     // de su ánimo (la que diseñó ella, o la de respaldo).
     let restingFace: Record<string, number> | undefined;
     if (!faceParts && targetExpression === "neutral" && !isSpeakingRef.current) {
+      // "happy_muy" sin diseñar todavía: usa la de "happy" mientras tanto.
+      const faceKey = getRestingMood();
+      const baseMood = faceKey.replace(/_muy$/, "");
       const background =
         previewFaceRef.current ??
         backgroundFaceRef.current ??
-        getMoodFace(getRestingMood()) ??
+        getMoodFace(faceKey) ??
+        getMoodFace(baseMood) ??
         null;
       if (background && background !== "ninguna") {
         const parts = decodeFace(background);
         if (parts) restingFace = parts;
         else targetExpression = background;
       } else if (!background) {
-        restingFace = RESTING_MOOD_FACES[getRestingMood()];
+        restingFace = RESTING_MOOD_FACES[baseMood];
       }
     }
     for (const shape of Object.keys(expressionWeights)) {

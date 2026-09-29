@@ -10,6 +10,7 @@ import {
   BONE_RANGES_DEG,
   CREATE_GESTURE_FINGER_LABELS,
 } from "../config/boneRanges";
+import { MOOD_AMOUNTS, MOOD_DURATIONS, MoodAmount, MoodDuration } from "./moodModel";
 import {
   ParsedMovement,
   ParsedHandGesture,
@@ -265,12 +266,33 @@ export function parseQuirkReadyMarker(text: string): string | null {
 // puntual propia. Mismo vocabulario cerrado que EXPRESION a propósito --
 // el humor termina siendo, en la práctica, "cuál es tu expresión de base
 // hoy", no un concepto separado con su propio rango de valores.
-export function parseMoodMarker(text: string): string | null {
-  const matches = [
-    ...text.matchAll(/\[ESTADO_ANIMO:\s*(happy|angry|sad|relaxed|neutral)\]/gi),
-  ];
+// Modelo nuevo (2026-09-28, ver moodModel.ts): además del ánimo puede decir
+// cuánto la afecta y cuánto le dura: [ESTADO_ANIMO: happy, cuanto=poco,
+// dura=un_rato]. Los dos son opcionales.
+const MOOD_MARKER = /\[ESTADO_ANIMO:\s*(happy|angry|sad|relaxed|neutral)\s*(?:,([^\]]*))?\]/gi;
+
+export type ParsedMoodPush = { mood: string; amount: MoodAmount | null; duration: MoodDuration | null };
+
+export function parseMoodPush(text: string): ParsedMoodPush | null {
+  const matches = [...text.matchAll(MOOD_MARKER)];
   if (matches.length === 0) return null;
-  return matches[matches.length - 1][1].toLowerCase();
+  const last = matches[matches.length - 1];
+  let amount: MoodAmount | null = null;
+  let duration: MoodDuration | null = null;
+  for (const part of (last[2] ?? "").split(",")) {
+    const [rawKey, rawValue] = part.split("=").map((s) => s.trim().toLowerCase());
+    const value = (rawValue ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "_");
+    if (rawKey === "cuanto" || rawKey === "cuánto") {
+      if ((MOOD_AMOUNTS as string[]).includes(value)) amount = value as MoodAmount;
+    } else if (rawKey === "dura") {
+      if ((MOOD_DURATIONS as string[]).includes(value)) duration = value as MoodDuration;
+    }
+  }
+  return { mood: last[1].toLowerCase(), amount, duration };
+}
+
+export function parseMoodMarker(text: string): string | null {
+  return parseMoodPush(text)?.mood ?? null;
 }
 
 export function stripMarkers(text: string): string {
@@ -281,7 +303,7 @@ export function stripMarkers(text: string): string {
     .replace(/\[CORREGIR_CONOCIMIENTO:[\s\S]*?\]/g, "")
     .replace(/\[OLVIDAR_CONOCIMIENTO:[\s\S]*?\]/g, "")
     .replace(/\[EXPRESION:\s*(happy|angry|sad|relaxed|neutral)\]/gi, "")
-    .replace(/\[ESTADO_ANIMO:\s*(happy|angry|sad|relaxed|neutral)\]/gi, "")
+    .replace(/\[ESTADO_ANIMO:[^\]]*\]/gi, "")
     .replace(/\[VOZ_PITCH:\s*-?\d+(?:\.\d+)?\]/gi, "")
     .replace(/\[VOZ_RATE:\s*-?\d+(?:\.\d+)?\]/gi, "")
     .replace(/\[MOVIMIENTO:[\s\S]*?\]/gi, "")

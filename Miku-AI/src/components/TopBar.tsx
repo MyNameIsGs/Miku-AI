@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
-import { Mood, getCachedMood, getCurrentMood, onMoodChange } from "../lib/mood";
+import { Mood, getCachedMood, getCurrentMood, getMoodLevel, onMoodChange } from "../lib/mood";
 import type { MusicCategory } from "../lib/musicStore";
 import type { MotionPhase } from "../hooks/usePresenceMotion";
 import {
@@ -81,14 +81,23 @@ const MOOD_LABEL: Record<Mood, string> = {
 // cada tanto además de escuchar los cambios.
 const MOOD_REFRESH_MS = 60_000;
 
-function useMood(): Mood {
-  const [mood, setMoodState] = useState<Mood>(getCachedMood());
+// Con su nivel (modelo nuevo, moodModel.ts): "UN POCO CONTENTA", "MUY CONTENTA".
+function moodPillText(): string {
+  const mood = getCachedMood();
+  const level = getMoodLevel();
+  const prefix = level === "un_poco" ? "UN POCO " : level === "muy" ? "MUY " : "";
+  return prefix + MOOD_LABEL[mood];
+}
+
+function useMood(): string {
+  const [mood, setMoodState] = useState<string>(moodPillText());
   useEffect(() => {
+    const refresh = () => setMoodState(moodPillText());
     getCurrentMood()
-      .then(setMoodState)
+      .then(refresh)
       .catch(() => {});
-    const unsubscribe = onMoodChange(setMoodState);
-    const id = window.setInterval(() => setMoodState(getCachedMood()), MOOD_REFRESH_MS);
+    const unsubscribe = onMoodChange(refresh);
+    const id = window.setInterval(refresh, MOOD_REFRESH_MS);
     return () => {
       unsubscribe();
       clearInterval(id);
@@ -257,7 +266,7 @@ export function TopBar(props: TopBarProps) {
           {shownPresence.kind === "normal" && (
             <div className="toolbar-mood" title="Su ánimo de base ahora">
               <span>ÁNIMO</span>
-              <span className="toolbar-mood-value">{MOOD_LABEL[mood]}</span>
+              <span className="toolbar-mood-value">{mood}</span>
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { ParsedMovement } from "../types";
+import type { MoodAmount, MoodDuration } from "./moodModel";
 import { BONE_RANGES_VERSION } from "../config/boneRanges";
 import { BODY_TOOLS_VERSION } from "../config/bodyChangelog";
 import { Mood } from "./mood";
@@ -53,6 +54,10 @@ export type DesignedTouchReaction = {
   // A8: si ella decidió que este tacto (con este ánimo) le cambia el ánimo,
   // a cuál. Sin el campo o null: no la afecta.
   moodEffect?: string | null;
+  // Modelo nuevo (moodModel.ts): cuánto la afecta y cuánto le dura. Sin
+  // el campo: poco y un rato.
+  moodAmount?: MoodAmount | null;
+  moodDuration?: MoodDuration | null;
   // A8: cómo reacciona según su ánimo, diseñado por ella la primera vez que
   // le pasa estando así. "igual" = decidió que reacciona como siempre.
   // Solo en la reacción de base (la de neutral), no dentro de otra variante.
@@ -120,7 +125,9 @@ export function describeReaction(reaction: DesignedTouchReaction): string {
       ? `movimiento: ${reaction.entries.map((e) => `${e.bone}.${e.axis}=${e.intensity}`).join(", ")}, duracion=${(reaction.durationMs / 1000).toFixed(1)}s${reaction.animated ? ", animado=si" : ""}`
       : "sin movimiento";
   const sideText = reaction.side ? ` (la diseñaste del lado ${reaction.side === "left" ? "izquierdo" : "derecho"}; del otro se espeja)` : "";
-  const moodText = reaction.moodEffect ? `\n- te cambia el ánimo a: ${reaction.moodEffect}` : "";
+  const moodText = reaction.moodEffect
+    ? `\n- te cambia el ánimo a: ${reaction.moodEffect} (cuanto=${reaction.moodAmount ?? "poco"}, dura=${reaction.moodDuration ?? "un_rato"})`
+    : "";
   return `- ${faceText}\n- ${movementText}${sideText}${moodText}`;
 }
 
