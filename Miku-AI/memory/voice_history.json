@@ -38,5 +38,10 @@
     "heard": "Busca vuelos a Japón por favor",
     "reply": "Ay, se me cayó la búsqueda justo ahora — me devolvió un error, no me llegó nada. Puedo intentarlo de nuevo en un rato.\n\nMientras tanto, dime un par de cosas para no buscar a ciegas: ¿desde qué ciudad saldrías, y para qué fechas más o menos? Y una curiosidad mía... ¿Japón es algo nuevo, o esto va con lo del vuelo de noviembre?",
     "timestampMs": 1790634865934
+  },
+  {
+    "heard": "lleva la foto nace",
+    "reply": "Uy, creo que la transcripción me llegó algo borrosa, Sebastián — te escuché como \"lleva la foto nace\" y no te entendí bien. ¿Es sobre una foto? ¿La quieres ver, mandar, o es que se me escapó algo de la pose? Repítemelo y te sigo.",
+    "timestampMs": 1790676517299
   }
 ]
