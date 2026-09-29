@@ -47,8 +47,12 @@ object MiUbicacion {
         }
     }
 
+    /** Coordenadas para otras tools (buscar_lugares cerca, tiempo_de_viaje): null sin permiso o sin ubicación. */
+    suspend fun coordinates(context: Context): Location? =
+        if (hasPermission(context)) currentLocation(context) else null
+
     // Una lectura fresca (hasta 10 s); si no llega, la última conocida más reciente.
-    @SuppressLint("MissingPermission") // se revisa en execute()
+    @SuppressLint("MissingPermission") // se revisa antes de llamarla
     private suspend fun currentLocation(context: Context): Location? {
         val manager = context.getSystemService(LocationManager::class.java) ?: return null
         val providers = manager.getProviders(true)

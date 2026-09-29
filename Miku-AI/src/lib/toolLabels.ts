@@ -27,6 +27,8 @@ const LABELS: Record<string, ToolLabel> = {
   // Mapas
   abrir_mapa: { category: "MAPAS", running: "Abriendo Google Maps…", done: "Abrió Google Maps" },
   mi_ubicacion: { category: "MAPAS", running: "Viendo dónde estás…", done: "Vio dónde estás" },
+  buscar_lugares: { category: "MAPAS", running: "Buscando lugares…", done: "Buscó lugares" },
+  tiempo_de_viaje: { category: "MAPAS", running: "Calculando el viaje…", done: "Calculó el viaje" },
 
   // Apps y ventanas
   abrir_aplicacion: { category: "APPS", running: "Abriendo la app…", done: "Abrió la app" },

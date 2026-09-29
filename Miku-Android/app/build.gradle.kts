@@ -53,6 +53,13 @@ android {
             "GMAIL_WEB_CLIENT_SECRET",
             "\"${localProperties.getProperty("gmail.webClientSecret", "")}\"",
         )
+        // Google Maps, pasos 3-4 (Places API New + Routes API): misma regla,
+        // la clave vive en local.properties (maps.apiKey).
+        buildConfigField(
+            "String",
+            "MAPS_API_KEY",
+            "\"${localProperties.getProperty("maps.apiKey", "")}\"",
+        )
     }
 
     buildTypes {

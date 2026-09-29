@@ -3,6 +3,8 @@ import { obtenerHoraActual } from "./obtenerHoraActual";
 import { abrirUrl } from "./abrirUrl";
 import { abrirMapa } from "./abrirMapa";
 import { miUbicacion } from "./miUbicacion";
+import { buscarLugares } from "./buscarLugares";
+import { tiempoDeViaje } from "./tiempoDeViaje";
 import { buscarEnWeb } from "./buscarEnWeb";
 import { controlMedios } from "./controlMedios";
 import { ajustarVolumen } from "./ajustarVolumen";
@@ -39,6 +41,8 @@ const STATIC_TOOLS: ToolDefinition[] = [
   abrirUrl,
   abrirMapa,
   miUbicacion,
+  buscarLugares,
+  tiempoDeViaje,
   buscarEnWeb,
   controlMedios,
   ajustarVolumen,

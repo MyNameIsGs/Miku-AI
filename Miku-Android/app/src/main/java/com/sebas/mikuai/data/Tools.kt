@@ -207,6 +207,45 @@ object Tools {
         )
         put(
             buildTool(
+                name = "buscar_lugares",
+                description = "Busca lugares reales en Google Maps (negocios, restaurantes, farmacias, direcciones) y te devuelve nombre, dirección, valoración, si está abierto ahora, el horario de hoy y el teléfono. Úsala para responder sobre lugares; para mostrárselos en el mapa, después usa abrir_mapa.",
+                properties = JSONObject().apply {
+                    put("consulta", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Qué buscar, como en Google Maps (\"farmacia 24 horas\", \"Farmatodo Altamira\", \"pizzería\").")
+                    })
+                    put("cerca_de_mi", JSONObject().apply {
+                        put("type", "boolean")
+                        put("description", "true si lo quiere cerca de donde está ahora (\"cerca de mí\", \"por aquí\"). Si la consulta ya dice dónde, no hace falta.")
+                    })
+                },
+                required = listOf("consulta"),
+            )
+        )
+        put(
+            buildTool(
+                name = "tiempo_de_viaje",
+                description = "Calcula cuánto tarda Sebastián en llegar a un lugar y a qué distancia está, con el tráfico de ahora si va en auto o moto. Para mostrarle la ruta en el mapa, usa abrir_mapa.",
+                properties = JSONObject().apply {
+                    put("destino", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Adónde va (dirección o lugar).")
+                    })
+                    put("origen", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Opcional. Desde dónde. Si no lo dijo, no lo pongas: se usa donde está ahora.")
+                    })
+                    put("modo", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray(MapsUrl.MODES))
+                        put("description", "Cómo va a ir. Por defecto, auto.")
+                    })
+                },
+                required = listOf("destino"),
+            )
+        )
+        put(
+            buildTool(
                 name = "mi_ubicacion",
                 description = "Dónde está Sebastián ahora: dirección aproximada y coordenadas, desde el GPS del celular. Úsala cuando haga falta saber dónde está (\"¿dónde estoy?\", \"cerca de mí\", el origen de un viaje).",
                 properties = JSONObject(),
@@ -355,6 +394,8 @@ object Tools {
                 "buscar_en_web" -> BuscarEnWeb.execute(openRouter, args.optString("consulta", ""))
                 "abrir_mapa" -> abrirMapa(context, args)
                 "mi_ubicacion" -> MiUbicacion.execute(context)
+                "buscar_lugares" -> BuscarLugares.execute(context, args)
+                "tiempo_de_viaje" -> TiempoDeViaje.execute(context, args)
                 "revisar_correo" -> {
                     val dias = if (args.has("dias") && args.get("dias") is Number) {
                         args.getInt("dias").coerceAtLeast(1)

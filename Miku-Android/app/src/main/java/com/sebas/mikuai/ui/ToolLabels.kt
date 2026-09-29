@@ -22,6 +22,8 @@ private val LABELS = mapOf(
     "buscar_en_web" to ToolLabel("WEB", "Buscando en internet…", "Buscó en internet"),
     "abrir_mapa" to ToolLabel("MAPAS", "Abriendo Google Maps…", "Abrió Google Maps"),
     "mi_ubicacion" to ToolLabel("MAPAS", "Viendo dónde estás…", "Vio dónde estás"),
+    "buscar_lugares" to ToolLabel("MAPAS", "Buscando lugares…", "Buscó lugares"),
+    "tiempo_de_viaje" to ToolLabel("MAPAS", "Calculando el viaje…", "Calculó el viaje"),
     "anotar_pendiente" to ToolLabel("PENDIENTES", "Anotando el pendiente…", "Anotó el pendiente"),
     "cerrar_pendiente" to ToolLabel("PENDIENTES", "Cerrando el pendiente…", "Cerró el pendiente"),
 )
