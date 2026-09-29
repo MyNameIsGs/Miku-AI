@@ -53,4 +53,5 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
 everything-ipc = "0.1.4"
 rmcp = { version = "3.4.0", features = ["client", "transport-child-process"] }
+tauri-plugin-notification = "2"
 

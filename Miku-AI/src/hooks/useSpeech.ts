@@ -1,4 +1,5 @@
 import { RefObject, useRef, useState } from "react";
+import { notifyIfHidden } from "../lib/hiddenNotice";
 
 // Cuánto "suena" cada forma de boca, 0-1: alimenta las teclas de piano del
 // panel de controles mientras habla (diseño v1). Sale de los mismos visemas
@@ -229,6 +230,8 @@ export function useSpeech({
     // [VOZ_VOLUMEN] de esta respuesta, 0-1 (1 = normal).
     volume: number = 1,
   ): Promise<void> {
+    // #17: si está escondida, también un aviso de Windows (ver hiddenNotice.ts).
+    notifyIfHidden(text);
     // Silenciado: no se toca la cola en absoluto -- si se desmutea después,
     // no hay nada "pendiente" esperando a sonar de golpe. Igual se revela
     // el texto completo de una, ya que sin audio no hay nada que sincronizar.
