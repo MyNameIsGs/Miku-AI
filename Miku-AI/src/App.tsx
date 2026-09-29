@@ -35,7 +35,7 @@ import { useGameMode } from "./hooks/useGameMode";
 import { useGameBreaks } from "./hooks/useGameBreaks";
 import { usePerfMonitor } from "./hooks/usePerfMonitor";
 import { noteInterruption } from "./lib/talkSignals";
-import { loadRecentChatHistory } from "./lib/chatHistory";
+import { loadRecentChatHistory, rememberSpokenOnOwn } from "./lib/chatHistory";
 import { useSleep } from "./hooks/useSleep";
 import { useMusicSway } from "./hooks/useMusicSway";
 import { useWindowWind } from "./hooks/useWindowWind";
@@ -594,10 +594,18 @@ function App() {
     onSpeechDuringPlayback: handleSpeechDuringPlayback,
   });
 
+  // Lo que dice por su cuenta (briefing, avisos, recordatorios, pausas de
+  // juego) queda en la charla, para que entienda si Sebastián le responde
+  // (ver rememberSpokenOnOwn en lib/chatHistory.ts).
+  const speakOnOwn: typeof speech.speak = (text, ...rest) => {
+    rememberSpokenOnOwn(conversationHistoryRef, text);
+    return speech.speak(text, ...rest);
+  };
+
   // Tarea 8.7: briefing automático al sentarse -- se dispara desde el
   // arranque de askMiku (ver más abajo), no acá.
   const briefing = useBriefing({
-    speak: speech.speak,
+    speak: speakOnOwn,
     voicePitchRef,
     voiceRateRef,
   });
@@ -618,7 +626,7 @@ function App() {
   // el loop idle decide mencionar ya no hablan directo -- se encolan acá,
   // igual que correo nuevo y los avisos de Calendar no urgentes.
   const notificationDigest = useNotificationDigest({
-    speak: speech.speak,
+    speak: speakOnOwn,
     voicePitchRef,
     voiceRateRef,
   });
@@ -640,7 +648,7 @@ function App() {
   });
 
   const reminders = useReminders({
-    speak: speech.speak,
+    speak: speakOnOwn,
     voicePitchRef,
     voiceRateRef,
   });
@@ -650,7 +658,7 @@ function App() {
   });
 
   const calendarWatcher = useCalendarWatcher({
-    speak: speech.speak,
+    speak: speakOnOwn,
     voicePitchRef,
     voiceRateRef,
     queueAnnouncement: notificationDigest.queueAnnouncement,
@@ -1062,7 +1070,7 @@ function App() {
   });
 
   // Pausas en sesiones largas de juego (ver useGameBreaks.ts).
-  const gameBreaks = useGameBreaks({ speak: speech.speak, voicePitchRef, voiceRateRef });
+  const gameBreaks = useGameBreaks({ speak: speakOnOwn, voicePitchRef, voiceRateRef });
   useEffect(() => {
     const id = setInterval(() => {
       gameBreaks.check().catch(console.error);

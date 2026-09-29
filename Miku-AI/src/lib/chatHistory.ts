@@ -1,5 +1,7 @@
 import { load } from "@tauri-apps/plugin-store";
+import { MAX_HISTORY_TURNS } from "../config/constants";
 import { ChatContent, ChatMessage } from "../types";
+import { appendDayTurn } from "./dayLog";
 
 // Punto 2 del plan: que no pierda el hilo si la app se cierra y se vuelve a
 // abrir al rato. Se guardan los últimos turnos de la charla y, si el último
@@ -38,8 +40,9 @@ function textOf(content: ChatContent): string {
 function toSavedTurn(turn: ChatMessage[]): SavedTurn | null {
   const user = turn.find((m) => m.role === "user");
   const assistant = [...turn].reverse().find((m) => m.role === "assistant");
-  if (!user || !assistant) return null;
-  const userText = userTextOf(user.content);
+  if (!assistant) return null;
+  // Sin mensaje de Sebastián: algo que ella dijo por su cuenta (ver rememberSpokenOnOwn).
+  const userText = user ? userTextOf(user.content) : "";
   const assistantText = textOf(assistant.content);
   return userText || assistantText ? { user: userText, assistant: assistantText } : null;
 }
@@ -68,10 +71,14 @@ export async function loadRecentChatHistory(): Promise<{ turns: ChatMessage[][];
     const ageMs = Date.now() - new Date(saved.savedAt).getTime();
     if (!(ageMs >= 0 && ageMs <= RESTORE_MAX_AGE_MS)) return null;
     return {
-      turns: saved.turns.map((t) => [
-        { role: "user", content: t.user },
-        { role: "assistant", content: t.assistant },
-      ]),
+      turns: saved.turns.map((t): ChatMessage[] =>
+        t.user
+          ? [
+              { role: "user", content: t.user },
+              { role: "assistant", content: t.assistant },
+            ]
+          : [{ role: "assistant", content: t.assistant }],
+      ),
       minutesAgo: Math.round(ageMs / 60000),
     };
   } catch (err) {
@@ -89,4 +96,20 @@ export function toApiMessages(turns: ChatMessage[][]): object[] {
     if (m.role === "assistant") return { role: "assistant", content: m.content, ...(m.tool_calls ? { tool_calls: m.tool_calls } : {}) };
     return { role: "user", content: m.content };
   });
+}
+
+// Lo que dice por su cuenta (aviso de correo, de calendario, recordatorio,
+// pausa de juego, saludo del día) también es parte de la charla: antes solo
+// sonaba, y si Sebastián le respondía ("tranquila, fui yo"), ella no sabía
+// a qué, y contestaba sobre lo último que tenía, de antes. Va como un
+// mensaje suyo sin uno de él antes (probado con DeepSeek: lo acepta y lo
+// entiende).
+export function rememberSpokenOnOwn(historyRef: { current: ChatMessage[][] }, text: string) {
+  if (!text.trim()) return;
+  historyRef.current.push([{ role: "assistant", content: text }]);
+  if (historyRef.current.length > MAX_HISTORY_TURNS) {
+    historyRef.current = historyRef.current.slice(-MAX_HISTORY_TURNS);
+  }
+  saveChatHistory(historyRef.current);
+  appendDayTurn("", text);
 }
