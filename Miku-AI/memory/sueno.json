@@ -1,0 +1,136 @@
+{
+  "dormir": {
+    "expression": "cara:ojos_cerrados=1,boca_sonrisa=0.22",
+    "entries": [
+      {
+        "bone": "leftUpperArm",
+        "axis": "x",
+        "intensity": 11
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "y",
+        "intensity": -33
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "z",
+        "intensity": 100
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "y",
+        "intensity": -5
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "x",
+        "intensity": 0
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "leftHand",
+        "axis": "x",
+        "intensity": 0
+      },
+      {
+        "bone": "leftHand",
+        "axis": "y",
+        "intensity": 33
+      },
+      {
+        "bone": "leftHand",
+        "axis": "z",
+        "intensity": 100
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "x",
+        "intensity": 9
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "y",
+        "intensity": 98
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "z",
+        "intensity": -84
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "y",
+        "intensity": 5
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "x",
+        "intensity": 83
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "rightHand",
+        "axis": "x",
+        "intensity": 33
+      },
+      {
+        "bone": "rightHand",
+        "axis": "y",
+        "intensity": -33
+      },
+      {
+        "bone": "rightHand",
+        "axis": "z",
+        "intensity": -100
+      },
+      {
+        "bone": "head",
+        "axis": "z",
+        "intensity": -13
+      },
+      {
+        "bone": "head",
+        "axis": "x",
+        "intensity": -6
+      },
+      {
+        "bone": "neck",
+        "axis": "z",
+        "intensity": -7
+      },
+      {
+        "bone": "neck",
+        "axis": "x",
+        "intensity": -5
+      },
+      {
+        "bone": "spine",
+        "axis": "x",
+        "intensity": -6
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "z",
+        "intensity": 5
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "z",
+        "intensity": -5
+      }
+    ],
+    "durationMs": 3000,
+    "animated": false,
+    "createdAt": "2026-09-29T21:00:57.095Z",
+    "rangos": 2
+  }
+}
