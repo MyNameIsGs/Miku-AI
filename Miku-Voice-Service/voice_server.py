@@ -114,6 +114,12 @@ WAKE_WORD_THRESHOLD = 0.85
 WAKE_WORD_SAMPLE_RATE = 16000
 WAKE_WORD_FRAME_SAMPLES = 1280  # 80ms a 16kHz, mismo tamaño de frame que usa nanowakeword
 WAKE_WORD_COOLDOWN_S = 3.0
+# "confirmation frames" (igual que Android, §6.41 del contexto): el score
+# tiene que pasar el umbral en 3 cuadros SEGUIDOS (240 ms), no en uno.
+# Medido 2026-09-28 con el registro de abajo: un "Hey Miku" real de
+# Sebastián sostiene 1,00 durante 9+ cuadros; las voces de una clase de
+# Zoom lo rozaban 1-2 cuadros y caían (3 falsos positivos, todos < 3).
+WAKE_WORD_CONFIRM_FRAMES = 3
 
 # Registro de detecciones (2026-09-28, para calibrar los falsos positivos
 # con audio del propio equipo): por cada detección se guarda el audio de
@@ -343,6 +349,8 @@ def _wake_word_loop():
     recent_frames = deque(maxlen=WAKE_WORD_LOG_PRE_FRAMES)
     recent_scores = deque(maxlen=WAKE_WORD_LOG_PRE_FRAMES)
     pending_log = None
+    # Cuadros seguidos con el score por encima del umbral (ver WAKE_WORD_CONFIRM_FRAMES).
+    frames_above = 0
 
     def save_detection_log(entry):
         try:
@@ -367,7 +375,7 @@ def _wake_word_loop():
             traceback.print_exc()
 
     def audio_callback(indata, _frames, _time_info, status):
-        nonlocal last_trigger_at, pending_log
+        nonlocal last_trigger_at, pending_log, frames_above
         global wake_word_detection_id
 
         if status:
@@ -403,8 +411,11 @@ def _wake_word_loop():
             _process_vad_frame(frame)
             return
 
+        if not wake_word_enabled:
+            frames_above = 0
+            return
         # Este cuadro ya pasó por el detector (arriba): no dos veces.
-        if not wake_word_enabled or logging_post_frames:
+        if logging_post_frames:
             return
 
         try:
@@ -418,9 +429,25 @@ def _wake_word_loop():
         recent_frames.append(frame.copy())
         recent_scores.append(round(score, 4))
 
-        if score >= WAKE_WORD_THRESHOLD:
+        if score < WAKE_WORD_THRESHOLD:
+            # Un roce que no llegó a confirmarse: se registra igual, para
+            # comprobar con el tiempo que no se pierde ningún "Hey Miku" real.
+            if 0 < frames_above < WAKE_WORD_CONFIRM_FRAMES:
+                entry = {
+                    "stamp": time_module.strftime("%Y%m%d-%H%M%S") + "-rechazada",
+                    "frames": list(recent_frames),
+                    "scores": list(recent_scores),
+                    "detection_frame": len(recent_scores) - 2,
+                }
+                threading.Thread(target=save_detection_log, args=(entry,), daemon=True).start()
+            frames_above = 0
+            return
+
+        frames_above += 1
+        if frames_above >= WAKE_WORD_CONFIRM_FRAMES:
             now = time_module.monotonic()
             if now - last_trigger_at >= WAKE_WORD_COOLDOWN_S:
+                frames_above = 0
                 last_trigger_at = now
                 with wake_word_state_lock:
                     wake_word_detection_id += 1
