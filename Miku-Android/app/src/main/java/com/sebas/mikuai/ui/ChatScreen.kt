@@ -94,6 +94,16 @@ fun ChatScreen(
         vm.selectImage(uri)
     }
 
+    // "Compartir con Miku" (ver SharedIntake): el texto o link queda escrito
+    // en el campo y la foto adjunta; Sebastián agrega lo suyo y envía.
+    val shared by SharedIntake.pending.collectAsState()
+    LaunchedEffect(shared) {
+        val content = SharedIntake.consume() ?: return@LaunchedEffect
+        showSettings = false
+        content.text?.let { inputText = if (inputText.isBlank()) it else "$inputText\n$it" }
+        content.imageUri?.let { vm.selectImage(it) }
+    }
+
     // Configuración es una pantalla propia (ronda 2 §6.4), con botón atrás.
     if (showSettings) {
         SettingsScreen(

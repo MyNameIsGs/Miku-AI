@@ -19,6 +19,7 @@ import com.sebas.mikuai.data.SecurePrefs
 import com.sebas.mikuai.data.SpotifyAuthBridge
 import com.sebas.mikuai.ui.ChatScreen
 import com.sebas.mikuai.ui.SetupScreen
+import com.sebas.mikuai.ui.SharedIntake
 import com.sebas.mikuai.ui.theme.MikuTheme
 import com.sebas.mikuai.wakeword.WakeWordPrefs
 import com.sebas.mikuai.wakeword.WakeWordService
@@ -43,6 +44,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         GmailAuthBridge.registerLauncher { request -> gmailAuthLauncher.launch(request) }
+        // "Compartir con Miku" con la app cerrada: llega acá (ver SharedIntake).
+        if (savedInstanceState == null) SharedIntake.offer(applicationContext, intent)
         requestNotificationPermissionIfNeeded()
         scheduleNotificationWorker()
         restartWakeWordServiceIfEnabled()
@@ -84,6 +87,8 @@ class MainActivity : ComponentActivity() {
     // en la pila de tareas (la abrió el propio flujo de conexión).
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // "Compartir con Miku" con la app ya abierta (singleTask).
+        if (SharedIntake.offer(applicationContext, intent)) return
         intent.data?.let { uri ->
             if (uri.scheme == "mikuai") {
                 SpotifyAuthBridge.onRedirectReceived(uri)
