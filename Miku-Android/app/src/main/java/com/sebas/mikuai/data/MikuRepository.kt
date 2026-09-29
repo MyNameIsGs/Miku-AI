@@ -7,6 +7,7 @@ import java.time.LocalDate
 
 class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: SecurePrefs) {
 
+    private val appContext = context.applicationContext
     private val ghApi = GitHubApi(ghToken)
     private val orApi = OpenRouterApi(orKey)
     private val pendientesRepo = PendientesRepository(ghApi)
@@ -146,7 +147,7 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     ) { name, argumentsJson ->
         onToolEvent?.invoke(name, false)
         try {
-            Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi, orApi)
+            Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi, orApi, appContext)
         } finally {
             onToolEvent?.invoke(name, true)
         }

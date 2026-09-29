@@ -24,6 +24,9 @@ const LABELS: Record<string, ToolLabel> = {
   buscar_en_web: { category: "WEB", running: "Buscando en internet…", done: "Buscó en internet" },
   abrir_url: { category: "WEB", running: "Abriendo la página…", done: "Abrió la página" },
 
+  // Mapas
+  abrir_mapa: { category: "MAPAS", running: "Abriendo Google Maps…", done: "Abrió Google Maps" },
+
   // Apps y ventanas
   abrir_aplicacion: { category: "APPS", running: "Abriendo la app…", done: "Abrió la app" },
   abrir_carpeta_de_apps: { category: "APPS", running: "Abriendo la carpeta…", done: "Abrió la carpeta de apps" },

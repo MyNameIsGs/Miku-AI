@@ -1,5 +1,9 @@
 package com.sebas.mikuai.data
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -172,6 +176,35 @@ object Tools {
                 required = listOf("consulta"),
             )
         )
+        // Google Maps, paso 1 (2026-09-28): misma tool que
+        // lib/tools/abrirMapa.ts de desktop (ver MapsUrl.kt).
+        put(
+            buildTool(
+                name = "abrir_mapa",
+                description = "Abre Google Maps para mostrarle a Sebastián un lugar, una ruta o iniciar la navegación. Solo abre el mapa: no te devuelve información del lugar ni del viaje.",
+                properties = JSONObject().apply {
+                    put("accion", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray(MapsUrl.ACTIONS))
+                        put("description", "buscar = mostrar un lugar o una búsqueda en el mapa; ruta = mostrar el recorrido hasta un destino; navegar = empezar la navegación paso a paso.")
+                    })
+                    put("destino", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "El lugar, dirección o búsqueda (\"farmacias\", \"Plaza Venezuela, Caracas\").")
+                    })
+                    put("origen", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Opcional. Desde dónde. Si no lo dijo, no lo pongas: Maps usa la ubicación actual.")
+                    })
+                    put("modo", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray(MapsUrl.MODES))
+                        put("description", "Opcional, para ruta o navegar. Cómo va a ir.")
+                    })
+                },
+                required = listOf("accion", "destino"),
+            )
+        )
         put(
             buildTool(
                 name = "revisar_correo",
@@ -208,6 +241,7 @@ object Tools {
         gmail: GmailApi,
         calendar: CalendarApi,
         openRouter: OpenRouterApi,
+        context: Context,
     ): String {
         val args = try {
             JSONObject(argumentsJson)
@@ -311,6 +345,7 @@ object Tools {
                     }
                 }
                 "buscar_en_web" -> BuscarEnWeb.execute(openRouter, args.optString("consulta", ""))
+                "abrir_mapa" -> abrirMapa(context, args)
                 "revisar_correo" -> {
                     val dias = if (args.has("dias") && args.get("dias") is Number) {
                         args.getInt("dias").coerceAtLeast(1)
@@ -346,6 +381,28 @@ object Tools {
             }
         } catch (e: Exception) {
             "Error ejecutando \"$name\": ${e.message}"
+        }
+    }
+
+    // Abre la app de Maps (o el navegador si no está). Desde el servicio de
+    // "Hey Miku" también funciona: la app tiene "mostrar sobre otras apps",
+    // que la exime del límite de Android para abrir pantallas desde segundo plano.
+    private fun abrirMapa(context: Context, args: JSONObject): String {
+        val action = args.optString("accion", "")
+        val destination = args.optString("destino", "").trim()
+        if (action !in MapsUrl.ACTIONS) return "Error: acción desconocida \"$action\"."
+        if (destination.isEmpty()) return "Error: no se especificó el destino."
+        val origin = args.optString("origen", "").trim().ifEmpty { null }
+        val mode = args.optString("modo", "").ifEmpty { null }
+
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(MapsUrl.build(action, destination, origin, mode)))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            context.startActivity(intent)
+            val what = if (action == "buscar") "\"$destination\"" else "la ruta a \"$destination\""
+            "Abrí Google Maps con $what" + if (action == "navegar") ", con la navegación en marcha." else "."
+        } catch (e: ActivityNotFoundException) {
+            "Error: no hay ninguna app para abrir Google Maps en el celular."
         }
     }
 
