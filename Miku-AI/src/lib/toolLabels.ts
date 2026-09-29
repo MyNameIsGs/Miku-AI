@@ -30,6 +30,9 @@ const LABELS: Record<string, ToolLabel> = {
   buscar_lugares: { category: "MAPAS", running: "Buscando lugares…", done: "Buscó lugares" },
   tiempo_de_viaje: { category: "MAPAS", running: "Calculando el viaje…", done: "Calculó el viaje" },
 
+  // Memoria
+  leer_mi_diario: { category: "DIARIO", running: "Leyendo su diario…", done: "Leyó su diario" },
+
   // Apps y ventanas
   abrir_aplicacion: { category: "APPS", running: "Abriendo la app…", done: "Abrió la app" },
   abrir_carpeta_de_apps: { category: "APPS", running: "Abriendo la carpeta…", done: "Abrió la carpeta de apps" },

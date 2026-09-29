@@ -5,6 +5,7 @@ import { abrirMapa } from "./abrirMapa";
 import { miUbicacion } from "./miUbicacion";
 import { buscarLugares } from "./buscarLugares";
 import { tiempoDeViaje } from "./tiempoDeViaje";
+import { leerMiDiario } from "./leerMiDiario";
 import { buscarEnWeb } from "./buscarEnWeb";
 import { controlMedios } from "./controlMedios";
 import { ajustarVolumen } from "./ajustarVolumen";
@@ -43,6 +44,7 @@ const STATIC_TOOLS: ToolDefinition[] = [
   miUbicacion,
   buscarLugares,
   tiempoDeViaje,
+  leerMiDiario,
   buscarEnWeb,
   controlMedios,
   ajustarVolumen,

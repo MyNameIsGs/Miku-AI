@@ -1,6 +1,8 @@
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
+import { localIsoDate } from "./dates";
+import { DiaryEntry, parseDiary } from "./diaryEntries";
 
 // Tarea 8.9: diario nocturno propio de Miku -- reflexión suya sobre la
 // jornada (qué pensó, cómo se sintió), NO una lista de eventos (eso ya es
@@ -16,15 +18,18 @@ const SEED_DIARY = `# Diario de Miku
 
 const STORE_KEY = "lastDiaryDate";
 
-function todayLocalIso(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
+const todayLocalIso = () => localIsoDate();
 
 async function diaryPath(): Promise<string> {
   const dataDir = await appDataDir();
   const memoryDir = await join(dataDir, "memory");
   return join(memoryDir, "diario.md");
+}
+
+// D5: sus entradas, para la tool leer_mi_diario.
+export async function readDiaryEntries(): Promise<DiaryEntry[]> {
+  const path = await diaryPath();
+  return (await exists(path)) ? parseDiary(await readTextFile(path)) : [];
 }
 
 export async function hasWrittenDiaryToday(): Promise<boolean> {
