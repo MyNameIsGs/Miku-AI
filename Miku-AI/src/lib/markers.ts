@@ -12,6 +12,7 @@ import {
   CREATE_GESTURE_FINGER_LABELS,
 } from "../config/boneRanges";
 import { MOOD_AMOUNTS, MOOD_DURATIONS, MoodAmount, MoodDuration } from "./moodModel";
+import { stripMarkdown } from "./speechText";
 import {
   ParsedMovement,
   ParsedHandGesture,
@@ -321,7 +322,8 @@ export function parseVoiceMarkers(
 }
 
 export function stripMarkers(text: string): string {
-  return text
+  // Al final, sin formato markdown (ver lib/speechText.ts): el chat es texto plano.
+  return stripMarkdown(text
     .replace(/\[GUARDAR_PERSONALIDAD:[\s\S]*?\]/g, "")
     .replace(/\[GUARDAR_MEMORIA:[\s\S]*?\]/g, "")
     .replace(/\[GUARDAR_CONOCIMIENTO:[\s\S]*?\]/g, "")
@@ -350,8 +352,7 @@ export function stripMarkers(text: string): string {
     .replace(/\[REDISE[ÑN]AR_CARA_ANIMO:[\s\S]*?\]/gi, "")
     .replace(/\[(NUEVO_BAILE|BAILE|AL_GOLPE|OLVIDAR_BAILE|REDISE[ÑN]AR_BAILE):[\s\S]*?\]/gi, "")
     .replace(/\[MEMORIA_IMPORTANTE:[\s\S]*?\]/gi, "")
-    .replace(/\[QUIRK_LISTO:[\s\S]*?\]/gi, "")
-    .trim();
+    .replace(/\[QUIRK_LISTO:[\s\S]*?\]/gi, "")).trim();
 }
 
 export interface ParsedMarkersResult {

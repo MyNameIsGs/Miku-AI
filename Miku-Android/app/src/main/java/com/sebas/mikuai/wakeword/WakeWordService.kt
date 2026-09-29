@@ -31,6 +31,7 @@ import com.sebas.mikuai.R
 import com.sebas.mikuai.data.CalendarApi
 import com.sebas.mikuai.data.CalendarAuth
 import com.sebas.mikuai.data.CalendarWatcher
+import com.sebas.mikuai.data.TextCleanup
 import com.sebas.mikuai.data.MiUbicacion
 import com.sebas.mikuai.data.GmailApi
 import com.sebas.mikuai.data.GmailAuth
@@ -592,7 +593,8 @@ class WakeWordService : Service() {
             return
         }
 
-        if (SecurePrefs(applicationContext).isVoiceMuted()) {
+        // Solo emojis (ej. "💙"): no hay nada que decir, se muestra como silenciada.
+        if (SecurePrefs(applicationContext).isVoiceMuted() || TextCleanup.forSpeech(reply).isBlank()) {
             // Sin audio que esperar -- se revela directo, y el mic se
             // reactiva con el mismo temporizador estimado que el TTS
             // (no hay nada sonando, pero mantiene un ritmo consistente
@@ -611,7 +613,8 @@ class WakeWordService : Service() {
                         if (cached != null) {
                             cached
                         } else {
-                            val mp3 = EdgeTtsClient.synthesize(reply)
+                            // Sin emojis ni formato (ver TextCleanup); en pantalla va `reply` tal cual.
+                            val mp3 = EdgeTtsClient.synthesize(TextCleanup.forSpeech(reply))
                             val decoded = Mp3Decoder.decode(mp3)
                             val source16k = Resampler.resample(decoded.samples, decoded.sampleRate, 16000)
                             val generated = pipeline.convert(source16k)
@@ -663,7 +666,7 @@ class WakeWordService : Service() {
             )
         )
         if (ttsReady) {
-            tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "miku_voice_reply")
+            tts?.speak(TextCleanup.forSpeech(reply), TextToSpeech.QUEUE_FLUSH, null, "miku_voice_reply")
         }
         scheduleOverlayDismissAndResume(reply)
     }

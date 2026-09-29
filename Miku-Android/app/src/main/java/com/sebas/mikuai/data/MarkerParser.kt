@@ -47,7 +47,8 @@ object MarkerParser {
         STRIP_PATTERNS.forEach { text = it.replace(text, "") }
 
         return ParsedResponse(
-            cleanText        = text.trim(),
+            // Sin markdown: el chat es texto plano (ver TextCleanup).
+            cleanText        = TextCleanup.stripMarkdown(text).trim(),
             savePersonality  = personality,
             saveMemories     = memories,
             saveKnowledge    = knowledge,

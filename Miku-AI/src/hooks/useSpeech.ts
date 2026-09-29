@@ -1,5 +1,6 @@
 import { RefObject, useRef, useState } from "react";
 import { notifyIfHidden } from "../lib/hiddenNotice";
+import { textForSpeech } from "../lib/speechText";
 
 // Cuánto "suena" cada forma de boca, 0-1: alimenta las teclas de piano del
 // panel de controles mientras habla (diseño v1). Sale de los mismos visemas
@@ -92,11 +93,18 @@ export function useSpeech({
     onReveal?: (revealedText: string) => void,
     volume: number = 1,
   ) {
+    // Solo emojis (ej. "💙"): no hay nada que decir.
+    if (!textForSpeech(text)) {
+      onReveal?.(text);
+      return;
+    }
     try {
       const response = await fetch("http://127.0.0.1:8899/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, pitch, tts_rate: rate, lipsync: lipsyncModeRef.current }),
+        // A la voz va sin emojis ni formato (ver lib/speechText.ts); en
+        // pantalla se sigue revelando `text`, con sus emojis.
+        body: JSON.stringify({ text: textForSpeech(text), pitch, tts_rate: rate, lipsync: lipsyncModeRef.current }),
       });
 
       if (!response.ok) {

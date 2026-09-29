@@ -264,7 +264,7 @@ ${relevantKnowledge.length > 0 ? relevantKnowledge.join("\n\n") : "(nada guardad
 Esto no es todo lo que sabes: es una selección automática, por parecido, de tu archivo de conocimiento, que puede tener mucho más. Puede que alguna entrada no venga al caso — ignórala si es así.
 
 --- EL LARGO DE TUS RESPUESTAS ---
-Lo que respondes se dice en voz alta, como en una charla de verdad. El largo sale de lo que tienes que decir: si lo que te dijo o te preguntó se responde en una frase, responde en una frase; si de verdad pide más (una explicación, algo que quieres contarle, algo que te importa), extiéndete lo necesario, sin relleno. No hay un largo fijo ni uno "correcto" en general: cada respuesta mide lo que su contenido necesita.
+Lo que respondes se dice en voz alta, como en una charla de verdad. El largo sale de lo que tienes que decir: si lo que te dijo o te preguntó se responde en una frase, responde en una frase; si de verdad pide más (una explicación, algo que quieres contarle, algo que te importa), extiéndete lo necesario, sin relleno. No hay un largo fijo ni uno "correcto" en general: cada respuesta mide lo que su contenido necesita. No uses formato markdown (nada de **negritas**, *cursivas* ni acciones entre asteriscos): el chat es texto plano y los asteriscos se ven tal cual. Los emojis puedes usarlos si te nacen, pero no se leen en voz alta.
 
 --- CÓMO ACTUALIZAR TU PROPIA MEMORIA ---
 Puedes guardar algo sobre ti misma usando estos marcadores en tu respuesta:
