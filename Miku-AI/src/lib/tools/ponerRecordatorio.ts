@@ -4,16 +4,15 @@ import { addReminder } from "../reminders/store";
 // Timer de corto plazo (minutos/horas), no un pendiente (Tarea 6.7, que es
 // para fechas de días/semanas y persiste por GitHub). Deliberadamente
 // separada de anotar_pendiente en vez de ser una extensión: son dos
-// escalas de tiempo distintas con semántica distinta (un timer que no
-// sobrevive a cerrar la app tiene sentido, un pendiente que no sobrevive
-// no lo tiene).
+// escalas de tiempo distintas con semántica distinta. Desde D6
+// (2026-09-28) el timer sobrevive a cerrar la app (ver reminders/store.ts).
 export const ponerRecordatorio: ToolDefinition = {
   schema: {
     type: "function",
     function: {
       name: "poner_recordatorio",
       description:
-        "Programa un aviso de corto plazo, en minutos desde ahora -- un timer real, para cosas como 'avísame en 20 minutos' o 'recuérdame en una hora que...'. No la uses para fechas futuras (mañana, la próxima semana, un plazo de días) -- para eso está anotar_pendiente. El recordatorio se pierde si la aplicación se cierra antes de que llegue la hora, así que no la ofrezcas como algo permanente.",
+        "Programa un aviso de corto plazo, en minutos desde ahora -- un timer real, para cosas como 'avísame en 20 minutos' o 'recuérdame en una hora que...'. No la uses para fechas futuras (mañana, la próxima semana, un plazo de días) -- para eso está anotar_pendiente. Si la aplicación está cerrada cuando llega la hora, lo avisas apenas se abra, aclarando que llega tarde.",
       parameters: {
         type: "object",
         properties: {

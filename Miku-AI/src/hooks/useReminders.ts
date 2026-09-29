@@ -1,5 +1,5 @@
 import { RefObject, useEffect } from "react";
-import { registerReminderFireHandler, checkDueReminders } from "../lib/reminders/store";
+import { registerReminderFireHandler, checkDueReminders, loadReminders, reminderSpeech } from "../lib/reminders/store";
 
 type UseRemindersParams = {
   // Misma firma que speech.speak -- ya encolada (ver useSpeech.ts), así
@@ -21,9 +21,11 @@ export function useReminders({
   voiceRateRef,
 }: UseRemindersParams) {
   useEffect(() => {
+    // D6: recupera los que quedaron guardados al cerrar la app.
+    loadReminders();
     registerReminderFireHandler((reminder) => {
       speak(
-        reminder.message,
+        reminderSpeech(reminder),
         voicePitchRef.current,
         voiceRateRef.current,
         "neutral",
