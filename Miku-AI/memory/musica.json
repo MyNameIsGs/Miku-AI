@@ -49,6 +49,64 @@
       "durationMs": 1333,
       "createdAt": "2026-09-25T21:00:22.703Z",
       "rangos": 2
+    },
+    "sin_golpe": {
+      "alGolpe": false,
+      "expression": "cara:ojos_cerrados=0.45,boca_sonrisa=0.28",
+      "entries": [
+        {
+          "bone": "spine",
+          "axis": "z",
+          "intensity": 9
+        },
+        {
+          "bone": "chest",
+          "axis": "z",
+          "intensity": 7
+        },
+        {
+          "bone": "neck",
+          "axis": "z",
+          "intensity": -4
+        },
+        {
+          "bone": "head",
+          "axis": "z",
+          "intensity": -6
+        }
+      ],
+      "durationMs": 4500,
+      "createdAt": "2026-09-29T21:54:45.794Z",
+      "rangos": 2
+    },
+    "ritmo_tranquilo": {
+      "alGolpe": true,
+      "expression": "cara:ojos_cerrados=0.4,boca_sonrisa=0.38",
+      "entries": [
+        {
+          "bone": "spine",
+          "axis": "z",
+          "intensity": 11
+        },
+        {
+          "bone": "chest",
+          "axis": "z",
+          "intensity": 9
+        },
+        {
+          "bone": "neck",
+          "axis": "z",
+          "intensity": -7
+        },
+        {
+          "bone": "head",
+          "axis": "z",
+          "intensity": -7
+        }
+      ],
+      "durationMs": 2500,
+      "createdAt": "2026-09-29T21:56:40.546Z",
+      "rangos": 2
     }
   }
 }
