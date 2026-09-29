@@ -24,6 +24,14 @@ const MOVED_THRESHOLD_PX = 2;
 // El punto se proyecta en un plano a esta distancia de la cara, hacia la
 // cámara: los ojos convergen a una distancia creíble.
 const PLANE_DISTANCE_M = 0.6;
+// D3 (2026-09-28): cuando Sebastián cambia de ventana, mira un momento
+// hacia donde quedó la nueva (solo los ojos, como con el cursor). Si él
+// mueve el mouse cerca, manda el cursor.
+const WINDOW_POLL_MS = 500;
+const GLANCE_MS = 1500;
+// Entre una mirada y la siguiente, para que no mire para todos lados si
+// cambia de ventana muy seguido.
+const GLANCE_MIN_GAP_MS = 4000;
 
 // Rayo desde la cámara por el punto del cursor (px relativos a la ventana),
 // cortado con un plano frente a la cara (perpendicular a la línea
@@ -60,6 +68,8 @@ export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideR
   const targetRef = useRef<THREE.Vector3 | null>(null);
   const lastPosRef = useRef<[number, number] | null>(null);
   const lastMoveRef = useRef(0);
+  // Mirada hacia la ventana nueva: dónde (px relativos a la ventana de Miku) y hasta cuándo.
+  const glanceRef = useRef<{ x: number; y: number; until: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,12 +94,30 @@ export function useCursorGaze({ cameraRef, canvasRef, headBoneRef, gazeOverrideR
         x <= window.innerWidth + NEAR_MARGIN_PX &&
         y <= window.innerHeight + NEAR_MARGIN_PX;
       const moving = now - lastMoveRef.current < STILL_RELEASE_MS;
-      targetRef.current = near && moving ? cursorToWorld(x, y) : null;
+      const glance = glanceRef.current && now < glanceRef.current.until ? glanceRef.current : null;
+      targetRef.current = near && moving ? cursorToWorld(x, y) : glance ? cursorToWorld(glance.x, glance.y) : null;
     };
     const id = window.setInterval(poll, POLL_MS);
+
+    // D3: ¿cambió la ventana en primer plano? (la de Miku no cuenta)
+    let lastWindowId: number | null = null;
+    let lastGlanceAt = -Infinity;
+    const pollWindow = async () => {
+      const spot = await invoke<{ id: number; x: number; y: number } | null>("ventana_activa_lugar").catch(() => null);
+      if (cancelled || !spot) return;
+      const changed = lastWindowId !== null && spot.id !== lastWindowId;
+      lastWindowId = spot.id;
+      const now = performance.now();
+      if (changed && now - lastGlanceAt >= GLANCE_MIN_GAP_MS) {
+        lastGlanceAt = now;
+        glanceRef.current = { x: spot.x, y: spot.y, until: now + GLANCE_MS };
+      }
+    };
+    const windowId = window.setInterval(pollWindow, WINDOW_POLL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      window.clearInterval(windowId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

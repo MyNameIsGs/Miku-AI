@@ -274,6 +274,7 @@ pub fn run() {
             game_mode::game_mode_show,
             game_mode::game_mode_is_hidden,
             location::mi_ubicacion,
+            active_window::ventana_activa_lugar,
             audio_device::list_audio_output_devices,
             audio_device::set_default_audio_output,
             screen_capture::capture_screens,

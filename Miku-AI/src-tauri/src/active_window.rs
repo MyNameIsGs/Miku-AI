@@ -2,12 +2,12 @@ use serde::Serialize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use windows::core::PWSTR;
-use windows::Win32::Foundation::CloseHandle;
+use windows::Win32::Foundation::{CloseHandle, RECT};
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+    GetForegroundWindow, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
 };
 
 // Tarea 8.3 (parte 1): qué ventana tiene Sebastián en primer plano -- el
@@ -112,6 +112,41 @@ pub fn ventana_activa() -> Option<ActiveWindowInfo> {
         process_name: t.process_name.clone(),
         seconds_ago: t.last_seen.elapsed().as_secs(),
     })
+}
+
+// D3 (2026-09-28): dónde está en pantalla la ventana en primer plano, para
+// que Miku mire hacia ahí cuando Sebastián cambia de ventana. Centro en px
+// lógicos relativos a la ventana de Miku (igual que cursor_position), más
+// un id de la ventana para saber cuándo cambió. None si es la de Miku.
+#[derive(Serialize)]
+pub struct ForegroundSpot {
+    id: isize,
+    x: f64,
+    y: f64,
+}
+
+#[tauri::command]
+pub fn ventana_activa_lugar(window: tauri::WebviewWindow) -> Option<ForegroundSpot> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return None;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 || pid == std::process::id() {
+            return None;
+        }
+        let mut rect = RECT::default();
+        GetWindowRect(hwnd, &mut rect).ok()?;
+        let origin = window.inner_position().ok()?;
+        let scale = window.scale_factor().ok()?;
+        Some(ForegroundSpot {
+            id: hwnd.0 as isize,
+            x: ((rect.left + rect.right) as f64 / 2.0 - origin.x as f64) / scale,
+            y: ((rect.top + rect.bottom) as f64 / 2.0 - origin.y as f64) / scale,
+        })
+    }
 }
 
 // B3 del plan: cuántos segundos lleva la PC sin teclado ni mouse (en todo
