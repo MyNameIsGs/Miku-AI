@@ -83,7 +83,7 @@ object MikuOverlayWindow {
                     OverlayScreen(
                         phase = phase,
                         onDismiss = {
-                            VoicePlaybackControl.stopCurrent()
+                            VoicePlaybackControl.cancelAll()
                             MikuOverlayState.update(MikuOverlayPhase.Idle)
                         },
                     )

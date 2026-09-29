@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -51,8 +52,10 @@ import com.sebas.mikuai.voice.Resampler
 import com.sebas.mikuai.voice.RvcPipeline
 import com.sebas.mikuai.voice.StaticVoiceCache
 import com.sebas.mikuai.voice.VoicePlaybackControl
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -92,6 +95,8 @@ class WakeWordService : Service() {
 
     private lateinit var engine: WakeWordEngine
     private var audioRecord: AudioRecord? = null
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private val wakeLog by lazy { WakeWordLog(applicationContext, SAMPLE_RATE) }
     private var captureThread: Thread? = null
     @Volatile private var capturing = false
 
@@ -103,6 +108,9 @@ class WakeWordService : Service() {
     private var rvcPipeline: RvcPipeline? = null
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // Pedido de voz en curso y su número (ver cancelCurrentCommand).
+    @Volatile private var commandGen = 0
+    private var commandJob: Job? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var lastDetectionAt = 0L
@@ -165,6 +173,8 @@ class WakeWordService : Service() {
         lastDigestFlushAt = System.currentTimeMillis()
         scheduleBackgroundChecks()
 
+        VoicePlaybackControl.registerCancelCallback { mainHandler.post { cancelCurrentCommand() } }
+
         tts = TextToSpeech(applicationContext) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
             if (ttsReady) {
@@ -212,12 +222,34 @@ class WakeWordService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * Cerrar la pantalla flotante descarta el pedido entero (ver
+     * [VoicePlaybackControl.cancelAll]). La llamada al modelo no se puede
+     * cortar a mitad (OkHttp bloqueante), así que cada pedido lleva el
+     * número [commandGen] con el que empezó: si cambió, su resultado se
+     * tira sin hablar ni guardar nada. Antes, decir "Hey Miku" varias veces
+     * cerrando la tarjeta dejaba varias respuestas en camino, que llegaban
+     * todas después (reportado por Sebastián, 2026-09-28).
+     */
+    private fun cancelCurrentCommand() {
+        commandGen++
+        commandJob?.cancel()
+        commandJob = null
+        try {
+            speechRecognizer?.cancel()
+        } catch (e: Exception) {
+        }
+        MikuOverlayState.update(MikuOverlayPhase.Idle)
+        resumeWakeWordListening() // no hace nada si ya estaba escuchando
+    }
+
     override fun onDestroy() {
         mainHandler.removeCallbacks(backgroundChecksRunnable)
         stopCapture()
         speechRecognizer?.destroy()
         VoicePlaybackControl.registerSystemTts(null)
         VoicePlaybackControl.registerStopCallback(null)
+        VoicePlaybackControl.registerCancelCallback(null)
         tts?.shutdown()
         if (::engine.isInitialized) engine.close()
         rvcPipeline?.close()
@@ -243,19 +275,17 @@ class WakeWordService : Service() {
         )
         val bufferSize = maxOf(minBuf, WakeWordEngine.FRAME_SAMPLES * 2 * 4)
 
-        // MIC (no VOICE_RECOGNITION): en muchos teléfonos, VOICE_RECOGNITION
-        // aplica control automático de ganancia (AGC) a nivel de plataforma
-        // -- eso puede "normalizar" audio de fondo silencioso (música/video
-        // de la compu) a un volumen artificialmente alto antes de que le
-        // llegue al modelo. Desktop captura con `sounddevice` (crudo, sin
-        // AGC) y el modelo se validó ahí -- MIC es la fuente más parecida
-        // a esa captura cruda en Android (a diferencia de VOICE_RECOGNITION
-        // o VOICE_COMMUNICATION, pensadas para aplicar su propio
-        // procesamiento). Sospecha real detrás de por qué "Hey Miku" se
-        // disparaba con audio genérico de la compu incluso a umbral 0.92.
+        // Historia: el 21/09 se eligió MIC (crudo) en vez de VOICE_RECOGNITION
+        // por miedo a que el control automático de ganancia de esas fuentes
+        // amplificara audio de fondo. El 28/09 Sebastián reportó falsos
+        // positivos con video/música del PROPIO celular: VOICE_COMMUNICATION
+        // (la fuente de las videollamadas) trae cancelación de eco, que le
+        // resta al micrófono lo que suena por el parlante del teléfono.
+        // Experimento medido con WakeWordLog (AUDIO_SOURCE_NAME queda en
+        // cada registro): si empeora la detección real, volver a MIC.
         val record = try {
             AudioRecord(
-                MediaRecorder.AudioSource.MIC,
+                AUDIO_SOURCE,
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
@@ -271,10 +301,22 @@ class WakeWordService : Service() {
         }
 
         audioRecord = record
+        // Cancelador de eco explícito, si el teléfono lo tiene (con
+        // VOICE_COMMUNICATION muchos ya lo aplican solos; pedirlo no hace daño).
+        echoCanceler = if (AcousticEchoCanceler.isAvailable()) {
+            try {
+                AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true }
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+        wakeLog.note("captura: fuente=$AUDIO_SOURCE_NAME, cancelador de eco=${echoCanceler?.enabled ?: "no disponible"}")
         capturing = true
         record.startRecording()
 
         recentScores.clear()
+        wakeLog.clear()
+        var framesAbove = 0
         captureThread = thread(name = "miku-wakeword-capture") {
             val chunk = ShortArray(WakeWordEngine.FRAME_SAMPLES)
             while (capturing) {
@@ -301,6 +343,19 @@ class WakeWordService : Service() {
                     // número a ciegas de nuevo.
                     recentScores.addLast(score >= THRESHOLD)
                     while (recentScores.size > CONFIRMATION_FRAMES) recentScores.removeFirst()
+                    wakeLog.add(chunk, score)
+
+                    // Un roce que no llegó a confirmarse: se registra igual
+                    // (ver WakeWordLog), para comprobar que no se pierde
+                    // ningún "Hey Miku" real.
+                    if (score >= THRESHOLD) {
+                        framesAbove++
+                    } else {
+                        if (framesAbove in 1 until CONFIRMATION_FRAMES) {
+                            wakeLog.save(false, THRESHOLD, CONFIRMATION_FRAMES, AUDIO_SOURCE_NAME)
+                        }
+                        framesAbove = 0
+                    }
 
                     val confirmed = recentScores.size == CONFIRMATION_FRAMES && recentScores.all { it }
                     if (confirmed) {
@@ -308,6 +363,8 @@ class WakeWordService : Service() {
                         if (now - lastDetectionAt >= COOLDOWN_MS) {
                             lastDetectionAt = now
                             recentScores.clear()
+                            framesAbove = 0
+                            wakeLog.save(true, THRESHOLD, CONFIRMATION_FRAMES, AUDIO_SOURCE_NAME)
                             engine.reset()
                             mainHandler.post { onWakeWordDetected() }
                         }
@@ -332,6 +389,8 @@ class WakeWordService : Service() {
         }
         captureThread?.join(500)
         captureThread = null
+        echoCanceler?.release()
+        echoCanceler = null
         audioRecord?.release()
         audioRecord = null
     }
@@ -418,13 +477,14 @@ class WakeWordService : Service() {
     private fun handleVoiceCommand(text: String) {
         updateNotification(statusText(R.string.wakeword_status_thinking))
 
-        serviceScope.launch {
+        val gen = commandGen
+        commandJob = serviceScope.launch {
             try {
                 val prefs = SecurePrefs(applicationContext)
                 val gh = prefs.getGitHubToken()
                 val or = prefs.getOpenRouterKey()
                 if (gh == null || or == null) {
-                    speakAndReveal(text, getString(R.string.wakeword_no_credentials), cacheKey = "no_credentials")
+                    speakAndReveal(text, getString(R.string.wakeword_no_credentials), cacheKey = "no_credentials", gen = gen)
                     return@launch
                 }
 
@@ -455,6 +515,10 @@ class WakeWordService : Service() {
                     parsed.cleanText
                 }
 
+                // Cerró la pantalla flotante mientras pensaba: se descarta
+                // todo (ni habla ni guarda), ver cancelCurrentCommand.
+                if (gen != commandGen) return@launch
+
                 parsed.savePersonality.forEach { t ->
                     try { repo.appendToFile(memory, "personality", t) } catch (e: Exception) {}
                 }
@@ -479,9 +543,13 @@ class WakeWordService : Service() {
                     }
                 }
 
-                speakAndReveal(text, finalReply) // vacío es un no-op adentro, pero igual reactiva el mic al final
+                speakAndReveal(text, finalReply, gen = gen) // vacío es un no-op adentro, pero igual reactiva el mic al final
+            } catch (e: CancellationException) {
+                throw e // cancelado a propósito: sin aviso de error
             } catch (e: Exception) {
-                speakAndReveal(text, getString(R.string.wakeword_error), cacheKey = "error")
+                if (gen == commandGen) {
+                    speakAndReveal(text, getString(R.string.wakeword_error), cacheKey = "error", gen = gen)
+                }
             }
         }
     }
@@ -512,7 +580,8 @@ class WakeWordService : Service() {
      * respuestas reales del LLM (cacheKey null) nunca se cachean, son
      * distintas cada vez.
      */
-    private fun speakAndReveal(heard: String, reply: String, cacheKey: String? = null) {
+    private fun speakAndReveal(heard: String, reply: String, cacheKey: String? = null, gen: Int = commandGen) {
+        if (gen != commandGen) return // se canceló (ver cancelCurrentCommand): el mic ya se reactivó allá
         if (reply.isBlank()) {
             MikuOverlayState.update(MikuOverlayPhase.Idle)
             resumeWakeWordListening()
@@ -548,6 +617,8 @@ class WakeWordService : Service() {
                             generated
                         }
                     }
+                    // Cerró la pantalla flotante mientras se generaba la voz.
+                    if (gen != commandGen) return@launch
                     // Audio listo -- recién ahora se "manda" el mensaje, con
                     // lo necesario para revelarlo al ritmo del audio.
                     MikuOverlayState.update(
@@ -563,8 +634,10 @@ class WakeWordService : Service() {
                     // El audio YA terminó de sonar -- recién acá es seguro reactivar el mic.
                     MikuOverlayState.update(MikuOverlayPhase.Idle)
                     resumeWakeWordListening()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    speakSystemTtsAndReveal(heard, reply)
+                    if (gen == commandGen) speakSystemTtsAndReveal(heard, reply)
                 }
             }
             return
@@ -862,6 +935,9 @@ class WakeWordService : Service() {
         // problema. Ver el comentario largo en `startCapture()`.
         private const val CONFIRMATION_FRAMES = 3
         private const val COOLDOWN_MS = 3000L
+        // Fuente del micrófono (ver el comentario en `startCapture()`).
+        private const val AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_COMMUNICATION
+        private const val AUDIO_SOURCE_NAME = "VOICE_COMMUNICATION"
         // Cada cuánto correr los chequeos de fondo (correo + Calendar) --
         // balance entre "se entera pronto" y no ametrallar las APIs /
         // batería con el servicio corriendo todo el día. Fácil de ajustar

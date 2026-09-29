@@ -15,6 +15,23 @@ import android.speech.tts.TextToSpeech
 object VoicePlaybackControl {
     @Volatile private var activeTts: TextToSpeech? = null
     @Volatile private var onStopRequested: (() -> Unit)? = null
+    @Volatile private var onCancelRequested: (() -> Unit)? = null
+
+    /** Lo registra `WakeWordService`: descarta el pedido de voz en curso. */
+    fun registerCancelCallback(callback: (() -> Unit)?) {
+        onCancelRequested = callback
+    }
+
+    /**
+     * Cerrar la pantalla flotante (la X o tocar afuera): corta el audio Y
+     * descarta el pedido entero -- si Miku todavía estaba escuchando,
+     * pensando o generando la voz, no responde después ni guarda nada.
+     * Antes solo cortaba el audio, y las respuestas llegaban igual.
+     */
+    fun cancelAll() {
+        stopCurrent()
+        onCancelRequested?.invoke()
+    }
 
     fun registerSystemTts(tts: TextToSpeech?) {
         activeTts = tts

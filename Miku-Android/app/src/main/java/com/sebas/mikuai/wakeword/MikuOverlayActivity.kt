@@ -76,7 +76,7 @@ class MikuOverlayActivity : ComponentActivity() {
                 OverlayScreen(
                     phase = phase,
                     onDismiss = {
-                        VoicePlaybackControl.stopCurrent()
+                        VoicePlaybackControl.cancelAll()
                         finish()
                     },
                 )
