@@ -25,5 +25,9 @@ data class ParsedResponse(
     val cleanText: String,
     val savePersonality: List<String>,
     val saveMemories: List<String>,
-    val saveKnowledge: List<String> = emptyList()
+    val saveKnowledge: List<String> = emptyList(),
+    // [ESTADO_ANIMO: mood, cuanto=..., dura=...] (ánimo compartido, ver SharedMood.kt).
+    val moodPush: MoodPush? = null,
 )
+
+data class MoodPush(val mood: String, val amount: String?, val duration: String?)

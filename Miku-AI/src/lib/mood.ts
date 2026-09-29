@@ -13,6 +13,7 @@ import {
   NEUTRAL_STATE,
   VALID_MOODS,
 } from "./moodModel";
+import { fetchNewerSharedMood, publishSharedMood, sharedMoodEnabled } from "./sharedMood";
 
 export { VALID_MOODS };
 export type { Mood, MoodLevel };
@@ -27,6 +28,11 @@ const LOG_KEY = "moodLog";
 const LOG_MAX = 200;
 // Empujones recientes (para acostumbrarse y hartarse): solo en memoria.
 const HISTORY_KEEP_MS = 15 * 60 * 1000;
+// Ánimo compartido con el celular (ver sharedMood.ts): cada cuánto se mira
+// si el otro lado tiene uno más nuevo, y cuánto se agrupan los cambios
+// propios antes de publicarlos (un toque no es una escritura en GitHub).
+const SHARED_CHECK_MS = 5 * 60 * 1000;
+const SHARED_PUBLISH_DELAY_MS = 20 * 1000;
 
 // Qué le cambió el ánimo: algo de la charla, un tacto, o se apagó solo.
 export type MoodOrigin = "charla" | "tacto" | "se apagó solo";
@@ -44,6 +50,8 @@ let state: MoodState = NEUTRAL_STATE;
 let history: { source: string; at: number }[] = [];
 let loaded = false;
 let lastShownMood: Mood = "neutral";
+let publishTimer: number | null = null;
+let sharedSyncStarted = false;
 
 // Quién quiere enterarse al instante de un cambio (la píldora de la barra).
 const listeners = new Set<(mood: Mood) => void>();
@@ -115,12 +123,57 @@ export function describeCurrentMood(): string {
   return describeMood(state, Date.now());
 }
 
+async function saveLocal() {
+  try {
+    const store = await load(".settings.dat", { autoSave: false });
+    await store.set(STORE_KEY, state);
+    await store.save();
+  } catch (err) {
+    console.error("Error guardando el ánimo:", err);
+  }
+}
+
+// El ánimo que llegó del otro lado (más nuevo que el de acá).
+async function adopt(remote: MoodState, from: string) {
+  state = { mood: remote.mood, intensity: remote.intensity, halfLifeMs: remote.halfLifeMs, setAt: remote.setAt };
+  const shown = currentMood(state, Date.now());
+  lastShownMood = shown;
+  listeners.forEach((listener) => listener(shown));
+  console.log(`[Ánimo] ${describeMood(state, Date.now())} (desde ${from})`);
+  await saveLocal();
+}
+
+// Al arrancar y cada SHARED_CHECK_MS: ¿el celular tiene uno más nuevo?
+function startSharedSync() {
+  if (sharedSyncStarted || !sharedMoodEnabled()) return;
+  sharedSyncStarted = true;
+  const check = () =>
+    fetchNewerSharedMood(state)
+      .then((remote) => remote && adopt(remote, remote.device === "celular" ? "el celular" : "GitHub"))
+      .catch((err) => console.warn("[Ánimo] No se pudo leer el ánimo compartido:", err));
+  check();
+  window.setInterval(check, SHARED_CHECK_MS);
+}
+
+// Publica el de la PC unos segundos después del último cambio.
+function schedulePublish() {
+  if (!sharedMoodEnabled()) return;
+  if (publishTimer !== null) window.clearTimeout(publishTimer);
+  publishTimer = window.setTimeout(() => {
+    publishTimer = null;
+    publishSharedMood(state)
+      .then((newer) => newer && adopt(newer, "el celular"))
+      .catch((err) => console.warn("[Ánimo] No se pudo publicar el ánimo compartido:", err));
+  }, SHARED_PUBLISH_DELAY_MS);
+}
+
 export async function getCurrentMood(): Promise<Mood> {
   if (!loaded) {
     const store = await load(".settings.dat", { autoSave: false });
     state = fromStored(await store.get(STORE_KEY));
     lastShownMood = currentMood(state, Date.now());
     loaded = true;
+    startSharedSync();
   }
   return getCachedMood();
 }
@@ -157,13 +210,8 @@ export async function pushMood(
   const level = describeMood(state, now);
   console.log(`[Ánimo] ${level} (por ${origin}: ${push.mood}, ${push.amount}, ${push.duration}${result.note ? `; ${result.note}` : ""})`);
 
-  try {
-    const store = await load(".settings.dat", { autoSave: false });
-    await store.set(STORE_KEY, state);
-    await store.save();
-  } catch (err) {
-    console.error("Error guardando el ánimo:", err);
-  }
+  await saveLocal();
+  schedulePublish();
   await appendLog({ at: new Date(now).toISOString(), mood: shown, origin, level, source: push.source });
   return result.note;
 }

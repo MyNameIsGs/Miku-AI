@@ -492,11 +492,14 @@ class WakeWordService : Service() {
                 val repo = MikuRepository(gh, or, applicationContext, prefs)
                 val memory = repo.loadMemory()
                 val activePendientes = repo.loadActivePendientes()
-                val prompt = Prompts.buildVoicePrompt(memory, activePendientes)
+                val prompt = Prompts.buildVoicePrompt(memory, activePendientes, repo.loadMoodWords())
                 val raw = repo.chatWithTools(prompt, emptyList(), text) { name, done ->
                     MikuOverlayState.toolEvent(name, done)
                 }
                 val parsed = MarkerParser.parse(raw)
+                // Ánimo compartido: si cambió, se escribe sin frenar la respuesta
+                // (aunque se cancele el pedido: lo que sintió, lo sintió).
+                parsed.moodPush?.let { push -> serviceScope.launch { repo.pushMood(push) } }
 
                 // Idea #8.7: briefing automático al sentarse -- si es la
                 // primera vez que Sebastián habla hoy, se antepone al

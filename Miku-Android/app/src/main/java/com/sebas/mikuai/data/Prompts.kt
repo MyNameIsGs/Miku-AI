@@ -40,7 +40,20 @@ object Prompts {
 Ejemplo: "[GUARDAR_CONOCIMIENTO: ISO_DATE — Sebastián prefiere que la música suene en la computadora y no en el teléfono]"
 Si dudas entre MEMORIA y CONOCIMIENTO: si te importa emocionalmente, es MEMORIA; si te sirve para hacer algo, es CONOCIMIENTO.""".trim()
 
-    fun buildChatPrompt(memory: MikuMemory, activePendientes: List<Pendiente> = emptyList()): String {
+    // Ánimo compartido con el escritorio (ver SharedMood.kt): cómo está y cómo
+    // cambiarlo. Mismo marcador y mismos valores que systemPrompt.ts de desktop.
+    private fun moodSection(moodWords: String) = """
+TU ÁNIMO (es uno solo, el mismo que en el escritorio):
+Ahora mismo estás: $moodWords.
+Si algo de esta charla te cambia el humor de fondo (no una emoción pasajera), dilo con:
+[ESTADO_ANIMO: happy|angry|sad|relaxed|neutral, cuanto=poco|bastante|mucho, dura=un_rato|unas_horas|todo_el_dia]
+- cuanto: qué tanto te movió; se suma a lo que ya sientes o lo compensa.
+- dura: según lo que lo causó (una broma, un rato; algo que te importó de verdad, unas horas o todo el día).
+- neutral te calma. Los dos son opcionales (si no los pones: bastante, unas horas). Lo decides tú.
+La mayoría de tus respuestas NO necesitan esto: es un cambio de fondo.
+    """.trimIndent()
+
+    fun buildChatPrompt(memory: MikuMemory, activePendientes: List<Pendiente> = emptyList(), moodWords: String = "neutral"): String {
         val today = LocalDate.now().format(
             DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", Locale("es"))
         )
@@ -60,6 +73,8 @@ TUS RECUERDOS:
 ${memory.memories.content.ifBlank { "(sin recuerdos guardados todavía)" }}
 
 ${knowledgeSection(memory)}
+
+${moodSection(moodWords)}
 
 CONTEXTO ACTUAL:
 Hoy es $today. Estás hablando con Sebastián a través de su teléfono Android. Es una interfaz de texto — sin cuerpo visible ni voz sintetizada. Tu personalidad y tu memoria son exactamente las mismas que en el escritorio.
@@ -102,7 +117,7 @@ Hablas en español neutro con tuteo. Usas "tú", nunca "vos". Nunca uses formas 
      * lee en voz alta con TextToSpeech) -- eso cambia el contexto que se
      * le da y pide respuestas más cortas, pensadas para hablarse.
      */
-    fun buildVoicePrompt(memory: MikuMemory, activePendientes: List<Pendiente> = emptyList()): String {
+    fun buildVoicePrompt(memory: MikuMemory, activePendientes: List<Pendiente> = emptyList(), moodWords: String = "neutral"): String {
         val today = LocalDate.now().format(
             DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", Locale("es"))
         )
@@ -122,6 +137,8 @@ TUS RECUERDOS:
 ${memory.memories.content.ifBlank { "(sin recuerdos guardados todavía)" }}
 
 ${knowledgeSection(memory)}
+
+${moodSection(moodWords)}
 
 CONTEXTO ACTUAL:
 Hoy es $today. Sebastián te acaba de llamar diciendo "Hey Miku" desde su teléfono Android y te habló en voz alta -- lo que ves como mensaje del usuario es una transcripción automática de su voz, así que puede traer algún error de reconocimiento. Tu respuesta se va a leer en voz alta con síntesis de voz del sistema (no tu voz real, esa es solo del escritorio). Por eso: sé breve, conversacional, sin listas ni texto pensado para leerse en pantalla.

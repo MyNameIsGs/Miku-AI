@@ -11,6 +11,7 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     private val ghApi = GitHubApi(ghToken)
     private val orApi = OpenRouterApi(orKey)
     private val pendientesRepo = PendientesRepository(ghApi)
+    private val sharedMood = SharedMood(ghApi)
     private val voiceHistoryRepo = VoiceHistoryRepository(ghApi)
     private val spotifyAuth = SpotifyAuth(context, prefs)
     private val spotifyApi = SpotifyApi(spotifyAuth)
@@ -18,6 +19,17 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     private val gmailApi = GmailApi(gmailAuth)
     private val calendarAuth = CalendarAuth(context, prefs)
     private val calendarApi = CalendarApi(calendarAuth)
+
+    // Ánimo compartido con el escritorio (ver SharedMood.kt).
+    suspend fun loadMoodWords(): String = sharedMood.describeNow()
+
+    /** Aplica un [ESTADO_ANIMO] de la respuesta. Un fallo no interrumpe la charla. */
+    suspend fun pushMood(push: MoodPush) {
+        try {
+            sharedMood.push(push.mood, push.amount, push.duration)
+        } catch (e: Exception) {
+        }
+    }
 
     suspend fun loadMemory(): MikuMemory = coroutineScope {
         // En paralelo: con conocimiento.md (Tarea 8.11) son 4 pedidos a

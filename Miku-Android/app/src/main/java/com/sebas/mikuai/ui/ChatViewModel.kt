@@ -196,7 +196,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 while (history.size > 40) { history.removeAt(0); history.removeAt(0) }
 
                 val activePendientes = r.loadActivePendientes()
-                val systemPrompt = Prompts.buildChatPrompt(mem, activePendientes)
+                val systemPrompt = Prompts.buildChatPrompt(mem, activePendientes, r.loadMoodWords())
                 var toolCount = 0
                 val raw          = r.chatWithTools(systemPrompt, history.dropLast(1), promptText, base64Payload) { name, done ->
                     val trail = _uiState.value.toolTrail
@@ -211,6 +211,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 val parsed       = MarkerParser.parse(raw)
+                // Ánimo compartido: si cambió, se escribe sin frenar la respuesta.
+                parsed.moodPush?.let { push -> viewModelScope.launch { r.pushMood(push) } }
 
                 addMessage(UiMessage("miku", parsed.cleanText))
                 history.add(ChatMessage("assistant", parsed.cleanText))
