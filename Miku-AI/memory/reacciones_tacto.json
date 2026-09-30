@@ -1,7 +1,52 @@
 {
   "caricia": {
-    "expression": "happy",
+    "expression": "cara:ojos_felices=0.6,boca_sonrisa=0.38",
     "entries": [
+      {
+        "bone": "rightUpperArm",
+        "axis": "x",
+        "intensity": 33
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "y",
+        "intensity": 51
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "z",
+        "intensity": -100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "y",
+        "intensity": 100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "x",
+        "intensity": 100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "rightHand",
+        "axis": "x",
+        "intensity": 100
+      },
+      {
+        "bone": "rightHand",
+        "axis": "y",
+        "intensity": 100
+      },
+      {
+        "bone": "rightHand",
+        "axis": "z",
+        "intensity": 14
+      },
       {
         "bone": "head",
         "axis": "z",
@@ -36,8 +81,12 @@
     "durationMs": 1800,
     "animated": true,
     "side": null,
-    "createdAt": "2026-09-24T04:34:32.335Z",
+    "createdAt": "2026-09-29T23:44:40.058Z",
+    "moodEffect": "relaxed",
+    "moodAmount": "poco",
+    "moodDuration": "un_rato",
     "rangos": 2,
+    "cuerpo": 2,
     "variantes": {
       "happy": {
         "expression": "cara:ojos_felices=0.7,boca_sonrisa=0.45",
@@ -350,39 +399,38 @@
       {
         "bone": "rightUpperArm",
         "axis": "z",
-        "intensity": 40.4
-      },
-      {
-        "bone": "rightUpperArm",
-        "axis": "y",
-        "intensity": 16.5
+        "intensity": 80
       },
       {
         "bone": "rightUpperArm",
         "axis": "x",
-        "intensity": 1.7
-      },
-      {
-        "bone": "rightLowerArm",
-        "axis": "z",
-        "intensity": 100
-      },
-      {
-        "bone": "rightLowerArm",
-        "axis": "x",
-        "intensity": 15.6
-      },
-      {
-        "bone": "leftShoulder",
-        "axis": "z",
         "intensity": 12
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "y",
+        "intensity": 105
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "x",
+        "intensity": -30
+      },
+      {
+        "bone": "rightHand",
+        "axis": "z",
+        "intensity": -15
       }
     ],
     "durationMs": 500,
     "animated": false,
     "side": "right",
-    "createdAt": "2026-09-24T04:39:33.235Z",
+    "createdAt": "2026-09-30T00:10:52.170Z",
+    "moodEffect": null,
+    "moodAmount": null,
+    "moodDuration": null,
     "rangos": 2,
+    "cuerpo": 2,
     "variantes": {
       "happy": {
         "expression": "cara:ojos_felices=0.75,boca_sonrisa=0.55",

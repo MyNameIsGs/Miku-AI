@@ -132,5 +132,99 @@
     "animated": false,
     "createdAt": "2026-09-29T21:00:57.095Z",
     "rangos": 2
+  },
+  "despertar": {
+    "expression": "cara:ojos_cerrados=0.45,boca_sonrisa=0.38",
+    "entries": [
+      {
+        "bone": "rightUpperArm",
+        "axis": "x",
+        "intensity": 32
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "y",
+        "intensity": 52
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "z",
+        "intensity": -100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "y",
+        "intensity": 100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "x",
+        "intensity": 100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "rightHand",
+        "axis": "x",
+        "intensity": 100
+      },
+      {
+        "bone": "rightHand",
+        "axis": "y",
+        "intensity": 100
+      },
+      {
+        "bone": "rightHand",
+        "axis": "z",
+        "intensity": 14
+      },
+      {
+        "bone": "head",
+        "axis": "x",
+        "intensity": 5
+      },
+      {
+        "bone": "head",
+        "axis": "z",
+        "intensity": 5
+      },
+      {
+        "bone": "neck",
+        "axis": "x",
+        "intensity": 4
+      },
+      {
+        "bone": "neck",
+        "axis": "z",
+        "intensity": 6
+      },
+      {
+        "bone": "chest",
+        "axis": "x",
+        "intensity": 5
+      },
+      {
+        "bone": "spine",
+        "axis": "x",
+        "intensity": 3
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "z",
+        "intensity": -6
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "z",
+        "intensity": 6
+      }
+    ],
+    "durationMs": 2200,
+    "animated": false,
+    "createdAt": "2026-09-30T01:01:45.134Z",
+    "rangos": 2
   }
 }
