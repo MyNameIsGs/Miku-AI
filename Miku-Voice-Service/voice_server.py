@@ -6,6 +6,7 @@ import traceback
 import unicodedata  # Forzar importación previa
 import subprocess
 import json
+import re
 import base64
 import io
 
@@ -132,6 +133,18 @@ WAKE_WORD_LOG_DIR = os.path.join(
 )
 WAKE_WORD_LOG_PRE_FRAMES = 31  # ~2,5 s
 WAKE_WORD_LOG_POST_FRAMES = 8  # ~0,64 s
+
+# Segunda revisión con Whisper (2026-09-29): con audífonos, en una llamada
+# de Discord, el micrófono captaba bajito las voces de sus amigos y el
+# modelo se activaba con frases sin nada en común ("si quieren una
+# pomada", "¡dónde, dónde!", "20 minutos más o menos") -- con 0,99 durante
+# 3+ cuadros, así que ningún umbral lo arreglaba. Whisper (ya cargado, en
+# la GPU, ~130 ms) transcribió bien los "Hey Miku" reales ("¡Ey, Miku!",
+# "Hey Miku, vamos a ir") y ninguno de los 16 falsos decía "Miku". Se
+# transcribe cuando pasaron WAKE_WORD_VERIFY_POST_FRAMES cuadros más (que
+# "Miku" quede entero en el audio), y solo se avisa a la app si lo dice.
+WAKE_WORD_VERIFY_POST_FRAMES = 4  # ~0,32 s
+WAKE_WORD_VERIFY_PATTERN = re.compile(r"\bm\s*[iy]\s*[kcq]+\s*[uo]\b")  # "Miku", "Mi ku", "Miko"; no "económico" ni "mi cuenta"
 
 # El frontend hace polling de este contador (ver /wake-word/poll) -- se
 # incrementa cada vez que se detecta "Hey Miku", en vez de un evento push,
@@ -354,8 +367,15 @@ def _wake_word_loop():
 
     def save_detection_log(entry):
         try:
+            # Detección que pasó a revisión: se espera lo que dijo Whisper
+            # (la primera vez tarda más, está "en frío").
+            if "verify_at" in entry:
+                deadline = time_module.monotonic() + 5
+                while "accepted" not in entry and time_module.monotonic() < deadline:
+                    time_module.sleep(0.05)
             os.makedirs(WAKE_WORD_LOG_DIR, exist_ok=True)
-            base = os.path.join(WAKE_WORD_LOG_DIR, entry["stamp"])
+            suffix = "-sin-miku" if entry.get("accepted") is False else ""
+            base = os.path.join(WAKE_WORD_LOG_DIR, entry["stamp"] + suffix)
             with wave.open(base + ".wav", "wb") as wav_file:
                 wav_file.setnchannels(1)
                 wav_file.setsampwidth(2)
@@ -367,6 +387,7 @@ def _wake_word_loop():
                         "threshold": WAKE_WORD_THRESHOLD,
                         "detection_frame": entry["detection_frame"],
                         "scores": entry["scores"],
+                        "whisper_heard": entry.get("heard"),
                     },
                     f,
                 )
@@ -374,9 +395,42 @@ def _wake_word_loop():
             print("[WAKE_WORD][WARN] No se pudo guardar el registro de la detección:")
             traceback.print_exc()
 
+    # Segunda revisión (ver WAKE_WORD_VERIFY_PATTERN): Whisper transcribe el
+    # audio de la detección y solo se avisa a la app si dice "Miku". Sin
+    # Whisper (no cargó), se avisa igual, como antes.
+    def verify_and_trigger(entry, frames):
+        global wake_word_detection_id
+        heard = None
+        accepted = True
+        if whisper_model is not None:
+            try:
+                audio = np.concatenate(frames).astype(np.float32) / 32768.0
+                segments, _info = whisper_model.transcribe(
+                    audio,
+                    language="es",
+                    beam_size=1,
+                    vad_filter=False,
+                    condition_on_previous_text=False,
+                )
+                heard = " ".join(s.text.strip() for s in segments)
+                plain = "".join(
+                    c for c in unicodedata.normalize("NFD", heard.lower()) if unicodedata.category(c) != "Mn"
+                )
+                accepted = WAKE_WORD_VERIFY_PATTERN.search(plain) is not None
+            except Exception:
+                print("[WAKE_WORD][WARN] Falló la revisión con Whisper, se acepta la detección:")
+                traceback.print_exc()
+        entry["heard"] = heard
+        entry["accepted"] = accepted
+        if accepted:
+            print(f"[WAKE_WORD] Detectado 'Hey Miku' (Whisper oyó: {heard!r})")
+            with wake_word_state_lock:
+                wake_word_detection_id += 1
+        else:
+            print(f"[WAKE_WORD] Descartada: Whisper oyó {heard!r}, no 'Miku'")
+
     def audio_callback(indata, _frames, _time_info, status):
         nonlocal last_trigger_at, pending_log, frames_above
-        global wake_word_detection_id
 
         if status:
             print(f"[WAKE_WORD][WARN] Estado del stream de audio: {status}")
@@ -394,6 +448,11 @@ def _wake_word_loop():
             pending_log["frames"].append(frame.copy())
             pending_log["scores"].append(post_score)
             pending_log["post_left"] -= 1
+            if pending_log.get("verify") and len(pending_log["frames"]) >= pending_log["verify_at"]:
+                pending_log["verify"] = False
+                threading.Thread(
+                    target=verify_and_trigger, args=(pending_log, list(pending_log["frames"])), daemon=True
+                ).start()
             if pending_log["post_left"] <= 0:
                 entry, pending_log = pending_log, None
                 # El score interno queda "pegado" arriba varios segundos
@@ -449,16 +508,26 @@ def _wake_word_loop():
             if now - last_trigger_at >= WAKE_WORD_COOLDOWN_S:
                 frames_above = 0
                 last_trigger_at = now
-                with wake_word_state_lock:
-                    wake_word_detection_id += 1
-                print(f"[WAKE_WORD] Detectado 'Hey Miku' (score={score:.3f})")
+                # Todavía no se avisa a la app: primero la revisión con
+                # Whisper, cuando lleguen unos cuadros más (ver arriba).
+                print(f"[WAKE_WORD] Posible 'Hey Miku' (score={score:.3f}), revisando con Whisper...")
                 pending_log = {
                     "stamp": time_module.strftime("%Y%m%d-%H%M%S"),
                     "frames": list(recent_frames),
                     "scores": list(recent_scores),
                     "detection_frame": len(recent_scores) - 1,
                     "post_left": WAKE_WORD_LOG_POST_FRAMES,
+                    "verify": True,
+                    "verify_at": len(recent_frames) + WAKE_WORD_VERIFY_POST_FRAMES,
                 }
+
+    # La primera transcripción tarda ~1,5 s ("en frío"); se hace una de
+    # prueba ya, para que el primer "Hey Miku" no la pague.
+    if whisper_model is not None:
+        try:
+            list(whisper_model.transcribe(np.zeros(WAKE_WORD_SAMPLE_RATE, dtype=np.float32), language="es", beam_size=1)[0])
+        except Exception:
+            pass
 
     try:
         with sd.InputStream(
