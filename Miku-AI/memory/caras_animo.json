@@ -1,4 +1,5 @@
 {
   "anteriores": {},
-  "happy": "cara:boca_sonrisa=0.3,ojos_felices=0.2,mirar_abajo=0.08"
+  "happy": "cara:boca_sonrisa=0.3,ojos_felices=0.2,mirar_abajo=0.08",
+  "relaxed": "cara:ojos_cerrados=0.55,mirar_abajo=0.18,boca_sonrisa=0.22"
 }
