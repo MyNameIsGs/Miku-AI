@@ -18,5 +18,15 @@
     "ultimoRecordatorio": "2026-10-01T03:49:02.735Z",
     "condicion": null,
     "ultimaRevisionCondicion": null
+  },
+  {
+    "id": "6073a070-4e51-406b-9db0-8bac715fd1d2",
+    "descripcion": "Meta Quest 2 usado (~100$) para regalar a un amigo — Sebastián está viendo si lo compra",
+    "fechaEstimada": "2026-11-02",
+    "creadoEn": "2026-10-02T18:36:35.416Z",
+    "estado": "activo",
+    "ultimoRecordatorio": null,
+    "condicion": null,
+    "ultimaRevisionCondicion": null
   }
 ]

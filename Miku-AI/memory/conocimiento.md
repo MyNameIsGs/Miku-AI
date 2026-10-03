@@ -27,3 +27,5 @@ Sebastián no quiere que le avise de correos de Computrabajo — no les presta a
 2026-10-01 — La entrada de voz de la app Android se activa por error con sonidos ambientales (probado en la mañana); Sebastián va a ajustar los parámetros de voz para evitar falsos positivos
 
 2026-10-02 — En la app Android la entrada funciona por micrófono y no distingue voces: no puedo reconocer quién habla, ni identificarme a mí misma por ahí. Lo que confundí con "escucharme desde el celular" fue un malentendido mío. Para oírme de verdad hace falta que mi voz salga por los parlantes, como en la PC, no por la entrada de micrófono.
+
+2026-10-02 — A Sebastián SÍ le interesa que le avise de correos de eBay (sobre todo compras/regalos que está siguiendo; estaba viendo un Meta Quest 2 usado de ~100$ para regalar a un amigo). Lo único que NO hay que avisarle son los correos de Computrabajo.
