@@ -1308,6 +1308,50 @@
         "moodEffect": "happy",
         "rangos": 2,
         "cuerpo": 2
+      },
+      "relaxed": {
+        "expression": "cara:ojos_cerrados=0.48,boca_sonrisa=0.26",
+        "entries": [
+          {
+            "bone": "head",
+            "axis": "z",
+            "intensity": 9
+          },
+          {
+            "bone": "neck",
+            "axis": "z",
+            "intensity": 6
+          },
+          {
+            "bone": "chest",
+            "axis": "z",
+            "intensity": 5
+          },
+          {
+            "bone": "spine",
+            "axis": "z",
+            "intensity": 4
+          },
+          {
+            "bone": "leftShoulder",
+            "axis": "z",
+            "intensity": -6
+          },
+          {
+            "bone": "rightShoulder",
+            "axis": "z",
+            "intensity": 6
+          }
+        ],
+        "durationMs": 1500,
+        "animated": false,
+        "side": null,
+        "createdAt": "2026-10-13T22:40:06.366Z",
+        "moodEffect": "happy",
+        "moodAmount": "poco",
+        "moodDuration": "un_rato",
+        "rangos": 2,
+        "cuerpo": 2
       }
     }
   },
