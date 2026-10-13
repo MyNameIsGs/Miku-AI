@@ -1,4 +1,34 @@
 {
   "version": 3,
-  "bailes": {}
+  "bailes": {
+    "sin_golpe": {
+      "alGolpe": false,
+      "expression": "cara:ojos_cerrados=0.45,boca_sonrisa=0.28",
+      "entries": [
+        {
+          "bone": "spine",
+          "axis": "z",
+          "intensity": 6
+        },
+        {
+          "bone": "chest",
+          "axis": "z",
+          "intensity": 5
+        },
+        {
+          "bone": "neck",
+          "axis": "z",
+          "intensity": -3
+        },
+        {
+          "bone": "head",
+          "axis": "z",
+          "intensity": -5
+        }
+      ],
+      "durationMs": 4000,
+      "createdAt": "2026-10-13T08:58:43.204Z",
+      "rangos": 2
+    }
+  }
 }

@@ -1,31 +1,76 @@
 {
-  "despertar": {
-    "expression": "cara:ojos_cerrados=0.45,boca_sonrisa=0.38",
+  "dormir": {
+    "expression": "cara:ojos_cerrados=1,boca_sonrisa=0.18",
     "entries": [
+      {
+        "bone": "leftUpperArm",
+        "axis": "x",
+        "intensity": 8
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "y",
+        "intensity": -95
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "z",
+        "intensity": 77
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "y",
+        "intensity": -5
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "x",
+        "intensity": 83
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "leftHand",
+        "axis": "x",
+        "intensity": 33
+      },
+      {
+        "bone": "leftHand",
+        "axis": "y",
+        "intensity": 33
+      },
+      {
+        "bone": "leftHand",
+        "axis": "z",
+        "intensity": 100
+      },
       {
         "bone": "rightUpperArm",
         "axis": "x",
-        "intensity": 32
+        "intensity": 8
       },
       {
         "bone": "rightUpperArm",
         "axis": "y",
-        "intensity": 52
+        "intensity": 95
       },
       {
         "bone": "rightUpperArm",
         "axis": "z",
-        "intensity": -100
+        "intensity": -77
       },
       {
         "bone": "rightLowerArm",
         "axis": "y",
-        "intensity": 100
+        "intensity": 5
       },
       {
         "bone": "rightLowerArm",
         "axis": "x",
-        "intensity": 100
+        "intensity": 83
       },
       {
         "bone": "rightLowerArm",
@@ -35,47 +80,52 @@
       {
         "bone": "rightHand",
         "axis": "x",
-        "intensity": 100
+        "intensity": 33
       },
       {
         "bone": "rightHand",
         "axis": "y",
-        "intensity": 100
+        "intensity": -33
       },
       {
         "bone": "rightHand",
         "axis": "z",
-        "intensity": 14
-      },
-      {
-        "bone": "head",
-        "axis": "x",
-        "intensity": 5
+        "intensity": -100
       },
       {
         "bone": "head",
         "axis": "z",
-        "intensity": 5
+        "intensity": -11
       },
       {
-        "bone": "neck",
+        "bone": "head",
         "axis": "x",
-        "intensity": 4
+        "intensity": -5
       },
       {
         "bone": "neck",
         "axis": "z",
-        "intensity": 6
+        "intensity": -7
       },
       {
-        "bone": "chest",
+        "bone": "neck",
         "axis": "x",
-        "intensity": 5
+        "intensity": -5
       },
       {
         "bone": "spine",
         "axis": "x",
-        "intensity": 3
+        "intensity": -6
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "y",
+        "intensity": -4
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "y",
+        "intensity": 4
       },
       {
         "bone": "leftShoulder",
@@ -86,11 +136,16 @@
         "bone": "rightShoulder",
         "axis": "z",
         "intensity": 6
+      },
+      {
+        "bone": "chest",
+        "axis": "x",
+        "intensity": 4
       }
     ],
-    "durationMs": 2200,
-    "animated": false,
-    "createdAt": "2026-09-30T01:01:45.134Z",
+    "durationMs": 1000,
+    "animated": true,
+    "createdAt": "2026-10-13T10:01:40.958Z",
     "rangos": 2
   }
 }
