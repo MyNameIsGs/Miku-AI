@@ -29,6 +29,35 @@
       "durationMs": 4000,
       "createdAt": "2026-10-13T08:58:43.204Z",
       "rangos": 2
+    },
+    "ritmo_movido": {
+      "alGolpe": true,
+      "expression": "cara:ojos_cerrados=0.35,boca_sonrisa=0.5",
+      "entries": [
+        {
+          "bone": "spine",
+          "axis": "z",
+          "intensity": 10
+        },
+        {
+          "bone": "chest",
+          "axis": "z",
+          "intensity": 8
+        },
+        {
+          "bone": "neck",
+          "axis": "z",
+          "intensity": -7
+        },
+        {
+          "bone": "head",
+          "axis": "z",
+          "intensity": -7
+        }
+      ],
+      "durationMs": 1900,
+      "createdAt": "2026-10-14T01:01:17.505Z",
+      "rangos": 2
     }
   }
 }
