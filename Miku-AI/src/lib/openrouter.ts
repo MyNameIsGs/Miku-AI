@@ -2,6 +2,21 @@ import { CallKind, recordUsage } from "./tokenUsage";
 import { ChatMessage, ToolCall } from "../types";
 import { getToolSchemas, executeTool } from "./tools";
 
+// Una consulta con SOLO mensajes de sistema (diario, avisos de correo,
+// repaso del día, silencios...) hace que DeepSeek siga escribiendo el prompt
+// o razone en voz alta en la respuesta, en vez de contestar: así se colaron
+// al diario pedazos de instrucciones y "Hmm, el usuario me pide...", y en
+// los avisos frases como "no le mencionaré esto". Medido el 2026-10-14 con
+// el prompt real del diario: 4 de 4 mal sin mensaje de usuario, 4 de 4 bien
+// con él. Se agrega uno neutro, que no cambia lo que se le pide.
+const NUDGE_USER_MESSAGE = { role: "user", content: "Responde según las instrucciones." };
+
+function withUserTurn(body: object): object {
+  const messages = (body as { messages?: { role?: string }[] }).messages;
+  if (!Array.isArray(messages) || messages.some((m) => m.role !== "system")) return body;
+  return { ...body, messages: [...messages, NUDGE_USER_MESSAGE] };
+}
+
 export async function fetchOpenRouterWithRetry(
   body: object,
   // kind: para qué es la llamada, para medir cuánto gasta cada tipo (B2,
@@ -30,7 +45,7 @@ export async function fetchOpenRouterWithRetry(
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(withUserTurn(body)),
         signal,
       },
     );
