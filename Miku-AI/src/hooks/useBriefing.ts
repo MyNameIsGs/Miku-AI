@@ -7,6 +7,7 @@ import { listUpcomingEventsAllAccounts } from "../lib/calendar/api";
 import { listRecentMessagesAllAccounts } from "../lib/gmail/api";
 import { buildBriefingPrompt } from "../prompts/briefingPrompt";
 import { fetchOpenRouterWithRetry } from "../lib/openrouter";
+import { stripMarkers } from "../lib/markers";
 import { isStreamModeActive } from "../lib/streamMode";
 
 type UseBriefingParams = {
@@ -68,7 +69,8 @@ export function useBriefing({ speak, voicePitchRef, voiceRateRef }: UseBriefingP
         messages: [{ role: "system", content: prompt }],
       }, { kind: "briefing" });
       const data = await response.json();
-      const reply: string = (data.choices?.[0]?.message?.content ?? "").trim();
+      // Sin [PENSAR] y sin "SILENCIO" (ver stripMarkers).
+      const reply = stripMarkers(data.choices?.[0]?.message?.content ?? "");
 
       if (reply) {
         await speak(reply, voicePitchRef.current, voiceRateRef.current, "neutral");

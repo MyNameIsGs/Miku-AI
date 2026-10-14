@@ -26,6 +26,10 @@ function smoothstep(t: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
+// Movimiento animado (no baile): cuánto se mece como mucho alrededor de la
+// pose, de cada lado -- 15°, o sea un vaivén de 30° en total.
+const ANIMATED_SWAY_MAX_RAD = (15 * Math.PI) / 180;
+
 // El balanceo ambiente de un hueso que se mueve por primera vez entra de a
 // poco, en vez de aparecer de golpe (hasta 1.5°) en el primer cuadro.
 const SWAY_FADE_IN_MS = 1000;
@@ -199,6 +203,7 @@ export function useMovement({
         duration: parsed.durationMs,
         origin,
         animated: parsed.animated,
+        fullSwing: parsed.fullSwing,
       };
 
       // Idea de Sebastián: un quirk (animado o no) no debería durar para
@@ -449,11 +454,30 @@ export function useMovement({
       if (!boneNode) continue;
 
       let value: number;
-      if (transition.animated) {
-        // Oscila entre el punto de partida y el objetivo, ida y
-        // vuelta, con "duration" como período del ciclo completo -- no
-        // se "termina" nunca, sigue así hasta la próxima orden para
-        // este mismo hueso.
+      if (transition.animated && !transition.fullSwing) {
+        // Llega a la pose (en medio ciclo) y se mece alrededor de ella,
+        // con "duration" como período de cada vaivén -- no se "termina"
+        // nunca, sigue así hasta la próxima orden para este mismo hueso.
+        // Pedido de Sebastián: antes el vaivén iba de punta a punta,
+        // del reposo al objetivo, y una pose grande (la mano en la mejilla
+        // mientras la acarician) subía y bajaba el brazo entero sin parar.
+        // Ahora el vaivén mide como mucho ANIMATED_SWAY_MAX_RAD de cada
+        // lado; un movimiento chico (ladear la cabeza) se ve igual que antes.
+        const elapsed = now - transition.startTime;
+        const approachMs = transition.duration / 2;
+        const travel = transition.targetValue - transition.startValue;
+        if (elapsed < approachMs) {
+          value = transition.startValue + travel * smoothstep(elapsed / approachMs);
+        } else {
+          const amplitude = Math.sign(travel) * Math.min(Math.abs(travel) / 2, ANIMATED_SWAY_MAX_RAD);
+          const cyclePos = ((elapsed - approachMs) % transition.duration) / transition.duration;
+          // Arranca en el objetivo (cos(0) = 1) y se mece hacia el punto de partida.
+          value = transition.targetValue - amplitude + amplitude * Math.cos(cyclePos * 2 * Math.PI);
+        }
+      } else if (transition.animated) {
+        // Bailes (fullSwing): oscila entre el punto de partida y el
+        // objetivo, ida y vuelta, con "duration" como período del ciclo
+        // completo. La fase la usa useMusicSway para caer en el golpe.
         const cyclePos =
           ((now - transition.startTime) % transition.duration) /
           transition.duration;

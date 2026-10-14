@@ -347,3 +347,18 @@ describe("parseVoiceMarkers", () => {
     expect(parseVoiceMarkers("[VOZ_VOLUMEN: 60]", 0, 0).volume).toBe(0.6);
   });
 });
+
+describe("pensamientos y silencio", () => {
+  it("[PENSAR] no se dice", () => {
+    expect(stripMarkers("[PENSAR: no le cuento lo del boletín] Te llegó un correo de tu jefe.")).toBe(
+      "Te llegó un correo de tu jefe.",
+    );
+  });
+  it("una respuesta que es solo SILENCIO queda vacía", () => {
+    expect(stripMarkers("SILENCIO")).toBe("");
+    expect(stripMarkers("[PENSAR: nada importante] SILENCIO.")).toBe("");
+  });
+  it("la palabra silencio dentro de una frase se dice", () => {
+    expect(stripMarkers("Me gusta el silencio de la noche.")).toBe("Me gusta el silencio de la noche.");
+  });
+});

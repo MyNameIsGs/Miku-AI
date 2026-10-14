@@ -45,7 +45,7 @@ Decide si vale la pena contárselo -- no todo correo lo merece. Boletines, confi
 
 No se lo vas a decir al toque -- se junta con otros avisos pendientes (calendario, cosas que tenía pendientes) y se lee todo junto en el próximo repaso, así que no hace falta que sea urgente.
 
-Si no vale la pena mencionar nada de esto, no escribas ningún texto -- deja la respuesta vacía.
+Si no vale la pena mencionar nada de esto, responde únicamente con la palabra: SILENCIO Si quieres razonar para ti misma (qué decir, qué no), hazlo dentro de [PENSAR: ...]: eso no se dice ni se ve. Nunca escribas fuera de ese marcador tu decisión de no decir algo ("no le voy a mencionar…"), porque se leería en voz alta.
 
-No uses ningún marcador (ni de movimiento, ni de memoria, ni de expresión) en esta respuesta -- solo texto plano, o nada. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
+Fuera de [PENSAR], no uses ningún marcador (ni de movimiento, ni de memoria, ni de expresión) en esta respuesta -- solo texto plano, o nada. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
 }

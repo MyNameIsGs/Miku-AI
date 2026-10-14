@@ -15,7 +15,8 @@ use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 // abierto); encima de una, se vuelve normal y los botones funcionan.
 //
 // Las zonas las manda el frontend en píxeles CSS relativos a la ventana
-// (ver App.tsx); acá se pasan a píxeles físicos con el factor de escala.
+// (ver App.tsx); acá se pasan a píxeles físicos con el factor de escala y
+// el zoom de la app (UI_ZOOM en lib.rs).
 #[derive(Deserialize, Clone, Copy)]
 pub struct Region {
     x: f64,
@@ -45,8 +46,8 @@ fn cursor_over_region(window: &WebviewWindow, regions: &[Region]) -> bool {
     let (Ok(origin), Ok(scale)) = (window.inner_position(), window.scale_factor()) else {
         return false;
     };
-    let x = (cursor.x - origin.x) as f64 / scale;
-    let y = (cursor.y - origin.y) as f64 / scale;
+    let x = (cursor.x - origin.x) as f64 / scale / crate::UI_ZOOM;
+    let y = (cursor.y - origin.y) as f64 / scale / crate::UI_ZOOM;
     regions
         .iter()
         .any(|r| x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
@@ -61,7 +62,13 @@ fn start_watcher(window: WebviewWindow) {
                 Ok(s) => (s.enabled, s.regions.clone()),
                 Err(_) => (false, Vec::new()),
             };
-            let over_region = enabled && cursor_over_region(&window, &regions);
+            // Escondida (Minimizar / modo juego, ver game_mode.rs) o
+            // minimizada: el cursor pasando por donde estaba no cuenta. Sin
+            // esto, con Miku bloqueada la barra se activaba igual estando
+            // escondida, al pasar el mouse por esa zona de la pantalla.
+            let on_screen = window.is_visible().unwrap_or(false)
+                && !window.is_minimized().unwrap_or(false);
+            let over_region = enabled && on_screen && cursor_over_region(&window, &regions);
             let want_ignore = enabled && !over_region;
             if applied_ignore != Some(want_ignore) {
                 let _ = window.set_ignore_cursor_events(want_ignore);
@@ -87,8 +94,8 @@ pub fn cursor_position(window: WebviewWindow) -> Option<(f64, f64)> {
     let origin = window.inner_position().ok()?;
     let scale = window.scale_factor().ok()?;
     Some((
-        (cursor.x - origin.x) as f64 / scale,
-        (cursor.y - origin.y) as f64 / scale,
+        (cursor.x - origin.x) as f64 / scale / crate::UI_ZOOM,
+        (cursor.y - origin.y) as f64 / scale / crate::UI_ZOOM,
     ))
 }
 

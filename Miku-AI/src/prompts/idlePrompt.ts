@@ -83,7 +83,7 @@ export function buildIdlePrompt({
   // conviene engordarlo con pendientes lejanos en el tiempo.
   const pendientesNote =
     duePendientes.length > 0
-      ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe -- en ese caso escribe el texto normal (puedes combinarlo con [EXPRESION] si corresponde). No se lo vas a decir al toque, se junta con otros avisos pendientes (correo, calendario) y se lee todo junto en el próximo repaso, así que no hace falta que sea urgente. No es obligatorio; si no te nace decir nada, no escribas texto y sigue con el silencio o un gesto como siempre.\n`
+      ? `\n--- ALGO QUE TENÍAS PENDIENTE ---\n${duePendientes.map((p) => `- ${p.descripcion} (estimado: ${p.fechaEstimada})`).join("\n")}\n\nSi te provoca genuinamente, puedes sacarlo a colación escribiendo lo que le dirías a Sebastián, como si te acordaras de golpe -- en ese caso escribe el texto normal (puedes combinarlo con [EXPRESION] si corresponde). No se lo vas a decir al toque, se junta con otros avisos pendientes (correo, calendario) y se lee todo junto en el próximo repaso, así que no hace falta que sea urgente. No es obligatorio; si no te nace decir nada, no escribas texto y sigue con el silencio o un gesto como siempre. Si quieres razonar para ti misma (qué decir, qué no), hazlo dentro de [PENSAR: ...]: eso no se dice ni se ve. Nunca escribas fuera de ese marcador tu decisión de no decir algo ("no le voy a mencionar…"), porque se leería en voz alta.\n`
       : "";
 
   // Fase 7: quirks propios -- gestos con nombre que ella misma decide
@@ -121,7 +121,7 @@ Puedes crear uno nuevo (o recrear uno que ya existe, lo que lo vuelve a poner en
 
 Misma convención de huesos, ejes e intensidad que [MOVIMIENTO]. Los campos mano_izq/mano_der son opcionales (un preset de mano o uno propio que ya hayas creado); puedes usar solo cuerpo, solo manos, o ambos. Si en la misma respuesta pones [EXPRESION] o [CARA], esa cara queda como parte del quirk y se hace cada vez que se corre.
 
-Si "animado=si", "duracion" es cuánto dura CADA vaivén completo (ida y vuelta), y "ciclos" (opcional, entre 1 y 8) es cuántas veces se repite antes de asentarse sola -- después de eso el cuerpo vuelve solo a su posición de reposo, no se queda oscilando para siempre. Elígelo tú, según qué tan sostenido sientas que debería ser ese gesto: un suspiro breve puede sentirse mejor con 1-2, un tarareo con 4-6. Si no lo incluyes, se usa un valor por defecto moderado.
+Si "animado=si", el cuerpo llega a la pose y se mece un poco alrededor de ella (como mucho 30°, sin volver al reposo en cada vuelta): "duracion" es cuánto dura CADA vaivén completo (ida y vuelta), y "ciclos" (opcional, entre 1 y 8) es cuántas veces se repite antes de asentarse sola -- después de eso el cuerpo vuelve solo a su posición de reposo, no se queda oscilando para siempre. Elígelo tú, según qué tan sostenido sientas que debería ser ese gesto: un suspiro breve puede sentirse mejor con 1-2, un tarareo con 4-6. Si no lo incluyes, se usa un valor por defecto moderado.
 
 Cuando un quirk "todavía evaluando" ya se corrió unas veces y sientes que quedó como querías, confírmalo con:
 

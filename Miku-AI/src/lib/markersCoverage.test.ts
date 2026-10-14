@@ -9,6 +9,7 @@ import { stripMarkers } from "./markers";
 // Un ejemplo realista de cada marcador, tal como lo escribiría ella.
 const EXAMPLES: Record<string, string> = {
   GUARDAR_MEMORIA: "[GUARDAR_MEMORIA: 2026-09-28 — algo]",
+  PENSAR: "[PENSAR: mejor no le cuento lo del correo]",
   GUARDAR_PERSONALIDAD: "[GUARDAR_PERSONALIDAD: algo]",
   GUARDAR_CONOCIMIENTO: "[GUARDAR_CONOCIMIENTO: algo]",
   CORREGIR_CONOCIMIENTO: "[CORREGIR_CONOCIMIENTO: viejo => nuevo]",

@@ -291,14 +291,14 @@ export function useMusicSway({
         Math.abs(option * beatMs - dance.durationMs) < Math.abs(best * beatMs - dance.durationMs) ? option : best,
       );
       const cycleMs = beatsPerCycle * beatMs;
-      scheduleMovement({ entries: dance.entries, durationMs: cycleMs, animated: true }, "idle", HOLD_WHILE_MUSIC_MS);
+      scheduleMovement({ entries: dance.entries, durationMs: cycleMs, animated: true, fullSwing: true }, "idle", HOLD_WHILE_MUSIC_MS);
       for (const key of keys) {
         const transition = boneTransitionsRef.current[key];
         if (transition) transition.startTime = trusted.lastBeatAt - cycleMs * 0.25;
       }
       swayRef.current = { keys, bpm: trusted.bpm, cycleMs, category };
     } else {
-      scheduleMovement({ entries: dance.entries, durationMs: dance.durationMs, animated: true }, "idle", HOLD_WHILE_MUSIC_MS);
+      scheduleMovement({ entries: dance.entries, durationMs: dance.durationMs, animated: true, fullSwing: true }, "idle", HOLD_WHILE_MUSIC_MS);
       swayRef.current = { keys, bpm: 0, cycleMs: dance.durationMs, category };
     }
   }

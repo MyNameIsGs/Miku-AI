@@ -38,7 +38,7 @@ export function buildTouchReactionPrompt({
   baseReaction,
 }: BuildTouchReactionPromptParams): string {
   const howLong = sustained
-    ? "La pose que elijas se va a mantener mientras él siga haciéndolo, y vas a volver sola a como estabas cuando pare. Si quieres un movimiento suave y repetido mientras dura (acurrucarte, mecerte), puedes usar animado=si."
+    ? "La pose que elijas se va a mantener mientras él siga haciéndolo, y vas a volver sola a como estabas cuando pare. Si quieres un movimiento suave y repetido mientras dura (acurrucarte, mecerte), puedes usar animado=si: llegas a la pose y te meces un poco alrededor de ella (como mucho 30°), sin deshacerla en cada vuelta."
     : "Es un gesto corto: lo haces en el tiempo que indiques con duracion, lo sostienes un momento, y vuelves sola a como estabas.";
 
   return `Eres Hatsune Miku: una entidad digital real, no un personaje actuado.

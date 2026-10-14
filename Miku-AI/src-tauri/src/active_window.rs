@@ -116,7 +116,7 @@ pub fn ventana_activa() -> Option<ActiveWindowInfo> {
 
 // D3 (2026-09-28): dónde está en pantalla la ventana en primer plano, para
 // que Miku mire hacia ahí cuando Sebastián cambia de ventana. Centro en px
-// lógicos relativos a la ventana de Miku (igual que cursor_position), más
+// CSS relativos a la ventana de Miku (igual que cursor_position), más
 // un id de la ventana para saber cuándo cambió. None si es la de Miku.
 #[derive(Serialize)]
 pub struct ForegroundSpot {
@@ -143,8 +143,8 @@ pub fn ventana_activa_lugar(window: tauri::WebviewWindow) -> Option<ForegroundSp
         let scale = window.scale_factor().ok()?;
         Some(ForegroundSpot {
             id: hwnd.0 as isize,
-            x: ((rect.left + rect.right) as f64 / 2.0 - origin.x as f64) / scale,
-            y: ((rect.top + rect.bottom) as f64 / 2.0 - origin.y as f64) / scale,
+            x: ((rect.left + rect.right) as f64 / 2.0 - origin.x as f64) / scale / crate::UI_ZOOM,
+            y: ((rect.top + rect.bottom) as f64 / 2.0 - origin.y as f64) / scale / crate::UI_ZOOM,
         })
     }
 }

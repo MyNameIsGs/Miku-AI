@@ -321,9 +321,18 @@ export function parseVoiceMarkers(
   };
 }
 
+// Respuesta que es solo "SILENCIO": la forma de decidir no decir nada en
+// los avisos (correo, repaso del día, pendientes). Antes se le pedía dejar
+// la respuesta vacía y a veces escribía la decisión en vez de callarse
+// ("No le mencionaré esto porque es irrelevante por ahora"), que se leía en
+// voz alta.
+const SILENCE_ONLY = /^\s*SILENCIO[.!]?\s*$/i;
+
 export function stripMarkers(text: string): string {
   // Al final, sin formato markdown (ver lib/speechText.ts): el chat es texto plano.
-  return stripMarkdown(text
+  const clean = stripMarkdown(text
+    // [PENSAR: ...]: lo que piensa para sí misma, nunca se dice ni se ve.
+    .replace(/\[PENSAR:[\s\S]*?\]/gi, "")
     .replace(/\[GUARDAR_PERSONALIDAD:[\s\S]*?\]/g, "")
     .replace(/\[GUARDAR_MEMORIA:[\s\S]*?\]/g, "")
     .replace(/\[GUARDAR_CONOCIMIENTO:[\s\S]*?\]/g, "")
@@ -353,6 +362,7 @@ export function stripMarkers(text: string): string {
     .replace(/\[(NUEVO_BAILE|BAILE|AL_GOLPE|OLVIDAR_BAILE|REDISE[ÑN]AR_BAILE):[\s\S]*?\]/gi, "")
     .replace(/\[MEMORIA_IMPORTANTE:[\s\S]*?\]/gi, "")
     .replace(/\[QUIRK_LISTO:[\s\S]*?\]/gi, "")).trim();
+  return SILENCE_ONLY.test(clean) ? "" : clean;
 }
 
 export interface ParsedMarkersResult {

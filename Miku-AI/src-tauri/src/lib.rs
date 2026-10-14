@@ -20,6 +20,14 @@ mod music_beat;
 mod location;
 mod tray;
 
+// Tamaño de toda la app (Miku, barra y paneles), pedido de Sebastián: que
+// ocupe menos pantalla. Es el zoom del webview -- el diseño sigue midiendo
+// 750x720 px CSS por dentro, y la ventana (tauri.conf.json) es esto mismo
+// por 0.8. Si se cambia, cambiar también el tamaño de la ventana allá.
+// Las coordenadas de pantalla que van al frontend (cursor, zonas de clic,
+// ventana activa) se pasan a px CSS dividiendo por esto.
+pub(crate) const UI_ZOOM: f64 = 0.8;
+
 #[tauri::command]
 fn log_to_terminal(msg: String) {
     println!("{}", msg);
@@ -40,10 +48,23 @@ fn kill_voice_server() {
             .status();
     }
 }
+// git sin ventana de consola: la app es GUI, y sin CREATE_NO_WINDOW cada
+// sync de memoria abría (y cerraba) una ventana de CMD encima de lo que
+// estuviera haciendo Sebastián, por ejemplo en pleno juego.
+fn git_command() -> std::process::Command {
+    let mut cmd = std::process::Command::new("git");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 #[tauri::command]
 fn pull_memory_from_github(repo_root: String) -> Result<(), String> {
     use std::path::PathBuf;
-    use std::process::Command;
 
     if repo_root.is_empty() {
         return Err("VITE_REPO_ROOT no configurado".to_string());
@@ -58,7 +79,7 @@ fn pull_memory_from_github(repo_root: String) -> Result<(), String> {
         .join("memory");
 
     // 1. Pull primero — traer lo más reciente del remoto
-    let pull = Command::new("git")
+    let pull = git_command()
         .args(["-C", &repo_root, "pull", "--rebase", "origin", "main"])
         .output()
         .map_err(|e| format!("git pull: {}", e))?;
@@ -160,7 +181,6 @@ async fn launch_voice_server(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
     use std::path::PathBuf;
-    use std::process::Command;
 
     if repo_root.is_empty() {
         return Err("VITE_REPO_ROOT no configurado".to_string());
@@ -187,12 +207,12 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
         }
     }
 
-    Command::new("git")
+    git_command()
         .args(["-C", &repo_root, "add", "memory/"])
         .output()
         .map_err(|e| format!("git add: {}", e))?;
 
-    let status = Command::new("git")
+    let status = git_command()
         .args(["-C", &repo_root, "diff", "--cached", "--quiet"])
         .status()
         .map_err(|e| format!("git diff: {}", e))?;
@@ -206,12 +226,12 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
         .unwrap_or_default()
         .as_secs();
 
-    Command::new("git")
+    git_command()
         .args(["-C", &repo_root, "commit", "-m", &format!("memory: sync {}", ts)])
         .output()
         .map_err(|e| format!("git commit: {}", e))?;
 
-    let mut push = Command::new("git")
+    let mut push = git_command()
         .args(["-C", &repo_root, "push"])
         .output()
         .map_err(|e| format!("git push: {}", e))?;
@@ -224,12 +244,12 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
     // dos cambiaron las mismas líneas), se cancela sin tocar nada: queda
     // commiteado local y se reintenta en el próximo sync.
     if !push.status.success() {
-        let pull = Command::new("git")
+        let pull = git_command()
             .args(["-C", &repo_root, "pull", "--rebase", "--autostash", "--quiet"])
             .output()
             .map_err(|e| format!("git pull: {}", e))?;
         if !pull.status.success() {
-            let _ = Command::new("git")
+            let _ = git_command()
                 .args(["-C", &repo_root, "rebase", "--abort"])
                 .output();
             return Err(format!(
@@ -237,7 +257,7 @@ fn sync_memory_to_github(repo_root: String) -> Result<(), String> {
                 String::from_utf8_lossy(&pull.stderr)
             ));
         }
-        push = Command::new("git")
+        push = git_command()
             .args(["-C", &repo_root, "push"])
             .output()
             .map_err(|e| format!("git push: {}", e))?;
@@ -275,6 +295,12 @@ pub fn run() {
         // Arrancar con Windows (se prende desde la app instalada, ver Configuración).
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .setup(|app| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(e) = window.set_zoom(UI_ZOOM) {
+                    eprintln!("[VENTANA] No se pudo achicar la app: {e}");
+                }
+            }
             // Ícono en la bandeja de Windows (ver tray.rs).
             if let Err(e) = tray::create(app.handle()) {
                 eprintln!("[BANDEJA] No se pudo crear el ícono: {e}");

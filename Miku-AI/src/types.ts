@@ -7,6 +7,10 @@ export type BoneTransition = {
   duration: number; // si animated=true, se interpreta como período del ciclo
   origin: MovementOrigin;
   animated: boolean;
+  // Solo con animated: vaivén completo entre el punto de partida y el
+  // objetivo (los bailes con música). Sin esto, llega a la pose y se mece
+  // poquito ahí (ver ANIMATED_SWAY_MAX_RAD en useMovement.ts).
+  fullSwing?: boolean;
 };
 
 // Cuándo y adónde debe volver solo un hueso después de un quirk (movimiento idle espontáneo)
@@ -20,6 +24,7 @@ export type ParsedMovement = {
   entries: { bone: string; axis: "x" | "y" | "z"; intensity: number }[];
   durationMs: number;
   animated: boolean;
+  fullSwing?: boolean;
 };
 
 export type FingerKey = "thumb" | "index" | "middle" | "ring" | "pinky";

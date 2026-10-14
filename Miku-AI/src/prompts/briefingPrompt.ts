@@ -64,7 +64,7 @@ ${pendientesList}
 
 Decide si vale la pena decir algo. Si hay algo genuinamente útil (un evento importante hoy o mañana, un correo que parece requerir atención, un pendiente que se acerca), arma UN mensaje breve y natural con tus propias palabras, como si le dijeras "antes de nada, te cuento..." -- nunca leas las listas de arriba tal cual, son solo para que entiendas qué hay. No hace falta mencionar todo, elige lo que de verdad importa.
 
-Si no hay nada que realmente valga la pena (agenda vacía, nada de correo relevante, nada pendiente cerca), no escribas ningún texto -- deja la respuesta vacía. No hace falta un "no tienes nada" todos los días, eso se vuelve ruido.
+Si no hay nada que realmente valga la pena (agenda vacía, nada de correo relevante, nada pendiente cerca), responde únicamente con la palabra: SILENCIO. No hace falta un "no tienes nada" todos los días, eso se vuelve ruido. Si quieres razonar para ti misma (qué decir, qué no), hazlo dentro de [PENSAR: ...]: eso no se dice ni se ve. Nunca escribas fuera de ese marcador tu decisión de no decir algo ("no le voy a mencionar…"), porque se leería en voz alta.
 
-No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
+Fuera de [PENSAR], no uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
 }

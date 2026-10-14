@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "Miku-AI",
-        "width": 750,
-        "height": 720,
+        "width": 600,
+        "height": 576,
         "alwaysOnTop": true,
         "decorations": false,
         "transparent": true,
