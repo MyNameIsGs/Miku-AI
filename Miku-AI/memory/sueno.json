@@ -1,1 +1,180 @@
-{}
+{
+  "dormir": {
+    "expression": "cara:ojos_cerrados=1,boca_sonrisa=0.18",
+    "entries": [
+      {
+        "bone": "head",
+        "axis": "x",
+        "intensity": -5
+      },
+      {
+        "bone": "head",
+        "axis": "z",
+        "intensity": -11
+      },
+      {
+        "bone": "neck",
+        "axis": "x",
+        "intensity": -5
+      },
+      {
+        "bone": "neck",
+        "axis": "z",
+        "intensity": -7
+      },
+      {
+        "bone": "spine",
+        "axis": "x",
+        "intensity": -6
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "y",
+        "intensity": -4
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "y",
+        "intensity": 4
+      },
+      {
+        "bone": "leftUpperArm",
+        "axis": "x",
+        "intensity": 15
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "x",
+        "intensity": 15
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "y",
+        "intensity": -42
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "y",
+        "intensity": 42
+      },
+      {
+        "bone": "leftLowerArm",
+        "axis": "x",
+        "intensity": -70
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "x",
+        "intensity": -70
+      }
+    ],
+    "durationMs": 2500,
+    "animated": false,
+    "createdAt": "2026-10-15T21:00:43.797Z",
+    "rangos": 2
+  },
+  "despertar": {
+    "expression": "cara:ojos_cerrados=0.4,boca_sonrisa=0.32",
+    "entries": [
+      {
+        "bone": "rightUpperArm",
+        "axis": "x",
+        "intensity": 31
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "y",
+        "intensity": 39
+      },
+      {
+        "bone": "rightUpperArm",
+        "axis": "z",
+        "intensity": -100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "y",
+        "intensity": 100
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "x",
+        "intensity": 83
+      },
+      {
+        "bone": "rightLowerArm",
+        "axis": "z",
+        "intensity": 0
+      },
+      {
+        "bone": "rightHand",
+        "axis": "x",
+        "intensity": 100
+      },
+      {
+        "bone": "rightHand",
+        "axis": "y",
+        "intensity": 100
+      },
+      {
+        "bone": "rightHand",
+        "axis": "z",
+        "intensity": 29
+      },
+      {
+        "bone": "head",
+        "axis": "z",
+        "intensity": 6
+      },
+      {
+        "bone": "head",
+        "axis": "x",
+        "intensity": 5
+      },
+      {
+        "bone": "neck",
+        "axis": "z",
+        "intensity": 5
+      },
+      {
+        "bone": "neck",
+        "axis": "x",
+        "intensity": 4
+      },
+      {
+        "bone": "chest",
+        "axis": "x",
+        "intensity": 6
+      },
+      {
+        "bone": "spine",
+        "axis": "x",
+        "intensity": 3
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "z",
+        "intensity": -7
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "z",
+        "intensity": 7
+      },
+      {
+        "bone": "leftShoulder",
+        "axis": "y",
+        "intensity": 2
+      },
+      {
+        "bone": "rightShoulder",
+        "axis": "y",
+        "intensity": -2
+      }
+    ],
+    "durationMs": 2400,
+    "animated": false,
+    "createdAt": "2026-10-15T21:18:15.963Z",
+    "rangos": 2
+  }
+}
