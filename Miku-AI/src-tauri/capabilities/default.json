@@ -18,7 +18,7 @@
     },
     {
       "identifier": "fs:scope-appdata-recursive",
-      "allow": [{ "path": "$APPDATA/memory/**" }]
+      "allow": [{ "path": "$APPDATA/memory/**" }, { "path": "$APPDATA/charlas" }, { "path": "$APPDATA/charlas/**" }]
     },
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",

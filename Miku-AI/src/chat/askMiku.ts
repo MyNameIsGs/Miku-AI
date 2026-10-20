@@ -11,6 +11,7 @@ import { describeCurrentMood, getCurrentMood, getMoodLevel, pushMood } from "../
 import { beginReply, endReply, noteInterruption, noteRevealProgress } from "../lib/talkSignals";
 import { saveChatHistory, toApiMessages } from "../lib/chatHistory";
 import { appendDayTurn } from "../lib/dayLog";
+import { appendConversationTurn } from "../lib/conversationLog";
 import { localIsoDate, spanishDateLabel } from "../lib/dates";
 import { isStreamModeActive } from "../lib/streamMode";
 import { describeGameContext } from "../lib/gameSessions";
@@ -359,7 +360,10 @@ export function createAskMiku(deps: AskMikuDeps) {
       }
       saveChatHistory(conversationHistoryRef.current);
       // Para el diario de la noche (ver lib/diaryDay.ts).
-      appendDayTurn(userMessage === IMAGE_ONLY_MESSAGE ? "(te mandó una imagen)" : userMessage, reply);
+      const userForLog = userMessage === IMAGE_ONLY_MESSAGE ? "(te mandó una imagen)" : userMessage;
+      appendDayTurn(userForLog, reply);
+      // Y al historial completo, que ella busca con buscar_en_charlas.
+      appendConversationTurn(userForLog, reply);
 
       // El texto ya NO se muestra completo de una -- se revela en sync con
       // el audio (ver onReveal en useSpeech.ts), para inmersión. "Pensando..."

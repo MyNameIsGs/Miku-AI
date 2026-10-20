@@ -2,6 +2,7 @@ import { load } from "@tauri-apps/plugin-store";
 import { MAX_HISTORY_TURNS } from "../config/constants";
 import { ChatContent, ChatMessage } from "../types";
 import { appendDayTurn } from "./dayLog";
+import { appendConversationTurn } from "./conversationLog";
 
 // Punto 2 del plan: que no pierda el hilo si la app se cierra y se vuelve a
 // abrir al rato. Se guardan los últimos turnos de la charla y, si el último
@@ -112,4 +113,5 @@ export function rememberSpokenOnOwn(historyRef: { current: ChatMessage[][] }, te
   }
   saveChatHistory(historyRef.current);
   appendDayTurn("", text);
+  appendConversationTurn("", text);
 }

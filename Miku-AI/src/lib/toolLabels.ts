@@ -32,6 +32,7 @@ const LABELS: Record<string, ToolLabel> = {
 
   // Memoria
   leer_mi_diario: { category: "DIARIO", running: "Leyendo su diario…", done: "Leyó su diario" },
+  buscar_en_charlas: { category: "CHARLAS", running: "Buscando en sus charlas…", done: "Buscó en sus charlas" },
 
   // Apps y ventanas
   abrir_aplicacion: { category: "APPS", running: "Abriendo la app…", done: "Abrió la app" },

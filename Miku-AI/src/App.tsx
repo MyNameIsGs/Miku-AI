@@ -78,6 +78,7 @@ import {
 } from "./config/constants";
 import { ToolEvent } from "./lib/openrouter";
 import { uint8ToBase64 } from "./lib/proprioception";
+import { ensureSeeded } from "./lib/conversationLog";
 
 // Franja de la barra, POR ENCIMA de Miku (la ventana es así de más alta
 // que el canvas, ver tauri.conf.json y .miku-canvas en App.css): no le
@@ -612,6 +613,11 @@ function App() {
 
   // Tarea 8.9: diario, a las 23:00 (o al abrir, si anoche estaba apagada).
   useDiary();
+  // Historial completo de charlas (buscar_en_charlas): al abrir, carga lo
+  // que ya había en el registro del diario, una sola vez.
+  useEffect(() => {
+    ensureSeeded().catch((err) => console.error("Error preparando el historial de charlas:", err));
+  }, []);
 
   const avatarState: "idle" | "listening" | "thinking" | "speaking" =
     speechRecognition.listening || speechRecognition.transcribing
