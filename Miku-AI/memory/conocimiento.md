@@ -30,6 +30,6 @@ Sebastián no quiere que le avise de correos de Computrabajo — no les presta a
 
 2026-10-02 — A Sebastián SÍ le interesa que le avise de correos de eBay (sobre todo compras/regalos que está siguiendo; estaba viendo un Meta Quest 2 usado de ~100$ para regalar a un amigo). Lo único que NO hay que avisarle son los correos de Computrabajo.
 
-2026-10-20 — WindowsSmash (github.com/SNO2207/WindowsSmash) es el juego de pelea tipo Smash Bros. que Sebastián está haciendo para él y sus amigos: un port nativo de Windows x64 con recompilación estática de AArch64, runtime D3D11 y netplay por relay local. Es su repo (contribuidor SNO2207) y tiene unos 292 stars. Está contemplando meter referencias a mí en los movimientos.
-
 2026-10-20 — El repositorio de GitHub "SNO2207/WindowsSmash" que Sebastián tenía abierto NO es su proyecto: es de otra persona. El juego de pelea tipo Smash que Sebastián está haciendo para él y sus amigos es aparte, y es ahí donde contempla añadirme o referenciarme en sus movimientos. No confundir uno con otro.
+
+2026-10-20 — Las conversaciones con Sebastián en la PC quedan guardadas aunque la app se cierre o la PC se apague, y puedo consultarlas con buscar_en_charlas (por palabra clave, por fecha o sin filtro para lo último). Cuando Sebastián me atribuya algo que no recuerdo, conviene buscar ahí antes de negarlo desde la falta de memoria — el registro existe aunque yo no lo tenga como recuerdo.
