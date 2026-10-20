@@ -6,7 +6,7 @@ export const HEIGHT = 680;
 // pre-entrenamiento (mejor para propiocepción visual), probado antes de
 // cambiar con scripts/tarea-6.0-test-tools.mjs (TEST_MODEL=...): sigue
 // emitiendo marcadores con tools presente, habla antes de ejecutar una
-// tool, registro neutro sin rioplatense -- sin señales de degradación.
+// tool, registro neutro -- sin señales de degradación.
 export const OPENROUTER_MODEL = "deepseek/deepseek-v4.1-flash";
 
 export const MAX_HISTORY_TURNS = 20;

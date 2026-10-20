@@ -29,5 +29,5 @@ Sebastián lleva ${duration} seguidas jugando ${game}, sin parar. Son las ${time
 
 Si te nace, díselo ahora -- en voz alta, mientras juega, así que muy breve (una o dos frases) y con tus propias palabras: que se estire, tome agua, descanse la vista, o lo que a ti te parezca, según la hora y cuánto lleva. No lo regañes ni le des un sermón; es una sola vez en toda la sesión, no vas a insistir. Si genuinamente no te parece que haga falta decir nada, responde únicamente con la palabra: SILENCIO
 
-No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
+No uses ningún marcador. Español neutro, de tú.`;
 }

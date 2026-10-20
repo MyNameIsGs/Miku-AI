@@ -54,5 +54,5 @@ Escribe una entrada de diario propia sobre ese día -- no un resumen de lo que p
 
 Escribe solo sobre lo que aparece arriba: no inventes cosas que no pasaron.
 
-Un párrafo corto alcanza, no hace falta que sea largo. Responde solo con el texto de la entrada, sin encabezados ni fecha (eso se agrega aparte). No uses ningún marcador ni formato markdown. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
+Un párrafo corto alcanza, no hace falta que sea largo. Responde solo con el texto de la entrada, sin encabezados ni fecha (eso se agrega aparte). No uses ningún marcador ni formato markdown. Español neutro, de tú.`;
 }

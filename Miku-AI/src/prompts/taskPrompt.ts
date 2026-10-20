@@ -26,5 +26,5 @@ Si se cumplió: responde con la palabra CUMPLIDA en la primera línea, y en la l
 
 Si todavía no se cumplió: responde únicamente con la palabra SIGUE_ESPERANDO, sin nada más.
 
-No uses ningún marcador. Español neutro con tuteo, nunca formas rioplatenses (sos, tenés, podés, etc.).`;
+No uses ningún marcador. Español neutro, de tú.`;
 }
