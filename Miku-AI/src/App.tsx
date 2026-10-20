@@ -86,6 +86,13 @@ import { ensureSeeded } from "./lib/conversationLog";
 // click_through.rs). También es de donde se arrastra la ventana.
 const TOOLBAR_STRIP_HEIGHT = 40;
 
+// "25 min", "6 horas": la charla retomada puede ser de hasta un día antes.
+function describeAgo(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? "1 hora" : `${hours} horas`;
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -144,7 +151,7 @@ function App() {
     loadRecentChatHistory().then((recent) => {
       if (!recent || conversationHistoryRef.current.length > 0) return;
       conversationHistoryRef.current = recent.turns;
-      resumedNoteRef.current = `La app se cerró y se volvió a abrir. La charla que ves arriba es de antes de eso (lo último, hace ${recent.minutesAgo} min).`;
+      resumedNoteRef.current = `La app se cerró y se volvió a abrir. La charla que ves arriba es de antes de eso (lo último, hace ${describeAgo(recent.minutesAgo)}).`;
       console.log(`[Charla] Se retomó la charla anterior (${recent.turns.length} turnos, hace ${recent.minutesAgo} min).`);
     });
   }, []);

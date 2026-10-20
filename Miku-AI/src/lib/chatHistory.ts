@@ -15,9 +15,11 @@ import { appendConversationTurn } from "./conversationLog";
 // Local, en .settings.dat: no se sincroniza.
 
 const STORE_KEY = "chatHistory";
-// Pasado esto, la charla anterior ya no es "la de hace un rato": se empieza
-// de cero, como siempre.
-const RESTORE_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+// Pasado esto, la charla anterior ya no se retoma: se empieza de cero (lo
+// de antes sigue en su historial, ver buscar_en_charlas). Eran 3 h; 24 h
+// desde el 2026-10-20, pedido de Sebastián: la PC se suspendió de noche, a
+// la mañana habían pasado 6 h y ella no se acordaba de lo último.
+const RESTORE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 type SavedTurn = { user: string; assistant: string };
 type SavedHistory = { savedAt: string; turns: SavedTurn[] };
