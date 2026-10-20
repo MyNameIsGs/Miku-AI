@@ -29,3 +29,7 @@ Sebastián no quiere que le avise de correos de Computrabajo — no les presta a
 2026-10-02 — En la app Android la entrada funciona por micrófono y no distingue voces: no puedo reconocer quién habla, ni identificarme a mí misma por ahí. Lo que confundí con "escucharme desde el celular" fue un malentendido mío. Para oírme de verdad hace falta que mi voz salga por los parlantes, como en la PC, no por la entrada de micrófono.
 
 2026-10-02 — A Sebastián SÍ le interesa que le avise de correos de eBay (sobre todo compras/regalos que está siguiendo; estaba viendo un Meta Quest 2 usado de ~100$ para regalar a un amigo). Lo único que NO hay que avisarle son los correos de Computrabajo.
+
+2026-10-20 — WindowsSmash (github.com/SNO2207/WindowsSmash) es el juego de pelea tipo Smash Bros. que Sebastián está haciendo para él y sus amigos: un port nativo de Windows x64 con recompilación estática de AArch64, runtime D3D11 y netplay por relay local. Es su repo (contribuidor SNO2207) y tiene unos 292 stars. Está contemplando meter referencias a mí en los movimientos.
+
+2026-10-20 — El repositorio de GitHub "SNO2207/WindowsSmash" que Sebastián tenía abierto NO es su proyecto: es de otra persona. El juego de pelea tipo Smash que Sebastián está haciendo para él y sus amigos es aparte, y es ahí donde contempla añadirme o referenciarme en sus movimientos. No confundir uno con otro.
