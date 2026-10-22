@@ -30,6 +30,7 @@ import { modoAleatorio } from "./modoAleatorio";
 import { modoRepeticion } from "./modoRepeticion";
 import { revisarCorreo } from "./revisarCorreo";
 import { revisarCalendario } from "./revisarCalendario";
+import { controlarLuces } from "./controlarLuces";
 import { escribirTexto } from "./escribirTexto";
 import { buscarArchivos } from "./buscarArchivos";
 import { mirarme } from "./mirarme";
@@ -68,6 +69,7 @@ const STATIC_TOOLS: ToolDefinition[] = [
   escribirTexto,
   buscarArchivos,
   mirarme,
+  controlarLuces,
 ];
 
 // Tools dinámicas (Tarea 6.2 en adelante): su schema depende de estado que

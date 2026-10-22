@@ -20,6 +20,9 @@ const LABELS: Record<string, ToolLabel> = {
   revisar_correo: { category: "CORREO", running: "Revisando tu correo…", done: "Revisó tu correo" },
   revisar_calendario: { category: "CALENDARIO", running: "Revisando tu calendario…", done: "Revisó tu calendario" },
 
+  // Luces RGB
+  controlar_luces: { category: "LUCES", running: "Cambiando las luces…", done: "Cambió las luces" },
+
   // Web
   buscar_en_web: { category: "WEB", running: "Buscando en internet…", done: "Buscó en internet" },
   abrir_url: { category: "WEB", running: "Abriendo la página…", done: "Abrió la página" },

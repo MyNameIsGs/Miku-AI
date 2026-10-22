@@ -19,6 +19,7 @@ mod gmail_auth;
 mod music_beat;
 mod location;
 mod tray;
+mod openrgb;
 
 // Tamaño de toda la app (Miku, barra y paneles), pedido de Sebastián: que
 // ocupe menos pantalla. Es el zoom del webview -- el diseño sigue midiendo
@@ -317,6 +318,8 @@ pub fn run() {
             app_launcher::launch_app_by_path,
             media_control::control_medios,
             media_control::ajustar_volumen,
+            openrgb::rgb_listar,
+            openrgb::rgb_poner_color,
             text_input::escribir_texto,
             window_control::minimizar_ventana,
             window_control::mover_ventana,
