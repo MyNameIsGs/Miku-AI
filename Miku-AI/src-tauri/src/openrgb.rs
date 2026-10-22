@@ -45,6 +45,7 @@ const REQUEST_PROTOCOL_VERSION: u32 = 40;
 const SET_CLIENT_NAME: u32 = 50;
 const UPDATELEDS: u32 = 1050;
 const SETCUSTOMMODE: u32 = 1100;
+const UPDATEMODE: u32 = 1101;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +64,9 @@ pub struct RgbDevice {
     pub leds: u16,
     pub modes: Vec<String>,
     pub active_mode: i32,
+    // Cada modo tal cual vino del servidor, para devolvérselo en UPDATEMODE.
+    #[serde(skip)]
+    raw_modes: Vec<Vec<u8>>,
 }
 
 // Orden de device_type en RGBController.h de OpenRGB.
@@ -349,7 +353,9 @@ fn parse_controller(index: u32, data: &[u8], protocol: u32) -> Result<RgbDevice,
     let num_modes = r.u16()?;
     let active_mode = r.i32()?;
     let mut modes = Vec::with_capacity(num_modes as usize);
+    let mut raw_modes = Vec::with_capacity(num_modes as usize);
     for _ in 0..num_modes {
+        let mode_start = r.pos;
         modes.push(r.string()?);
         r.i32()?; // mode_value
         r.u32()?; // flags
@@ -366,6 +372,7 @@ fn parse_controller(index: u32, data: &[u8], protocol: u32) -> Result<RgbDevice,
         r.u32()?; // color_mode
         let colors = r.u16()? as usize;
         r.skip(colors * 4)?;
+        raw_modes.push(data[mode_start..r.pos].to_vec());
     }
 
     let num_zones = r.u16()?;
@@ -391,7 +398,7 @@ fn parse_controller(index: u32, data: &[u8], protocol: u32) -> Result<RgbDevice,
     }
 
     let leds = r.u16()?;
-    Ok(RgbDevice { index, name, kind: kind_name(device_type).into(), zones, leds, modes, active_mode })
+    Ok(RgbDevice { index, name, kind: kind_name(device_type).into(), zones, leds, modes, active_mode, raw_modes })
 }
 
 async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>, String> {
@@ -410,9 +417,15 @@ pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
 }
 
 // Pone todos los LEDs de los dispositivos elegidos (por índice; vacío =
-// todos) en un color fijo. Primero el modo "directo" (SETCUSTOMMODE), que
-// es el que acepta colores LED por LED. Devuelve los nombres de los que
-// cambió.
+// todos) en un color fijo. Primero el modo "directo", que es el que acepta
+// colores LED por LED. Devuelve los nombres de los que cambió.
+//
+// SETCUSTOMMODE solo no alcanza: en la RAM (ENE) cambia el modo que OpenRGB
+// cree activo pero no se lo manda al hardware, que seguía con su efecto
+// guardado (Rainbow) e ignoraba los colores -- medido en la PC de
+// Sebastián; el micrófono, que solo tiene "Direct", sí cambiaba. Por eso
+// además se manda UPDATEMODE con el modo Direct, como hace la ventana de
+// OpenRGB al elegir un modo.
 #[tauri::command]
 pub async fn rgb_poner_color(r: u8, g: u8, b: u8, dispositivos: Vec<u32>) -> Result<Vec<String>, String> {
     let mut conn = connect().await?;
@@ -423,6 +436,15 @@ pub async fn rgb_poner_color(r: u8, g: u8, b: u8, dispositivos: Vec<u32>) -> Res
             continue;
         }
         conn.send(device.index, SETCUSTOMMODE, &[]).await?;
+        if let Some(direct) = device.modes.iter().position(|m| m.eq_ignore_ascii_case("direct")) {
+            let mode = &device.raw_modes[direct];
+            let size = 4 + 4 + mode.len();
+            let mut payload = Vec::with_capacity(size);
+            payload.extend_from_slice(&(size as u32).to_le_bytes());
+            payload.extend_from_slice(&(direct as i32).to_le_bytes());
+            payload.extend_from_slice(mode);
+            conn.send(device.index, UPDATEMODE, &payload).await?;
+        }
         // data_size (incluye sus propios 4 bytes) + cantidad + un RGBColor
         // por LED: 0x00BBGGRR, o sea bytes R, G, B, 0.
         let size = 4 + 2 + 4 * device.leds as usize;
@@ -462,5 +484,48 @@ mod tests {
     async fn pone_el_turquesa_de_miku() {
         let changed = rgb_poner_color(0x39, 0xC5, 0xBB, vec![]).await.expect("color");
         println!("cambiados: {changed:?}");
+    }
+
+    // Diagnóstico de la RAM: 15 s en rojo reescribiéndolo cada 100 ms (si
+    // otro programa pelea, se ve rojo parpadeando) y 15 s en azul escrito
+    // una sola vez (si otro programa pelea, el azul dura un instante).
+    #[tokio::test]
+    #[ignore]
+    async fn prueba_de_la_ram() {
+        let ram: Vec<u32> = rgb_listar().await.expect("lista").iter()
+            .filter(|d| d.kind == "RAM").map(|d| d.index).collect();
+        println!("RAM: {ram:?}");
+        let started = tokio::time::Instant::now();
+        while started.elapsed() < Duration::from_secs(15) {
+            rgb_poner_color(255, 0, 0, ram.clone()).await.expect("rojo");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        rgb_poner_color(0, 0, 255, ram.clone()).await.expect("azul");
+        tokio::time::sleep(Duration::from_secs(15)).await;
+        println!("listo");
+    }
+
+    // El caso que fallaba: la RAM en un efecto de hardware (Rainbow) y
+    // después un color fijo. Debe verse arcoíris 5 s, rojo 10 s y azul 10 s.
+    #[tokio::test]
+    #[ignore]
+    async fn desde_rainbow() {
+        let mut conn = connect().await.expect("conexión");
+        for d in all_devices(&mut conn).await.expect("lista").iter().filter(|d| d.kind == "RAM") {
+            let idx = d.modes.iter().position(|m| m == "Rainbow").expect("modo Rainbow");
+            let mode = &d.raw_modes[idx];
+            let size = 8 + mode.len();
+            let mut payload = (size as u32).to_le_bytes().to_vec();
+            payload.extend_from_slice(&(idx as i32).to_le_bytes());
+            payload.extend_from_slice(mode);
+            conn.send(d.index, UPDATEMODE, &payload).await.expect("rainbow");
+        }
+        let _ = conn.stream.flush().await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        println!("cambiados: {:?}", rgb_poner_color(255, 0, 0, vec![0, 1]).await.expect("rojo"));
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        rgb_poner_color(0, 0, 255, vec![0, 1]).await.expect("azul");
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        println!("listo");
     }
 }
