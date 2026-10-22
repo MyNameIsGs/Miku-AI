@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Emitter, WebviewWindow};
+use tauri::WebviewWindow;
 use windows::Win32::Foundation::POINT;
 use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
@@ -11,8 +11,9 @@ use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 // bloqueada tampoco se podía usar la barra -- solo destrabar con
 // Ctrl+Shift+M. Técnica habitual para esto: vigilar el cursor cada ~30 ms
 // y dejar la ventana transparente a los clics SOLO mientras el cursor no
-// esté sobre una zona interactiva (la franja de la barra, un panel
-// abierto); encima de una, se vuelve normal y los botones funcionan.
+// esté sobre una zona interactiva (un panel abierto); encima de una, se
+// vuelve normal y los botones funcionan. La barra ya no es zona: bloqueada,
+// no aparece (ver App.tsx).
 //
 // Las zonas las manda el frontend en píxeles CSS relativos a la ventana
 // (ver App.tsx); acá se pasan a píxeles físicos con el factor de escala y
@@ -72,10 +73,6 @@ fn start_watcher(window: WebviewWindow) {
             let want_ignore = enabled && !over_region;
             if applied_ignore != Some(want_ignore) {
                 let _ = window.set_ignore_cursor_events(want_ignore);
-                // Con la ventana ignorando el mouse, el frontend no recibe
-                // eventos de hover: se le avisa por acá para mostrar u
-                // ocultar la barra.
-                let _ = window.emit("click-through-hover", enabled && over_region);
                 applied_ignore = Some(want_ignore);
             }
             std::thread::sleep(POLL_INTERVAL);

@@ -3,9 +3,10 @@
 // encontrarla). Siempre visible, con el ícono de la app (el cebollín).
 //
 // - Clic: la esconde o la trae (lo mismo que Ctrl+Shift+H, con su animación).
-// - Menú (clic derecho): mostrar/esconder, y Salir.
+// - Menú (clic derecho): mostrar/esconder, bloquear/desbloquear, y Salir.
 //
-// Las dos cosas las hace el frontend (eventos "tray-toggle" y "tray-quit"):
+// Todo lo hace el frontend (eventos "tray-toggle", "tray-click-through" y
+// "tray-quit"):
 // esconder tiene animación, y salir tiene que cerrar como el botón de la
 // barra (apaga el servidor de voz; al cerrar la ventana se sincroniza la
 // memoria). Si el frontend no responde, "Salir" cierra igual a los 8 s.
@@ -17,8 +18,10 @@ use tauri::{AppHandle, Emitter};
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, "toggle", "Mostrar / esconder a Miku", true, None::<&str>)?;
+    // Con Miku bloqueada la barra no aparece: esto (o Ctrl+Shift+M) la destraba.
+    let lock = MenuItem::with_id(app, "click-through", "Bloquear / desbloquear (Ctrl+Shift+M)", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Salir", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&toggle, &quit])?;
+    let menu = Menu::with_items(app, &[&toggle, &lock, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("miku")
         .tooltip("Miku")
@@ -27,6 +30,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "toggle" => {
                 let _ = app.emit("tray-toggle", ());
+            }
+            "click-through" => {
+                let _ = app.emit("tray-click-through", ());
             }
             "quit" => {
                 let _ = app.emit("tray-quit", ());

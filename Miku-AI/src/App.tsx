@@ -80,11 +80,6 @@ import { ToolEvent } from "./lib/openrouter";
 import { uint8ToBase64 } from "./lib/proprioception";
 import { ensureSeeded } from "./lib/conversationLog";
 
-// Franja de la barra, POR ENCIMA de Miku (la ventana es así de más alta
-// que el canvas, ver tauri.conf.json y .miku-canvas en App.css): no le
-// tapa la cabeza, y con Miku bloqueada sigue siendo usable (ver
-// click_through.rs). También es de donde se arrastra la ventana.
-const TOOLBAR_STRIP_HEIGHT = 40;
 
 // "25 min", "6 horas": la charla retomada puede ser de hasta un día antes.
 function describeAgo(minutes: number): string {
@@ -294,10 +289,12 @@ function App() {
   }, [freeCamera]);
 
   // Click-through por zonas (ver click_through.rs): con Miku bloqueada,
-  // la ventana deja pasar los clics salvo sobre la franja de la barra (por
-  // encima de Miku) y los paneles abiertos, que siguen usables. Las zonas
-  // se recalculan cada medio segundo por si un panel cambia de tamaño, y
-  // solo se mandan si cambiaron.
+  // la ventana deja pasar los clics salvo sobre los paneles abiertos, que
+  // siguen usables. La barra NO aparece (2026-10-21, pedido de Sebastián:
+  // que apareciera al pasar el mouse se interponía más de lo que ayudaba);
+  // se destraba con Ctrl+Shift+M o desde la bandeja. Las zonas se
+  // recalculan cada medio segundo por si un panel cambia de tamaño, y solo
+  // se mandan si cambiaron.
   const clickThroughRef = useRef(clickThrough);
   useEffect(() => {
     clickThroughRef.current = clickThrough;
@@ -305,9 +302,10 @@ function App() {
       invoke("set_click_through", { enabled: false, regions: [] }).catch(console.error);
       return;
     }
+    setShowToolbar(false);
     let lastSent = "";
     const sendRegions = () => {
-      const regions = [{ x: 0, y: 0, width: window.innerWidth, height: TOOLBAR_STRIP_HEIGHT }];
+      const regions: { x: number; y: number; width: number; height: number }[] = [];
       document
         .querySelectorAll(".m-panel, .controls-panel, .toolbar-menu, .m-dialog-layer, .caption-error, .free-camera-pill")
         .forEach((el) => {
@@ -323,17 +321,6 @@ function App() {
     const id = setInterval(sendRegions, 500);
     return () => clearInterval(id);
   }, [clickThrough]);
-
-  // Con la ventana ignorando el mouse no llegan eventos de hover: Rust
-  // avisa cuándo el cursor entra o sale de una zona interactiva.
-  useEffect(() => {
-    const unlistenPromise = listen<boolean>("click-through-hover", (event) => {
-      if (clickThroughRef.current) setShowToolbar(event.payload);
-    });
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []);
 
   useEffect(() => {
     let isPressed = false;
@@ -405,9 +392,11 @@ function App() {
   useEffect(() => {
     const unlistenToggle = listen("tray-toggle", () => toggleHidden());
     const unlistenQuit = listen("tray-quit", () => closeAppRef.current());
+    const unlistenLock = listen("tray-click-through", () => setClickThrough((v) => !v));
     return () => {
       unlistenToggle.then((unlisten) => unlisten());
       unlistenQuit.then((unlisten) => unlisten());
+      unlistenLock.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -1236,7 +1225,8 @@ function App() {
       className={`app-container ${
         minimizeAnim ? `game-${minimizeAnim}` : gameMode.visual !== "shown" ? `game-${gameMode.visual}` : ""
       }`}
-      onMouseEnter={() => setShowToolbar(true)}
+      // Bloqueada, el mouse sobre un panel abierto tampoco trae la barra.
+      onMouseEnter={() => setShowToolbar(!clickThroughRef.current)}
       onMouseLeave={() => setShowToolbar(false)}
       onDragOver={handleFileDragOver}
       onDragLeave={(e) => {
