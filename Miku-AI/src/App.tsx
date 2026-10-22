@@ -52,6 +52,8 @@ import { useAudioDevices } from "./hooks/useAudioDevices";
 import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
+import { LightsPanel } from "./components/LightsPanel";
+import { restoreLights } from "./lib/lights";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { TopBar, Presence } from "./components/TopBar";
 import { usePresenceMotion } from "./hooks/usePresenceMotion";
@@ -112,6 +114,13 @@ function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [showAppLauncher, setShowAppLauncher] = useState(false);
   const [showQuirksPanel, setShowQuirksPanel] = useState(false);
+  const [showLightsPanel, setShowLightsPanel] = useState(false);
+
+  // Luces RGB: al arrancar, vuelven los colores y tamaños guardados (ver
+  // lib/lights.ts).
+  useEffect(() => {
+    restoreLights().catch((err) => console.error("[Luces]", err));
+  }, []);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const [quirksState, setQuirksState] = useState<QuirksStore>({});
   const [hideResponseText, setHideResponseText] = useState(false);
@@ -1205,6 +1214,7 @@ function App() {
   const configMotion = usePresenceMotion(showConfig, { exitMs: 160 });
   const memoryMotion = usePresenceMotion(showMemoryPanel, { exitMs: 160 });
   const quirksMotion = usePresenceMotion(showQuirksPanel, { exitMs: 160 });
+  const lightsMotion = usePresenceMotion(showLightsPanel, { exitMs: 160 });
   const appsMotion = usePresenceMotion(showAppLauncher, { exitMs: 160 });
 
   const captionMode: CaptionMode | null =
@@ -1260,6 +1270,8 @@ function App() {
           onToggleAppLauncher={() => setShowAppLauncher((v) => !v)}
           showMemoryPanel={showMemoryPanel}
           onToggleMemoryPanel={() => setShowMemoryPanel((v) => !v)}
+          showLightsPanel={showLightsPanel}
+          onToggleLightsPanel={() => setShowLightsPanel((v) => !v)}
           // Quirks se abre desde Configuración: su botón queda marcado.
           showConfig={showConfig || showQuirksPanel}
           onToggleConfig={() => {
@@ -1339,6 +1351,10 @@ function App() {
           onDelete={handleDeleteQuirk}
           onClose={() => setShowQuirksPanel(false)}
         />
+      )}
+
+      {lightsMotion.mounted && (
+        <LightsPanel motion={lightsMotion.phase} onClose={() => setShowLightsPanel(false)} />
       )}
 
       {memoryMotion.mounted && (

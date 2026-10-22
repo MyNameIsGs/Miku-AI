@@ -15,6 +15,7 @@ import {
   IconClose,
   IconConfig,
   IconLock,
+  IconLights,
   IconMemory,
   IconMinimize,
   IconVolume,
@@ -122,6 +123,8 @@ type TopBarProps = {
   onToggleAppLauncher: () => void;
   showMemoryPanel: boolean;
   onToggleMemoryPanel: () => void;
+  showLightsPanel: boolean;
+  onToggleLightsPanel: () => void;
   showConfig: boolean;
   onToggleConfig: () => void;
 
@@ -313,6 +316,15 @@ export function TopBar(props: TopBarProps) {
             title="Memoria"
           >
             <IconMemory />
+          </button>
+          <button
+            className={`toolbar-btn ${props.showLightsPanel ? "active" : ""}`}
+            onClick={props.onToggleLightsPanel}
+            aria-label="Luces"
+            aria-pressed={props.showLightsPanel}
+            title="Luces de la PC"
+          >
+            <IconLights />
           </button>
           <button
             className={`toolbar-btn ${props.showConfig ? "active" : ""}`}

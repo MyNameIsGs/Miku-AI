@@ -326,6 +326,8 @@ pub fn run() {
             media_control::ajustar_volumen,
             openrgb::rgb_listar,
             openrgb::rgb_poner_color,
+            openrgb::rgb_pintar_zona,
+            openrgb::rgb_redimensionar_zona,
             text_input::escribir_texto,
             window_control::minimizar_ventana,
             window_control::mover_ventana,

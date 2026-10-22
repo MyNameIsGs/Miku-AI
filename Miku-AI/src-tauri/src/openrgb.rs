@@ -43,15 +43,25 @@ const REQUEST_CONTROLLER_COUNT: u32 = 0;
 const REQUEST_CONTROLLER_DATA: u32 = 1;
 const REQUEST_PROTOCOL_VERSION: u32 = 40;
 const SET_CLIENT_NAME: u32 = 50;
+const RESIZEZONE: u32 = 1000;
 const UPDATELEDS: u32 = 1050;
+const UPDATEZONELEDS: u32 = 1051;
 const SETCUSTOMMODE: u32 = 1100;
 const UPDATEMODE: u32 = 1101;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RgbZone {
+    pub index: u32,
     pub name: String,
     pub leds: u32,
+    // Rango de LEDs que acepta. En los conectores ARGB de la placa es
+    // distinto (0 hasta lo que soporte): la placa no sabe qué hay enchufado
+    // y hay que decirle cuántos LEDs tiene (RESIZEZONE).
+    pub leds_min: u32,
+    pub leds_max: u32,
+    // Dónde empieza esta zona dentro de la lista de LEDs del dispositivo.
+    pub start: u32,
 }
 
 #[derive(Serialize, Clone)]
@@ -243,6 +253,17 @@ pub async fn ensure_server() -> Result<bool, String> {
     if server_up().await {
         return Ok(false);
     }
+    // OpenRGB 1.x se instala también como servicio de Windows, que corre
+    // como sistema y es el único con permiso para PawnIO (la RAM por
+    // SMBus). Si está instalado se lo espera (al prender la PC tarda en
+    // arrancar) y nunca se abre otro OpenRGB: uno sin administrador no ve la
+    // RAM y muestra el aviso de "I2C/SMBus interfaces failed to initialize".
+    if openrgb_service_installed() {
+        if wait_for_server().await {
+            return Ok(true);
+        }
+        return Err("El servicio de OpenRGB no está corriendo. Se puede arrancar desde Servicios de Windows (\"OpenRGB\"), o reiniciando la PC.".into());
+    }
     // Abierto a mano sin el servidor: abrir otro se pelearía con ese por
     // los mismos dispositivos.
     if !crate::window_control::find_pids_by_process_name("OpenRGB.exe").is_empty() {
@@ -250,14 +271,36 @@ pub async fn ensure_server() -> Result<bool, String> {
     }
     let exe = openrgb_exe().ok_or("No encontré OpenRGB instalado.")?;
     launch_detached(&exe)?;
+    if wait_for_server().await {
+        return Ok(true);
+    }
+    Err("Abrí OpenRGB pero su servidor no arrancó.".into())
+}
+
+async fn wait_for_server() -> bool {
     let started = tokio::time::Instant::now();
     while started.elapsed() < LAUNCH_TIMEOUT {
         tokio::time::sleep(POLL_EVERY).await;
         if server_up().await {
-            return Ok(true);
+            return true;
         }
     }
-    Err("Abrí OpenRGB pero su servidor no arrancó.".into())
+    false
+}
+
+// "sc query OpenRGB" sale con 0 si el servicio existe (corriendo o no).
+fn openrgb_service_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    std::process::Command::new("sc.exe")
+        .args(["query", "OpenRGB"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 // Recién abierto, los dispositivos van apareciendo mientras detecta: se
@@ -377,10 +420,12 @@ fn parse_controller(index: u32, data: &[u8], protocol: u32) -> Result<RgbDevice,
 
     let num_zones = r.u16()?;
     let mut zones = Vec::with_capacity(num_zones as usize);
-    for _ in 0..num_zones {
+    let mut start = 0;
+    for zone_index in 0..num_zones as u32 {
         let zone_name = r.string()?;
         r.i32()?; // tipo
-        r.skip(8)?; // LEDs mín/máx
+        let leds_min = r.u32()?;
+        let leds_max = r.u32()?;
         let leds = r.u32()?;
         let matrix_len = r.u16()? as usize;
         r.skip(matrix_len)?;
@@ -394,7 +439,8 @@ fn parse_controller(index: u32, data: &[u8], protocol: u32) -> Result<RgbDevice,
         if protocol >= 5 {
             r.u32()?; // zone_flags
         }
-        zones.push(RgbZone { name: zone_name, leds });
+        zones.push(RgbZone { index: zone_index, name: zone_name, leds, leds_min, leds_max, start });
+        start += leds;
     }
 
     let leds = r.u16()?;
@@ -410,15 +456,7 @@ async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>, String> {
     Ok(devices)
 }
 
-#[tauri::command]
-pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
-    let mut conn = connect().await?;
-    all_devices(&mut conn).await
-}
-
-// Pone todos los LEDs de los dispositivos elegidos (por índice; vacío =
-// todos) en un color fijo. Primero el modo "directo", que es el que acepta
-// colores LED por LED. Devuelve los nombres de los que cambió.
+// Deja el dispositivo en modo directo, el que acepta colores LED por LED.
 //
 // SETCUSTOMMODE solo no alcanza: en la RAM (ENE) cambia el modo que OpenRGB
 // cree activo pero no se lo manda al hardware, que seguía con su efecto
@@ -426,6 +464,35 @@ pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
 // Sebastián; el micrófono, que solo tiene "Direct", sí cambiaba. Por eso
 // además se manda UPDATEMODE con el modo Direct, como hace la ventana de
 // OpenRGB al elegir un modo.
+async fn set_direct(conn: &mut Connection, device: &RgbDevice) -> Result<(), String> {
+    conn.send(device.index, SETCUSTOMMODE, &[]).await?;
+    if let Some(direct) = device.modes.iter().position(|m| m.eq_ignore_ascii_case("direct")) {
+        let mode = &device.raw_modes[direct];
+        let size = 4 + 4 + mode.len();
+        let mut payload = Vec::with_capacity(size);
+        payload.extend_from_slice(&(size as u32).to_le_bytes());
+        payload.extend_from_slice(&(direct as i32).to_le_bytes());
+        payload.extend_from_slice(mode);
+        conn.send(device.index, UPDATEMODE, &payload).await?;
+    }
+    Ok(())
+}
+
+fn find_device(devices: Vec<RgbDevice>, index: u32) -> Result<RgbDevice, String> {
+    devices
+        .into_iter()
+        .find(|d| d.index == index)
+        .ok_or_else(|| format!("No hay ningún dispositivo con el número {index}."))
+}
+
+#[tauri::command]
+pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
+    let mut conn = connect().await?;
+    all_devices(&mut conn).await
+}
+
+// Pone todos los LEDs de los dispositivos elegidos (por índice; vacío =
+// todos) en un color fijo. Devuelve los nombres de los que cambió.
 #[tauri::command]
 pub async fn rgb_poner_color(r: u8, g: u8, b: u8, dispositivos: Vec<u32>) -> Result<Vec<String>, String> {
     let mut conn = connect().await?;
@@ -435,16 +502,7 @@ pub async fn rgb_poner_color(r: u8, g: u8, b: u8, dispositivos: Vec<u32>) -> Res
         if device.leds == 0 {
             continue;
         }
-        conn.send(device.index, SETCUSTOMMODE, &[]).await?;
-        if let Some(direct) = device.modes.iter().position(|m| m.eq_ignore_ascii_case("direct")) {
-            let mode = &device.raw_modes[direct];
-            let size = 4 + 4 + mode.len();
-            let mut payload = Vec::with_capacity(size);
-            payload.extend_from_slice(&(size as u32).to_le_bytes());
-            payload.extend_from_slice(&(direct as i32).to_le_bytes());
-            payload.extend_from_slice(mode);
-            conn.send(device.index, UPDATEMODE, &payload).await?;
-        }
+        set_direct(&mut conn, device).await?;
         // data_size (incluye sus propios 4 bytes) + cantidad + un RGBColor
         // por LED: 0x00BBGGRR, o sea bytes R, G, B, 0.
         let size = 4 + 2 + 4 * device.leds as usize;
@@ -460,6 +518,59 @@ pub async fn rgb_poner_color(r: u8, g: u8, b: u8, dispositivos: Vec<u32>) -> Res
     // Lo que se manda sin respuesta se va antes de cerrar la conexión.
     let _ = conn.stream.flush().await;
     Ok(changed)
+}
+
+// Pinta una zona (panel Luces): un color por LED, o uno solo para toda la
+// zona.
+#[tauri::command]
+pub async fn rgb_pintar_zona(dispositivo: u32, zona: u32, colores: Vec<[u8; 3]>) -> Result<(), String> {
+    let mut conn = connect().await?;
+    let device = find_device(all_devices(&mut conn).await?, dispositivo)?;
+    let zone = device
+        .zones
+        .iter()
+        .find(|z| z.index == zona)
+        .ok_or_else(|| format!("«{}» no tiene la zona {zona}.", device.name))?;
+    if zone.leds == 0 || colores.is_empty() {
+        return Ok(());
+    }
+    set_direct(&mut conn, &device).await?;
+    let count = zone.leds as usize;
+    let size = 4 + 4 + 2 + 4 * count;
+    let mut payload = Vec::with_capacity(size);
+    payload.extend_from_slice(&(size as u32).to_le_bytes());
+    payload.extend_from_slice(&zona.to_le_bytes());
+    payload.extend_from_slice(&(count as u16).to_le_bytes());
+    for i in 0..count {
+        let [r, g, b] = if colores.len() == 1 { colores[0] } else { colores[i.min(colores.len() - 1)] };
+        payload.extend_from_slice(&[r, g, b, 0]);
+    }
+    conn.send(device.index, UPDATEZONELEDS, &payload).await?;
+    let _ = conn.stream.flush().await;
+    Ok(())
+}
+
+// Cuántos LEDs tiene lo enchufado en una zona que se puede redimensionar
+// (los conectores ARGB de la placa). Devuelve el dispositivo ya cambiado.
+#[tauri::command]
+pub async fn rgb_redimensionar_zona(dispositivo: u32, zona: u32, tamano: u32) -> Result<RgbDevice, String> {
+    let mut conn = connect().await?;
+    let device = find_device(all_devices(&mut conn).await?, dispositivo)?;
+    let zone = device
+        .zones
+        .iter()
+        .find(|z| z.index == zona)
+        .ok_or_else(|| format!("«{}» no tiene la zona {zona}.", device.name))?;
+    if zone.leds_min == zone.leds_max {
+        return Err(format!("La zona «{}» tiene una cantidad fija de LEDs.", zone.name));
+    }
+    let size = tamano.clamp(zone.leds_min, zone.leds_max);
+    let mut payload = Vec::with_capacity(8);
+    payload.extend_from_slice(&(zona as i32).to_le_bytes());
+    payload.extend_from_slice(&(size as i32).to_le_bytes());
+    conn.send(device.index, RESIZEZONE, &payload).await?;
+    let _ = conn.stream.flush().await;
+    conn.controller(dispositivo).await
 }
 
 // Contra un OpenRGB de verdad abierto con --server:
@@ -527,5 +638,18 @@ mod tests {
         rgb_poner_color(0, 0, 255, vec![0, 1]).await.expect("azul");
         tokio::time::sleep(Duration::from_secs(10)).await;
         println!("listo");
+    }
+
+    // Cambia el tamaño del primer conector ARGB de la placa y lo devuelve.
+    #[tokio::test]
+    #[ignore]
+    async fn redimensiona_un_conector() {
+        let board = rgb_listar().await.expect("lista").into_iter().find(|d| d.kind == "placa madre").expect("placa");
+        let zone = board.zones.iter().find(|z| z.leds_min != z.leds_max).expect("zona redimensionable");
+        println!("{}: {} LEDs (rango {}-{})", zone.name, zone.leds, zone.leds_min, zone.leds_max);
+        let after = rgb_redimensionar_zona(board.index, zone.index, 4).await.expect("redimensionar");
+        println!("después: {:?}", after.zones.iter().map(|z| (&z.name, z.leds, z.start)).collect::<Vec<_>>());
+        let back = rgb_redimensionar_zona(board.index, zone.index, zone.leds).await.expect("volver");
+        println!("vuelta: {:?}", back.zones.iter().map(|z| (&z.name, z.leds)).collect::<Vec<_>>());
     }
 }
