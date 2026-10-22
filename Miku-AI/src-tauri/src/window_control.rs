@@ -19,7 +19,7 @@ use xcap::Monitor;
 // primera -- una app puede tener más de una ventana abierta, y "modo foco"
 // además necesita la lista completa para saber cuáles minimizar.
 
-fn find_pids_by_process_name(target_name: &str) -> Vec<u32> {
+pub(crate) fn find_pids_by_process_name(target_name: &str) -> Vec<u32> {
     let mut pids = Vec::new();
     unsafe {
         let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {

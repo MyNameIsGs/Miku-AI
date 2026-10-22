@@ -306,6 +306,12 @@ pub fn run() {
             if let Err(e) = tray::create(app.handle()) {
                 eprintln!("[BANDEJA] No se pudo crear el ícono: {e}");
             }
+            // Luces RGB: deja OpenRGB abierto con su servidor (ver openrgb.rs).
+            tauri::async_runtime::spawn(async {
+                if let Err(e) = openrgb::ensure_server().await {
+                    eprintln!("[LUCES] {e}");
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

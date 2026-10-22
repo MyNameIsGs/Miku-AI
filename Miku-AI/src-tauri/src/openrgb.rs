@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -18,6 +19,12 @@ use tokio::time::timeout;
 //
 // Una conexión por pedido: es localhost y son pocos paquetes, no hace falta
 // mantenerla abierta.
+//
+// Si OpenRGB no está abierto, Miku lo abre ella, minimizado y con el
+// servidor prendido (al arrancar la app y al pedir un color): sin eso, al
+// reiniciar la PC las luces dejaban de responder. Recién abierto tarda unos
+// segundos en detectar los dispositivos (la RAM por SMBus, ~9 s medido en
+// la PC de Sebastián), así que se espera a que la lista deje de crecer.
 
 const SERVER: &str = "127.0.0.1:6742";
 const MAX_PROTOCOL: u32 = 5;
@@ -25,6 +32,12 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const REPLY_TIMEOUT: Duration = Duration::from_secs(4);
 // Un servidor de protocolo 0 no contesta la versión: se espera poco.
 const VERSION_REPLY_TIMEOUT: Duration = Duration::from_millis(800);
+
+// Cuánto se espera a que OpenRGB recién abierto prenda su servidor, y a
+// que termine de detectar los dispositivos.
+const LAUNCH_TIMEOUT: Duration = Duration::from_secs(20);
+const DETECTION_TIMEOUT: Duration = Duration::from_secs(20);
+const POLL_EVERY: Duration = Duration::from_millis(1000);
 
 const REQUEST_CONTROLLER_COUNT: u32 = 0;
 const REQUEST_CONTROLLER_DATA: u32 = 1;
@@ -169,7 +182,106 @@ impl Connection {
 }
 
 fn not_running() -> String {
-    "OpenRGB no está abierto con su servidor (puerto 6742). Hay que abrirlo y prender \"SDK Server\" (o lanzarlo con --server).".into()
+    "OpenRGB no responde en su servidor (puerto 6742).".into()
+}
+
+fn openrgb_exe() -> Option<PathBuf> {
+    ["ProgramFiles", "ProgramFiles(x86)"]
+        .iter()
+        .filter_map(|var| std::env::var(var).ok())
+        .map(|dir| PathBuf::from(dir).join("OpenRGB").join("OpenRGB.exe"))
+        .find(|path| path.exists())
+}
+
+// Abre OpenRGB independiente de Miku: sin heredar NINGÚN handle (con
+// std::process::Command, Rust pasa todos los heredables aunque la salida
+// vaya a null, y quien leía la salida de Miku se quedaba esperando a que
+// OpenRGB se cerrara), sin consola, y sigue abierto si Miku se cierra.
+fn launch_detached(exe: &std::path::Path) -> Result<(), String> {
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        CreateProcessW, CREATE_NEW_PROCESS_GROUP, DETACHED_PROCESS, PROCESS_INFORMATION, STARTUPINFOW,
+    };
+    let mut command_line: Vec<u16> = format!("\"{}\" --server --startminimized", exe.display())
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let startup = STARTUPINFOW { cb: std::mem::size_of::<STARTUPINFOW>() as u32, ..Default::default() };
+    let mut info = PROCESS_INFORMATION::default();
+    unsafe {
+        CreateProcessW(
+            PCWSTR::null(),
+            Some(PWSTR(command_line.as_mut_ptr())),
+            None,
+            None,
+            false,
+            DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            None,
+            PCWSTR::null(),
+            &startup,
+            &mut info,
+        )
+        .map_err(|e| format!("No se pudo abrir OpenRGB: {e}"))?;
+        let _ = CloseHandle(info.hProcess);
+        let _ = CloseHandle(info.hThread);
+    }
+    Ok(())
+}
+
+async fn server_up() -> bool {
+    matches!(timeout(Duration::from_millis(500), TcpStream::connect(SERVER)).await, Ok(Ok(_)))
+}
+
+// Deja el servidor de OpenRGB escuchando. Devuelve true si lo tuvo que
+// abrir recién (entonces todavía puede estar detectando dispositivos).
+pub async fn ensure_server() -> Result<bool, String> {
+    if server_up().await {
+        return Ok(false);
+    }
+    // Abierto a mano sin el servidor: abrir otro se pelearía con ese por
+    // los mismos dispositivos.
+    if !crate::window_control::find_pids_by_process_name("OpenRGB.exe").is_empty() {
+        return Err("OpenRGB está abierto pero sin su servidor: en OpenRGB, pestaña \"SDK Server\", botón \"Start Server\" (o ciérralo y lo abro yo).".into());
+    }
+    let exe = openrgb_exe().ok_or("No encontré OpenRGB instalado.")?;
+    launch_detached(&exe)?;
+    let started = tokio::time::Instant::now();
+    while started.elapsed() < LAUNCH_TIMEOUT {
+        tokio::time::sleep(POLL_EVERY).await;
+        if server_up().await {
+            return Ok(true);
+        }
+    }
+    Err("Abrí OpenRGB pero su servidor no arrancó.".into())
+}
+
+// Recién abierto, los dispositivos van apareciendo mientras detecta: se
+// espera a que la cantidad deje de cambiar (dos revisiones iguales y más de
+// cero).
+async fn wait_for_detection(conn: &mut Connection) -> Result<(), String> {
+    let started = tokio::time::Instant::now();
+    let mut last = conn.controller_count().await?;
+    while started.elapsed() < DETECTION_TIMEOUT {
+        tokio::time::sleep(POLL_EVERY * 2).await;
+        let count = conn.controller_count().await?;
+        if count > 0 && count == last {
+            return Ok(());
+        }
+        last = count;
+    }
+    Ok(())
+}
+
+// Conexión lista para usar: abre OpenRGB si hace falta y, si lo acaba de
+// abrir, espera a que detecte.
+async fn connect() -> Result<Connection, String> {
+    let launched = ensure_server().await?;
+    let mut conn = Connection::open().await?;
+    if launched {
+        wait_for_detection(&mut conn).await?;
+    }
+    Ok(conn)
 }
 
 // Lector secuencial de los datos de un controlador.
@@ -293,7 +405,7 @@ async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>, String> {
 
 #[tauri::command]
 pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
-    let mut conn = Connection::open().await?;
+    let mut conn = connect().await?;
     all_devices(&mut conn).await
 }
 
@@ -303,7 +415,7 @@ pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
 // cambió.
 #[tauri::command]
 pub async fn rgb_poner_color(r: u8, g: u8, b: u8, dispositivos: Vec<u32>) -> Result<Vec<String>, String> {
-    let mut conn = Connection::open().await?;
+    let mut conn = connect().await?;
     let devices = all_devices(&mut conn).await?;
     let mut changed = Vec::new();
     for device in devices.iter().filter(|d| dispositivos.is_empty() || dispositivos.contains(&d.index)) {
