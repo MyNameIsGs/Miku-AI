@@ -2,7 +2,7 @@ import { Dispatch, RefObject, SetStateAction } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { RetryInfo } from "../components/Caption";
 import { ChatContent, ChatContentPart, ChatMessage, ParsedMovement } from "../types";
-import { MAX_HISTORY_TURNS, OPENROUTER_MODEL, POSE_HOLD_MAX_MS } from "../config/constants";
+import { MAX_HISTORY_TURNS, OPENROUTER_MODEL } from "../config/constants";
 import { runToolCallingCycle, ToolEvent } from "../lib/openrouter";
 import { loadMemoryContext } from "../lib/memory";
 import { retrieveKnowledge, takeKnowledgeEditFeedback } from "../lib/knowledge";
@@ -27,6 +27,9 @@ import {
   parseMovementMarker,
   parseVoiceMarkers,
   stripMarkers,
+  gestureHoldMs,
+  gesturePlayMs,
+  playableGesture,
 } from "../lib/markers";
 import { buildSystemPrompt } from "../prompts/systemPrompt";
 import type { useSleep } from "../hooks/useSleep";
@@ -260,16 +263,23 @@ export function createAskMiku(deps: AskMikuDeps) {
       // [VOZ_PITCH], [VOZ_RATE] y [VOZ_VOLUMEN] de esta respuesta.
       const { pitch: messagePitch, rate: messageRate, volume: messageVolume } = parseVoiceMarkers(reply, voicePitch, voiceRate);
 
-      const explicitMovement = parseMovementMarker(reply);
+      // Un gesto de la charla se hace una vez (o "repetir" veces), se
+      // sostiene "mantener" y vuelve al reposo -- nada de vaivén sin fin
+      // (ver playableGesture en markers.ts). La mano que lleva con
+      // [LLEVAR_MANO] y los gestos de los dedos vuelven junto con el cuerpo.
+      const rawMovement = parseMovementMarker(reply);
+      const explicitMovement = rawMovement ? playableGesture(rawMovement) : null;
+      const holdMs = gestureHoldMs(explicitMovement);
+      const bodyPlayMs = explicitMovement ? gesturePlayMs(explicitMovement) : 0;
       // [LLEVAR_MANO]: se resuelve antes de programar nada (sobre la pose
       // final) y se programa aparte; para la foto y la descripción de su
       // propio cuerpo cuenta junto con [MOVIMIENTO].
       const reachMovement = resolveReach(reply, explicitMovement);
       if (explicitMovement) {
-        movement.scheduleMovement(explicitMovement, "response", POSE_HOLD_MAX_MS, true);
+        movement.scheduleMovement(explicitMovement, "response", holdMs, true);
       }
       if (reachMovement) {
-        movement.scheduleMovement(reachMovement, "response", POSE_HOLD_MAX_MS, true);
+        movement.scheduleMovement(reachMovement, "response", Math.max(holdMs, bodyPlayMs + holdMs - reachMovement.durationMs), true);
       }
       const parsedMovement: ParsedMovement | null =
         explicitMovement && reachMovement
@@ -300,7 +310,7 @@ export function createAskMiku(deps: AskMikuDeps) {
             parsedHandGesture.left,
             parsedHandGesture.durationMs,
             "response",
-            POSE_HOLD_MAX_MS,
+            Math.max(holdMs, bodyPlayMs + holdMs - parsedHandGesture.durationMs),
             true,
           );
         }
@@ -310,7 +320,7 @@ export function createAskMiku(deps: AskMikuDeps) {
             parsedHandGesture.right,
             parsedHandGesture.durationMs,
             "response",
-            POSE_HOLD_MAX_MS,
+            Math.max(holdMs, bodyPlayMs + holdMs - parsedHandGesture.durationMs),
             true,
           );
         }
@@ -327,7 +337,7 @@ export function createAskMiku(deps: AskMikuDeps) {
         movement.animatedHandSidesRef.current.right;
 
       const maxDurationMs = Math.max(
-        parsedMovement?.durationMs ?? 0,
+        parsedMovement ? gesturePlayMs(parsedMovement) : 0,
         parsedHandGesture?.durationMs ?? 0,
         0,
       );

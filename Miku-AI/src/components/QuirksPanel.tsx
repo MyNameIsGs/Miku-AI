@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { QuirksStore, StoredQuirk } from "../lib/quirks";
-import { DEFAULT_QUIRK_REVERT_CYCLES } from "../config/constants";
 import { HAND_PRESET_DESCRIPTIONS } from "../config/handPresets";
 import { IconBack, IconCheck, IconClose, IconReload, IconTrash } from "./Icons";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -199,9 +198,14 @@ function describeQuirk(quirk: StoredQuirk): string {
   const parts: string[] = [];
   if (quirk.movement) {
     const bones = [...new Set(quirk.movement.entries.map((e) => boneWord(e.bone)))];
-    const timing = quirk.movement.animated
-      ? `animado, ${seconds(quirk.movement.durationMs)} por ciclo × ${quirk.revertAfterCycles ?? DEFAULT_QUIRK_REVERT_CYCLES}`
-      : seconds(quirk.movement.durationMs);
+    const repeat = quirk.movement.repeat ?? 1;
+    const timing = [
+      seconds(quirk.movement.durationMs),
+      repeat > 1 ? `× ${repeat}` : null,
+      quirk.movement.holdMs !== undefined ? `sostiene ${seconds(quirk.movement.holdMs)}` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
     parts.push(bones.join(" · "), timing);
   }
   if (quirk.handLeft && quirk.handLeft === quirk.handRight) {

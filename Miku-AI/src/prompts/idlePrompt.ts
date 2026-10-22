@@ -117,11 +117,11 @@ ${
 
 Puedes crear uno nuevo (o recrear uno que ya existe, lo que lo vuelve a poner en evaluación) con:
 
-[CREAR_QUIRK: nombre=nombre_que_elijas, hueso.eje=intensidad, duracion=Xs, mano_izq=preset, mano_der=preset, animado=si|no, ciclos=N]
+[CREAR_QUIRK: nombre=nombre_que_elijas, hueso.eje=intensidad, duracion=Xs, mano_izq=preset, mano_der=preset, mantener=Xs, repetir=N]
 
 Misma convención de huesos, ejes e intensidad que [MOVIMIENTO]. Los campos mano_izq/mano_der son opcionales (un preset de mano o uno propio que ya hayas creado); puedes usar solo cuerpo, solo manos, o ambos. Si en la misma respuesta pones [EXPRESION] o [CARA], esa cara queda como parte del quirk y se hace cada vez que se corre.
 
-Si "animado=si", el cuerpo llega a la pose y se mece un poco alrededor de ella (como mucho 30°, sin volver al reposo en cada vuelta): "duracion" es cuánto dura CADA vaivén completo (ida y vuelta), y "ciclos" (opcional, entre 1 y 8) es cuántas veces se repite antes de asentarse sola -- después de eso el cuerpo vuelve solo a su posición de reposo, no se queda oscilando para siempre. Elígelo tú, según qué tan sostenido sientas que debería ser ese gesto: un suspiro breve puede sentirse mejor con 1-2, un tarareo con 4-6. Si no lo incluyes, se usa un valor por defecto moderado.
+Un quirk es un gesto que se hace una vez y vuelve, igual que [MOVIMIENTO]: llegas a la pose en "duracion", la sostienes "mantener" (opcional; si lo omites, lo mismo que tardaste en llegar) y vuelves sola a como estabas. "repetir" (opcional, de 1 a 6) es solo para gestos que de verdad se repiten, como asentir: va a la pose y vuelve N veces, y en la última se queda en la pose. Antes los quirks animados se mecían alrededor de la pose varias veces; eso ya no existe, y los que creaste así ahora se hacen una sola vez. Si alguno quedó raro así, puedes recrearlo como quieras.
 
 Cuando un quirk "todavía evaluando" ya se corrió unas veces y sientes que quedó como querías, confírmalo con:
 

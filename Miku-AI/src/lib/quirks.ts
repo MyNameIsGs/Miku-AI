@@ -16,10 +16,9 @@ export type StoredQuirk = {
   handLeft?: string;
   handRight?: string;
   handDurationMs?: number;
-  // Pedido de Sebastián: cuántos ciclos de vaivén corre un quirk ANIMADO
-  // antes de asentarse solo -- decisión de Miku por quirk (ver
-  // markers.ts), no un número fijo para todos. undefined = usa
-  // DEFAULT_QUIRK_REVERT_CYCLES.
+  // Ya no se usa (era cuántos ciclos de vaivén corría un quirk animado;
+  // desde 2026-10-21 todo quirk se hace una vez, ver playableGesture en
+  // markers.ts). Queda en los quirks viejos guardados.
   revertAfterCycles?: number;
   // La cara del quirk ([EXPRESION] o [CARA] de la misma respuesta con que
   // lo creó, como un guiño), o sin el campo si no tiene.

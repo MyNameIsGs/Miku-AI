@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  gestureHoldMs,
+  gesturePlayMs,
   parseCreateHandGestureMarker,
   parseCreateQuirkMarker,
   parseHandGestureMarker,
@@ -9,11 +11,13 @@ import {
   parseMovementMarker,
   parseQuirkReadyMarker,
   parseVoiceMarkers,
+  playableGesture,
   stripMarkers,
 } from "./markers";
 import { parseFaceMarker, parseRequestedFace, decodeFace } from "./faceParts";
 import { parseReachMarker } from "./reach";
 import {
+  DEFAULT_GESTURE_HOLD_MS,
   DEFAULT_HAND_GESTURE_DURATION_MS,
   DEFAULT_MOVEMENT_DURATION_MS,
   VOICE_PITCH_MAX,
@@ -47,6 +51,20 @@ describe("[MOVIMIENTO]", () => {
       expect(parseMovementMarker(`[MOVIMIENTO: head.x=10, animado=${yes}]`)?.animated).toBe(true);
     }
     expect(parseMovementMarker("[MOVIMIENTO: head.x=10, animado=no]")?.animated).toBe(false);
+  });
+
+  it("lee repetir y mantener, que no cuentan como huesos", () => {
+    const parsed = parseMovementMarker("[MOVIMIENTO: head.x=20, repetir=2, mantener=3s]");
+    expect(parsed?.repeat).toBe(2);
+    expect(parsed?.holdMs).toBe(3000);
+    expect(parsed?.entries).toHaveLength(1);
+  });
+
+  it("un gesto se hace una vez: playableGesture apaga el vaivén y gesturePlayMs cuenta las idas y vueltas", () => {
+    const parsed = parseMovementMarker("[MOVIMIENTO: head.x=20, animado=si, repetir=3, duracion=0.5s]")!;
+    expect(playableGesture(parsed).animated).toBe(false);
+    expect(gesturePlayMs(parsed)).toBe(2500);
+    expect(gestureHoldMs(parseMovementMarker("[MOVIMIENTO: head.x=20]"))).toBe(DEFAULT_GESTURE_HOLD_MS);
   });
 
   it("ignora una duración cero, negativa o ilegible", () => {
@@ -163,23 +181,25 @@ describe("[CREAR_QUIRK] y [QUIRK_LISTO]", () => {
   it("combina cuerpo, manos, duración, animado y ciclos", () => {
     expect(
       parseCreateQuirkMarker(
-        "[CREAR_QUIRK: nombre=tarareo, head.z=20, animado=si, ciclos=4, duracion=3s, mano_izq=paz]",
+        "[CREAR_QUIRK: nombre=asentir, head.x=20, repetir=2, mantener=1.5s, duracion=0.4s, mano_izq=paz]",
       ),
     ).toEqual({
-      name: "tarareo",
-      entries: [{ bone: "head", axis: "z", intensity: 20 }],
-      durationMs: 3000,
-      animated: true,
+      name: "asentir",
+      entries: [{ bone: "head", axis: "x", intensity: 20 }],
+      durationMs: 400,
+      animated: false,
       handLeft: "paz",
       handRight: undefined,
-      revertAfterCycles: 4,
+      repeat: 2,
+      holdMs: 1500,
     });
   });
 
-  it("recorta ciclos a 1-8 (un quirk eterno reabriría el bug de los quirks mezclados)", () => {
-    expect(parseCreateQuirkMarker("[CREAR_QUIRK: nombre=a, head.x=1, ciclos=50]")?.revertAfterCycles).toBe(8);
-    expect(parseCreateQuirkMarker("[CREAR_QUIRK: nombre=a, head.x=1, ciclos=0]")?.revertAfterCycles).toBe(1);
-    expect(parseCreateQuirkMarker("[CREAR_QUIRK: nombre=a, head.x=1]")?.revertAfterCycles).toBeUndefined();
+  it("recorta repetir a 1-6 y mantener a 2 min", () => {
+    expect(parseCreateQuirkMarker("[CREAR_QUIRK: nombre=a, head.x=1, repetir=50]")?.repeat).toBe(6);
+    expect(parseCreateQuirkMarker("[CREAR_QUIRK: nombre=a, head.x=1, repetir=0]")?.repeat).toBe(1);
+    expect(parseCreateQuirkMarker("[CREAR_QUIRK: nombre=a, head.x=1, mantener=900s]")?.holdMs).toBe(120000);
+    expect(parseCreateQuirkMarker("[CREAR_QUIRK: nombre=a, head.x=1]")?.repeat).toBeUndefined();
   });
 
   it("acepta un quirk solo de manos", () => {

@@ -184,6 +184,9 @@ export function useMovement({
     revertToRest = false,
   ) {
     const now = performance.now();
+    // Con "repetir=N" va y vuelve: tarda 2N-1 tramos en quedar en la pose.
+    const repeat = parsed.animated ? 1 : (parsed.repeat ?? 1);
+    const playMs = parsed.durationMs * (2 * repeat - 1);
     for (const { bone, axis, intensity } of parsed.entries) {
       const range = BONE_RANGES_DEG[bone]?.[axis];
       const boneNode = movementBonesRef.current[bone];
@@ -204,6 +207,7 @@ export function useMovement({
         origin,
         animated: parsed.animated,
         fullSwing: parsed.fullSwing,
+        repeat: repeat > 1 ? repeat : undefined,
       };
 
       // Idea de Sebastián: un quirk (animado o no) no debería durar para
@@ -220,7 +224,7 @@ export function useMovement({
       // que se pidió acá.
       if (autoRevertDelayMs !== undefined) {
         pendingQuirkRevertsRef.current[key] = {
-          revertAt: now + parsed.durationMs + autoRevertDelayMs,
+          revertAt: now + playMs + autoRevertDelayMs,
           revertToValue: parsed.animated || revertToRest ? restRad : currentValue,
           revertDuration: parsed.durationMs,
         };
@@ -368,7 +372,8 @@ export function useMovement({
   // contrato del loop en useVRMScene. Agrupa todo lo que escribe
   // rotaciones de huesos: el balanceo de respiración de pecho/cabeza, los
   // reverts automáticos de quirks pendientes, y las transiciones de
-  // huesos en curso (oscilación senoidal para animado=si, y el balanceo
+  // huesos en curso (ida y vuelta para repetir=N, oscilación senoidal para
+  // animado=si -- bailes, dormir, tacto --, y el balanceo
   // ambiente de ±1.5° / el wiggle de dedos para gestos animados).
   function updateMovement(now: number, delta: number, elapsed: number) {
     const chestBone = chestBoneRef.current;
@@ -487,6 +492,18 @@ export function useMovement({
           transition.startValue +
           (transition.targetValue - transition.startValue) / 2;
         value = center + amplitude * oscillation;
+      } else if (transition.repeat && transition.repeat > 1) {
+        // "repetir=N" (asentir dos veces): tramos de "duration" que van al
+        // objetivo y vuelven al punto de partida, y el último se queda en
+        // el objetivo. Después lo sostiene y vuelve como cualquier gesto.
+        const legs = 2 * transition.repeat - 1;
+        const progress = Math.min((now - transition.startTime) / transition.duration, legs);
+        const leg = Math.min(Math.floor(progress), legs - 1);
+        const t = smoothstep(progress - leg);
+        const towardTarget = leg % 2 === 0;
+        const from = towardTarget ? transition.startValue : transition.targetValue;
+        const to = towardTarget ? transition.targetValue : transition.startValue;
+        value = from + (to - from) * t;
       } else {
         const t = (now - transition.startTime) / transition.duration;
         const eased = smoothstep(t);

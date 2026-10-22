@@ -13,7 +13,11 @@ export function describeSelfMovement(
     for (const { bone, axis, intensity } of movement.entries) {
       const pct = Math.abs(Math.round(intensity));
       const nearLimit = pct >= 95 ? " -- casi sin margen en esa dirección" : "";
-      const animatedLabel = movement.animated ? " (oscilando)" : "";
+      const animatedLabel = movement.animated
+        ? " (oscilando)"
+        : (movement.repeat ?? 1) > 1
+          ? ` (ida y vuelta ${movement.repeat} veces)`
+          : "";
       lines.push(
         `${bone}.${axis}: ${intensity}${animatedLabel} (${pct}% del límite hacia ese lado${nearLimit})`,
       );

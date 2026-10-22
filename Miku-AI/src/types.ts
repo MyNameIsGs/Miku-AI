@@ -11,6 +11,10 @@ export type BoneTransition = {
   // objetivo (los bailes con música). Sin esto, llega a la pose y se mece
   // poquito ahí (ver ANIMATED_SWAY_MAX_RAD en useMovement.ts).
   fullSwing?: boolean;
+  // Sin animated: cuántas veces va y vuelve entre el punto de partida y el
+  // objetivo antes de quedarse en el objetivo (asentir dos veces). 1 o nada
+  // = va una sola vez.
+  repeat?: number;
 };
 
 // Cuándo y adónde debe volver solo un hueso después de un quirk (movimiento idle espontáneo)
@@ -25,6 +29,13 @@ export type ParsedMovement = {
   durationMs: number;
   animated: boolean;
   fullSwing?: boolean;
+  // Gestos de la charla y de los silencios (2026-10-21, pedido de
+  // Sebastián: no todo tiene que ser un loop): el gesto se hace una vez y
+  // vuelve solo. "repetir=N" lo repite (ida y vuelta) N veces; "mantener=Xs"
+  // es cuánto sostiene la pose antes de volver. Ver playableGesture en
+  // markers.ts.
+  repeat?: number;
+  holdMs?: number;
 };
 
 export type FingerKey = "thumb" | "index" | "middle" | "ring" | "pinky";

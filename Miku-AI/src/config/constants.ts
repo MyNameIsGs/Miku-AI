@@ -66,12 +66,6 @@ export const CALENDAR_MILESTONE_DAYS = [7, 3, 1];
 // nada más (ver useTaskWatcher.ts), no todas de golpe.
 export const TASK_WATCH_INTERVAL_MS = 21600000; // 6 horas
 
-// Cuántos ciclos de vaivén corre un quirk ANIMADO antes de asentarse solo,
-// si Miku no eligió un valor propio con "ciclos=N" al crearlo (ver
-// markers.ts/systemPrompt.ts) -- pedido de Sebastián: 2 (el valor viejo,
-// implícito) se sentía corto para algo como tararear.
-export const DEFAULT_QUIRK_REVERT_CYCLES = 3;
-
 // Fase 7: en cada tick idle, si ya tiene al menos un quirk propio guardado,
 // esta es la probabilidad de correrlo directamente (sin llamar al LLM) en
 // vez de preguntarle qué quiere hacer. Sin calibrar contra uso real todavía.
@@ -84,6 +78,12 @@ export const DEFAULT_HAND_GESTURE_DURATION_MS = 400;
 // la mejilla se quedaba mucho rato). Si vuelve a mover ese hueso o esa
 // mano antes, el reloj empieza de nuevo.
 export const POSE_HOLD_MAX_MS = 120000;
+// Gestos de la charla y de los silencios (2026-10-21, pedido de Sebastián:
+// no todo tiene que ser un loop): el gesto se hace, se sostiene esto si
+// Miku no eligió otra cosa con "mantener=Xs" (como mucho POSE_HOLD_MAX_MS),
+// y vuelve. "repetir=N" va de 1 a GESTURE_REPEAT_MAX.
+export const DEFAULT_GESTURE_HOLD_MS = 2500;
+export const GESTURE_REPEAT_MAX = 6;
 
 export const EXPRESSION_SMOOTHING = 0.08;
 export const GAZE_SMOOTHING = 0.03;

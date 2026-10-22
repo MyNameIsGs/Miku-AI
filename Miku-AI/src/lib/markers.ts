@@ -1,6 +1,9 @@
 import {
   DEFAULT_MOVEMENT_DURATION_MS,
   DEFAULT_HAND_GESTURE_DURATION_MS,
+  DEFAULT_GESTURE_HOLD_MS,
+  GESTURE_REPEAT_MAX,
+  POSE_HOLD_MAX_MS,
   VOICE_PITCH_MIN,
   VOICE_PITCH_MAX,
   VOICE_RATE_MIN,
@@ -33,6 +36,46 @@ export function normalizeGestureName(raw: string): string {
     .replace(/[^a-zA-Z0-9_]/g, "");
 }
 
+// "repetir=N" y "mantener=Xs" (ver ParsedMovement en types.ts), iguales en
+// [MOVIMIENTO] y [CREAR_QUIRK]. Devuelve true si la clave era una de esas.
+function parseGestureTiming(
+  key: string,
+  rawValue: string,
+  timing: { repeat?: number; holdMs?: number },
+): boolean {
+  if (key === "repetir") {
+    const num = parseInt(rawValue, 10);
+    if (!Number.isNaN(num)) timing.repeat = Math.max(1, Math.min(GESTURE_REPEAT_MAX, num));
+    return true;
+  }
+  if (key === "mantener") {
+    const num = parseFloat(rawValue.replace(/s$/i, ""));
+    if (!Number.isNaN(num) && num >= 0) timing.holdMs = Math.min(POSE_HOLD_MAX_MS, num * 1000);
+    return true;
+  }
+  return false;
+}
+
+// Un gesto de la charla o de un silencio: se hace una vez (o "repetir"
+// veces) y vuelve -- nada de vaivén sin fin (2026-10-21, pedido de
+// Sebastián). "animado" queda solo para lo que sí se sostiene a propósito:
+// bailar con música, dormir y las reacciones al tacto, que no pasan por acá.
+// Los quirks viejos guardados con animado=si también se hacen una vez.
+export function playableGesture(movement: ParsedMovement): ParsedMovement {
+  return { ...movement, animated: false, fullSwing: false };
+}
+
+// Cuánto tarda en hacerse el gesto entero hasta quedar en la pose: con
+// "repetir=N" va y vuelve, así que son 2N-1 tramos de "duracion".
+export function gesturePlayMs(movement: ParsedMovement): number {
+  return movement.durationMs * (2 * (movement.repeat ?? 1) - 1);
+}
+
+// Cuánto se sostiene la pose antes de volver.
+export function gestureHoldMs(movement: ParsedMovement | null, fallbackMs = DEFAULT_GESTURE_HOLD_MS): number {
+  return movement?.holdMs ?? fallbackMs;
+}
+
 export function parseMovementMarker(text: string): ParsedMovement | null {
   const match = text.match(/\[MOVIMIENTO:\s*([\s\S]*?)\]/i);
   if (!match) return null;
@@ -45,6 +88,7 @@ export function parseMovementMarker(text: string): ParsedMovement | null {
   const entries: ParsedMovement["entries"] = [];
   let durationMs = DEFAULT_MOVEMENT_DURATION_MS;
   let animated = false;
+  const timing: { repeat?: number; holdMs?: number } = {};
 
   for (const part of parts) {
     const [rawKey, rawValue] = part.split("=").map((s) => s.trim());
@@ -60,6 +104,7 @@ export function parseMovementMarker(text: string): ParsedMovement | null {
       animated = /^(si|sí|yes|true)$/i.test(rawValue);
       continue;
     }
+    if (parseGestureTiming(key, rawValue, timing)) continue;
 
     const [bone, axis] = rawKey.split(".");
     if (!bone || !axis || !["x", "y", "z"].includes(axis)) continue;
@@ -71,7 +116,7 @@ export function parseMovementMarker(text: string): ParsedMovement | null {
     entries.push({ bone, axis: axis as "x" | "y" | "z", intensity });
   }
 
-  return entries.length > 0 ? { entries, durationMs, animated } : null;
+  return entries.length > 0 ? { entries, durationMs, animated, ...timing } : null;
 }
 
 export function parseHandGestureMarker(text: string): ParsedHandGesture | null {
@@ -180,11 +225,9 @@ export interface ParsedQuirkCreation {
   animated: boolean;
   handLeft?: string;
   handRight?: string;
-  // Pedido de Sebastián: cuántas veces se repite el ciclo de un quirk
-  // ANIMADO antes de asentarse solo -- decisión de Miku por quirk, no un
-  // número fijo para todos (un suspiro corto no necesita durar lo mismo
-  // que un tarareo). Solo importa si animado=si; se ignora si no.
-  revertAfterCycles?: number;
+  // "repetir=N" y "mantener=Xs", igual que en [MOVIMIENTO].
+  repeat?: number;
+  holdMs?: number;
 }
 
 export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null {
@@ -201,7 +244,7 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
   let animated = false;
   let handLeft: string | undefined;
   let handRight: string | undefined;
-  let revertAfterCycles: number | undefined;
+  const timing: { repeat?: number; holdMs?: number } = {};
   const entries: ParsedQuirkCreation["entries"] = [];
 
   for (const part of parts) {
@@ -222,14 +265,7 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
       animated = /^(si|sí|yes|true)$/i.test(rawValue);
       continue;
     }
-    if (key === "ciclos") {
-      const num = parseInt(rawValue, 10);
-      // Entre 1 (un solo vaivén) y 8 (bastante sostenido) -- sin tope
-      // arriba, un quirk "para siempre" reintroduciría el bug que ya se
-      // arregló.
-      if (!Number.isNaN(num)) revertAfterCycles = Math.max(1, Math.min(8, num));
-      continue;
-    }
+    if (parseGestureTiming(key, rawValue, timing)) continue;
     if (key === "mano_izq") {
       handLeft = normalizeGestureName(rawValue) || handLeft;
       continue;
@@ -252,7 +288,7 @@ export function parseCreateQuirkMarker(text: string): ParsedQuirkCreation | null
   if (!name) return null;
   if (entries.length === 0 && !handLeft && !handRight) return null;
 
-  return { name, entries, durationMs, animated, handLeft, handRight, revertAfterCycles };
+  return { name, entries, durationMs, animated, handLeft, handRight, ...timing };
 }
 
 export function parseQuirkReadyMarker(text: string): string | null {
