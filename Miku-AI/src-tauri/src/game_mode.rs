@@ -5,7 +5,7 @@ use tauri::{Emitter, WebviewWindow};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
+    GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindow,
     IsZoomed, SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_HIDE,
     SW_SHOWNOACTIVATE,
 };
@@ -16,6 +16,12 @@ use crate::active_window::process_name_for_pid;
 // plano, Miku se oculta pero sigue funcionando, y "Hey Miku" la trae de
 // vuelta. Ocultarla de verdad (no transparente) además libera la GPU: el
 // navegador interno deja de dibujar el modelo 3D.
+//
+// Una vez detectado, el juego queda "anotado" y Miku sigue escondida
+// aunque Sebastián cambie a otra ventana (Discord, el navegador, el
+// escritorio): solo vuelve sola cuando esa ventana del juego se cierra, o
+// cuando el juego vuelve al frente sin estar a pantalla completa (por
+// ejemplo, un video del navegador que salió de pantalla completa).
 //
 // Por qué casi todo vive acá y no en el frontend: con la ventana oculta,
 // WebView2 frena los temporizadores de la página (hasta uno por minuto
@@ -41,7 +47,17 @@ const TICK: Duration = Duration::from_millis(250);
 // latido mientras está oculta (~5 s).
 const FULLSCREEN_EVERY_TICKS: u32 = 4;
 const HEARTBEAT_EVERY_TICKS: u32 = 20;
+// Cuántas revisiones seguidas (~1 s cada una) tiene que faltar el juego
+// antes de soltarlo: algunos juegos cierran y vuelven a abrir su ventana al
+// cambiar la resolución o entre pantallas de carga.
+const RELEASE_AFTER_CHECKS: u32 = 3;
 const WAKE_WORD_POLL_URL: &str = "http://127.0.0.1:8899/wake-word/poll";
+
+// Herramientas del sistema que tapan la pantalla entera por un momento y no
+// son juegos. Salen del registro de sesiones de juego de la PC de
+// Sebastián: el recorte de Win+Shift+S (SnippingTool) y el Alt+Tab / Win+Tab
+// (explorer) aparecían cientos de veces como "juegos".
+const IGNORED_PROCESSES: &[&str] = &["snippingtool.exe", "screenclippinghost.exe", "explorer.exe"];
 
 #[derive(Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +65,19 @@ pub struct GameModeState {
     pub active: bool,
     pub title: String,
     pub process_name: String,
+}
+
+impl GameModeState {
+    fn inactive() -> Self {
+        GameModeState { active: false, title: String::new(), process_name: String::new() }
+    }
+}
+
+// El juego anotado. La ventana se guarda como número: HWND no se puede
+// mandar entre hilos.
+struct TrackedGame {
+    hwnd: isize,
+    state: GameModeState,
 }
 
 fn window_text(hwnd: HWND) -> String {
@@ -66,16 +95,18 @@ fn class_name(hwnd: HWND) -> String {
 enum Foreground {
     // La ventana en primer plano es la de Miku: no dice nada nuevo.
     Own,
-    Other { fullscreen: Option<(String, String)> },
+    // Interfaz del sistema (escritorio, barra de tareas, recorte, Alt+Tab,
+    // una ventana "No responde"): ni empieza un juego ni lo termina.
+    System,
+    Other { hwnd: isize, fullscreen: Option<(String, String)> },
 }
 
-// ¿La ventana en primer plano ocupa su monitor entero? El escritorio y la
-// barra de tareas no cuentan.
+// ¿La ventana en primer plano ocupa su monitor entero?
 fn foreground_state() -> Foreground {
     unsafe {
         let hwnd = GetForegroundWindow();
         if hwnd.0.is_null() {
-            return Foreground::Other { fullscreen: None };
+            return Foreground::System;
         }
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
@@ -86,23 +117,31 @@ fn foreground_state() -> Foreground {
         // Escritorio, barra de tareas, y la interfaz del sistema que también
         // ocupa la pantalla entera (panel de emojis/teclado, Inicio): medido
         // en la PC de Sebastián, "Experiencia de entrada de Windows" cubre
-        // el monitor igual que un juego.
+        // el monitor igual que un juego. "Ghost" es la copia que pone
+        // Windows cuando una ventana deja de responder ("Roblox (No
+        // responde)"): sigue siendo el mismo juego.
         if matches!(
             class.as_str(),
-            "Progman" | "WorkerW" | "Shell_TrayWnd" | "Windows.UI.Core.CoreWindow"
+            "Progman" | "WorkerW" | "Shell_TrayWnd" | "Windows.UI.Core.CoreWindow" | "Ghost"
         ) {
-            return Foreground::Other { fullscreen: None };
+            return Foreground::System;
         }
+        let process = process_name_for_pid(pid).unwrap_or_default();
+        if IGNORED_PROCESSES.contains(&process.to_lowercase().as_str()) {
+            return Foreground::System;
+        }
+
+        let raw = hwnd.0 as isize;
         // Una ventana maximizada con la barra de tareas en auto-ocultar
         // también cubre el monitor entero -- no es un juego. Los juegos
         // "sin bordes" son ventanas del tamaño del monitor, no maximizadas.
         if IsZoomed(hwnd).as_bool() {
-            return Foreground::Other { fullscreen: None };
+            return Foreground::Other { hwnd: raw, fullscreen: None };
         }
 
         let mut rect = RECT::default();
         if GetWindowRect(hwnd, &mut rect).is_err() {
-            return Foreground::Other { fullscreen: None };
+            return Foreground::Other { hwnd: raw, fullscreen: None };
         }
         let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         let mut info = MONITORINFO {
@@ -110,16 +149,19 @@ fn foreground_state() -> Foreground {
             ..Default::default()
         };
         if !GetMonitorInfoW(monitor, &mut info).as_bool() {
-            return Foreground::Other { fullscreen: None };
+            return Foreground::Other { hwnd: raw, fullscreen: None };
         }
         let m = info.rcMonitor;
         let covers = rect.left <= m.left && rect.top <= m.top && rect.right >= m.right && rect.bottom >= m.bottom;
         if !covers {
-            return Foreground::Other { fullscreen: None };
+            return Foreground::Other { hwnd: raw, fullscreen: None };
         }
-        let process = process_name_for_pid(pid).unwrap_or_default();
-        Foreground::Other { fullscreen: Some((window_text(hwnd), process)) }
+        Foreground::Other { hwnd: raw, fullscreen: Some((window_text(hwnd), process)) }
     }
+}
+
+fn window_exists(hwnd: isize) -> bool {
+    unsafe { IsWindow(Some(HWND(hwnd as *mut _))).as_bool() }
 }
 
 fn main_hwnd(window: &WebviewWindow) -> Option<HWND> {
@@ -150,13 +192,49 @@ async fn wake_word_detection_id(client: &reqwest::Client) -> Option<u64> {
     json.get("detectionId")?.as_u64()
 }
 
+// Qué juego queda anotado después de mirar la ventana en primer plano.
+// `missing` cuenta las revisiones seguidas en las que el juego anotado ya no
+// está (cerrado, o al frente sin pantalla completa).
+fn next_tracked(tracked: Option<TrackedGame>, missing: &mut u32) -> Option<TrackedGame> {
+    if !ENABLED.load(Ordering::SeqCst) {
+        *missing = 0;
+        return None;
+    }
+    let foreground = foreground_state();
+
+    // Un juego nuevo a pantalla completa reemplaza al anotado.
+    if let Foreground::Other { hwnd, fullscreen: Some((title, process_name)) } = &foreground {
+        *missing = 0;
+        return Some(TrackedGame {
+            hwnd: *hwnd,
+            state: GameModeState { active: true, title: title.clone(), process_name: process_name.clone() },
+        });
+    }
+
+    let game = tracked?;
+    let gone = !window_exists(game.hwnd)
+        || matches!(foreground, Foreground::Other { hwnd, fullscreen: None } if hwnd == game.hwnd);
+    if !gone {
+        *missing = 0;
+        return Some(game);
+    }
+    *missing += 1;
+    if *missing >= RELEASE_AFTER_CHECKS {
+        *missing = 0;
+        return None;
+    }
+    Some(game)
+}
+
 fn start_watcher(window: WebviewWindow) {
     tauri::async_runtime::spawn(async move {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_millis(800))
             .build()
             .unwrap_or_default();
-        let mut last_state = GameModeState { active: false, title: String::new(), process_name: String::new() };
+        let mut last_state = GameModeState::inactive();
+        let mut tracked: Option<TrackedGame> = None;
+        let mut missing: u32 = 0;
         let mut tick: u32 = 0;
         // Base del contador de "Hey Miku" desde que se ocultó: solo cuenta
         // una detección NUEVA.
@@ -166,18 +244,8 @@ fn start_watcher(window: WebviewWindow) {
             tick = tick.wrapping_add(1);
 
             if tick % FULLSCREEN_EVERY_TICKS == 0 {
-                let next = match foreground_state() {
-                    Foreground::Own => last_state.clone(),
-                    Foreground::Other { fullscreen } => {
-                        let enabled = ENABLED.load(Ordering::SeqCst);
-                        match fullscreen {
-                            Some((title, process_name)) if enabled => {
-                                GameModeState { active: true, title, process_name }
-                            }
-                            _ => GameModeState { active: false, title: String::new(), process_name: String::new() },
-                        }
-                    }
-                };
+                tracked = next_tracked(tracked.take(), &mut missing);
+                let next = tracked.as_ref().map(|g| g.state.clone()).unwrap_or_else(GameModeState::inactive);
                 if next != last_state {
                     let _ = window.emit("game-mode", next.clone());
                     last_state = next;
