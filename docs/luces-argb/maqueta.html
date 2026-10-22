@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luces — maqueta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<!--
+  Maqueta navegable del panel Luces (docs/luces-argb/PLAN.md §3). Es
+  referencia visual, no código para copiar. Los efectos de la vista previa
+  están simulados acá en JavaScript; en la app los calcula el motor en Rust y
+  la vista previa recibe los mismos cuadros que las luces reales.
+-->
+<style>
+:root {
+  --m-teal: #39C5BB; --m-teal-dim: #2A8F88; --m-teal-hover: #5AD3CA; --m-teal-press: #2FA99F;
+  --m-pink: #F0508F; --m-pink-text: #F58AB3;
+  --m-text: #EAF4F3; --m-muted: #9DB9B6; --m-dim: #7E9B98;
+  --m-glass: rgba(9,20,23,0.94); --m-glass-panel: rgba(9,20,23,0.96);
+  --m-line: rgba(57,197,187,0.4); --m-line-soft: rgba(157,185,182,0.25);
+  --m-fill-soft: rgba(234,244,243,0.05); --m-module: rgba(234,244,243,0.035);
+  --m-hover-fill: rgba(234,244,243,0.08); --m-focus: #7FE3DA;
+  --m-on-teal: #06221F; --m-on-pink: #2A0714;
+  --m-font-display: 'Dela Gothic One', 'Arial Black', sans-serif;
+  --m-font-label: 'Chakra Petch', 'Bahnschrift', monospace;
+  --m-font-body: 'Zen Kaku Gothic New', 'Yu Gothic', 'Segoe UI', sans-serif;
+  --m-ease-out: cubic-bezier(.2,.8,.2,1);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(1200px 700px at 30% 20%, #1d3a40, #0a1214 70%);
+  font-family: var(--m-font-body); color: var(--m-text);
+}
+.note { position: fixed; left: 16px; bottom: 12px; font: 600 11px var(--m-font-label); letter-spacing: .12em; color: var(--m-dim); }
+.window { position: relative; width: 750px; height: 720px; }
+.toolbar {
+  position: absolute; inset: 0 0 auto 0; height: 40px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 6px 0 14px; background: var(--m-glass); border-bottom: 1px solid var(--m-line); border-radius: 12px 12px 0 0;
+}
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.wordmark { font: 15px var(--m-font-display); letter-spacing: .08em; color: var(--m-teal); }
+.channel { font: 600 10px var(--m-font-label); color: var(--m-pink); letter-spacing: .1em; }
+.tb-right { display: flex; }
+.tb-btn { width: 40px; height: 40px; display: grid; place-items: center; color: var(--m-muted); border-radius: 10px; }
+.tb-btn.active { background: rgba(57,197,187,.16); color: var(--m-teal); }
+svg { display: block; }
+
+.panel {
+  position: absolute; left: 12px; top: 52px; width: 726px; height: 656px; padding: 16px 20px 18px;
+  display: flex; flex-direction: column; gap: 12px;
+  background: var(--m-glass-panel); border: 1px solid var(--m-line); border-radius: 22px; font-size: 14px; line-height: 1.4;
+}
+.head { display: flex; align-items: center; justify-content: space-between; }
+.heading { display: flex; align-items: baseline; gap: 12px; }
+.title { margin: 0; font: 24px var(--m-font-display); letter-spacing: .02em; }
+.tag { font: 600 11px var(--m-font-label); letter-spacing: .14em; color: var(--m-pink); }
+.head-actions { display: flex; gap: 8px; align-items: center; }
+
+button { font-family: var(--m-font-body); cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; }
+.icon-btn { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; color: var(--m-muted); background: transparent; border: 1px solid var(--m-line-soft); border-radius: 10px; }
+.icon-btn:hover { background: var(--m-hover-fill); color: var(--m-text); }
+.icon-btn:disabled { opacity: .35; cursor: default; }
+.btn { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--m-muted); background: transparent; border: 1px solid var(--m-line-soft); border-radius: 8px; white-space: nowrap; }
+.btn:hover { border-color: rgba(57,197,187,.45); color: var(--m-text); }
+.btn.primary { background: var(--m-teal); border-color: var(--m-teal); color: var(--m-on-teal); font-weight: 700; }
+.btn.primary:hover { background: var(--m-teal-hover); }
+.btn.on { background: rgba(57,197,187,.14); border-color: rgba(57,197,187,.45); color: var(--m-teal); }
+.label { font: 600 11px var(--m-font-label); letter-spacing: .14em; color: var(--m-teal); }
+.label .n { color: var(--m-pink); margin-right: 6px; }
+.dim { color: var(--m-dim); font-size: 12px; }
+.muted { color: var(--m-muted); font-size: 13px; }
+
+/* Vista previa */
+.preview { flex-shrink: 0; border-radius: 16px; background: rgba(0,0,0,.28); border: 1px solid rgba(57,197,187,.22); overflow: hidden; }
+.preview canvas { display: block; width: 684px; height: 132px; cursor: pointer; }
+.preview-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid rgba(157,185,182,.12); }
+.switch { width: 44px; height: 26px; padding: 3px; display: flex; align-items: center; justify-content: flex-start; background: rgba(157,185,182,.25); border: 0; border-radius: 999px; flex-shrink: 0; }
+.switch span { width: 20px; height: 20px; border-radius: 50%; background: var(--m-muted); transition: transform .15s; }
+.switch.on { background: var(--m-teal); justify-content: flex-end; }
+.switch.on span { background: var(--m-on-teal); }
+.bright { display: flex; align-items: center; gap: 8px; flex: 1; }
+input[type=range] { accent-color: var(--m-teal); width: 100%; }
+.scene-name { font: 600 11px var(--m-font-label); letter-spacing: .12em; color: var(--m-muted); white-space: nowrap; }
+.scene-name b { color: var(--m-text); font-weight: 600; }
+.tooltip { position: absolute; pointer-events: none; padding: 4px 8px; font-size: 12px; background: #0B1719; border: 1px solid var(--m-line); border-radius: 8px; white-space: nowrap; display: none; }
+
+/* Pestañas */
+.tabs { display: flex; gap: 6px; flex-shrink: 0; }
+.tab { height: 32px; padding: 0 14px; font-size: 13px; color: var(--m-muted); background: transparent; border: 1px solid var(--m-line-soft); border-radius: 999px; }
+.tab:hover { border-color: rgba(57,197,187,.45); color: var(--m-text); }
+.tab[aria-selected=true] { background: var(--m-teal); border-color: var(--m-teal); color: var(--m-on-teal); font-weight: 700; }
+.tab-spacer { flex: 1; }
+.body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; margin-right: -12px; padding-right: 12px; scrollbar-width: thin; scrollbar-color: rgba(57,197,187,.3) transparent; }
+.view { display: none; }
+.view.active { display: block; animation: fade .2s var(--m-ease-out); }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+
+.module { padding: 14px 16px; background: var(--m-module); border: 1px solid rgba(57,197,187,.22); border-radius: 16px; }
+.module + .module { margin-top: 12px; }
+
+/* Escena */
+.scene-grid { display: grid; grid-template-columns: 186px minmax(0, 1fr); gap: 12px; align-items: start; }
+.scene-grid > * { min-width: 0; }
+.groups { display: flex; flex-direction: column; gap: 6px; }
+.group { display: flex; align-items: center; gap: 10px; padding: 8px 10px; text-align: left; color: var(--m-text); background: transparent; border: 1px solid transparent; border-radius: 12px; }
+.group:hover { background: var(--m-hover-fill); }
+.group.sel { background: rgba(57,197,187,.1); border-color: rgba(57,197,187,.45); }
+.group canvas { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; }
+.group .g-text { display: flex; flex-direction: column; min-width: 0; }
+.group .g-name { font-weight: 500; font-size: 14px; }
+.group .g-fx { font-size: 11px; color: var(--m-dim); }
+.group.add { color: var(--m-teal); font-size: 13px; justify-content: center; border: 1px dashed rgba(57,197,187,.35); }
+
+.fx-gallery { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.fx { padding: 6px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--m-muted); font-size: 12px; background: rgba(0,0,0,.18); border: 1px solid rgba(157,185,182,.14); border-radius: 12px; }
+.fx canvas { width: 100%; height: auto; aspect-ratio: 144 / 88; border-radius: 8px; }
+.fx:hover { border-color: rgba(57,197,187,.45); color: var(--m-text); }
+.fx.sel { border-color: var(--m-teal); color: var(--m-teal); box-shadow: 0 0 0 3px rgba(57,197,187,.15); }
+.fx .badge { font: 600 9px var(--m-font-label); letter-spacing: .1em; color: var(--m-pink); }
+.fx-section { margin-top: 14px; }
+.params { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-top: 10px; }
+.param { display: flex; flex-direction: column; gap: 4px; }
+.param-row { display: flex; justify-content: space-between; font-size: 13px; }
+.param-row span:last-child { font-family: var(--m-font-label); color: var(--m-teal); }
+.dir { display: flex; gap: 6px; }
+.colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.chip { width: 26px; height: 26px; border-radius: 8px; border: 1px solid rgba(0,0,0,.4); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); padding: 0; }
+.chip.sel { box-shadow: 0 0 0 2px #0B1719, 0 0 0 4px var(--m-teal); }
+.hex { width: 92px; height: 28px; padding: 0 8px; font: 600 13px var(--m-font-label); color: var(--m-text); background: var(--m-fill-soft); border: 1px solid var(--m-line-soft); border-radius: 8px; }
+.gradient { position: relative; height: 26px; margin: 18px 8px 6px; border-radius: 8px; border: 1px solid rgba(0,0,0,.4); }
+.stop { position: absolute; top: -9px; width: 16px; height: 44px; margin-left: -8px; cursor: grab; }
+.stop::before { content: ""; position: absolute; left: 3px; top: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--c); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.stop::after { content: ""; position: absolute; left: 7px; top: 12px; width: 2px; height: 28px; background: rgba(255,255,255,.7); }
+.layers { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.layer { display: grid; grid-template-columns: 16px minmax(0, 1fr) 90px 80px 28px; align-items: center; gap: 10px; padding: 6px 10px; background: rgba(0,0,0,.18); border: 1px solid rgba(157,185,182,.14); border-radius: 10px; font-size: 13px; }
+.grip { color: var(--m-dim); cursor: grab; }
+.mini-select { height: 28px; font-size: 12px; color: var(--m-text); background: #0f1c1f; border: 1px solid var(--m-line-soft); border-radius: 8px; }
+.miku-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 12px 14px; background: rgba(240,80,143,.06); border: 1px solid rgba(240,80,143,.3); border-radius: 14px; }
+.miku-row b { color: var(--m-pink-text); }
+
+/* Dispositivos */
+.dev-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.dev-name { font-weight: 500; font-size: 15px; }
+.zone { display: grid; grid-template-columns: 30px 1fr auto auto; gap: 12px; align-items: center; min-height: 48px; border-top: 1px solid rgba(157,185,182,.12); }
+.zone:first-of-type { border-top: none; }
+.zsw { width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(0,0,0,.4); }
+.zsw.empty { background: transparent; border: 1.5px dashed rgba(157,185,182,.45); }
+.status { font: 600 10px var(--m-font-label); letter-spacing: .12em; padding: 3px 8px; border-radius: 999px; }
+.status.ok { color: var(--m-teal); background: rgba(57,197,187,.12); }
+.status.off { color: var(--m-dim); background: rgba(157,185,182,.12); }
+.status.warn { color: var(--m-pink-text); background: rgba(240,80,143,.12); }
+.wizard { margin: 2px -8px 10px; padding: 14px; background: rgba(57,197,187,.06); border: 1px solid var(--m-teal); border-radius: 12px; box-shadow: 0 0 0 3px rgba(57,197,187,.15); display: grid; grid-template-columns: 150px 1fr; gap: 16px; }
+.dial { position: relative; width: 140px; height: 140px; }
+.dial button { position: absolute; width: 20px; height: 20px; margin: -10px; padding: 0; border-radius: 50%; border: 2px solid rgba(0,0,0,.4); background: #2A8F88; }
+.dial button.first { background: var(--m-pink); box-shadow: 0 0 0 3px rgba(240,80,143,.3); }
+.dial .center { position: absolute; inset: 44px; display: grid; place-items: center; text-align: center; font: 600 10px var(--m-font-label); letter-spacing: .1em; color: var(--m-dim); }
+.wiz-rows { display: flex; flex-direction: column; gap: 10px; }
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper .val { width: 52px; height: 32px; display: grid; place-items: center; font: 600 16px var(--m-font-label); background: var(--m-fill-soft); border: 1px solid var(--m-line-soft); border-radius: 8px; }
+.seg { display: inline-flex; padding: 3px; background: rgba(234,244,243,.06); border-radius: 10px; }
+.seg button { height: 28px; padding: 0 10px; font-size: 12px; color: var(--m-muted); background: transparent; border: 0; border-radius: 8px; }
+.seg button.on { background: var(--m-teal); color: var(--m-on-teal); font-weight: 700; }
+.service { display: flex; align-items: center; gap: 12px; }
+.led { width: 8px; height: 8px; border-radius: 50%; background: var(--m-teal); box-shadow: 0 0 8px var(--m-teal); }
+.wb { display: grid; grid-template-columns: 70px 1fr 40px; gap: 8px; align-items: center; font-size: 12px; }
+
+/* Mapa */
+.map-wrap { display: grid; grid-template-columns: 1fr 200px; gap: 12px; }
+.case { position: relative; height: 360px; border-radius: 16px; background: repeating-linear-gradient(0deg, rgba(57,197,187,.05) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(57,197,187,.05) 0 1px, transparent 1px 24px), rgba(0,0,0,.25); border: 1px solid rgba(57,197,187,.22); }
+.case-outline { position: absolute; inset: 18px 118px 18px 18px; border: 2px solid rgba(157,185,182,.35); border-radius: 14px; }
+.case::after { content: "FUERA"; position: absolute; right: 30px; top: 26px; font: 600 10px var(--m-font-label); letter-spacing: .14em; color: var(--m-dim); }
+.case-outline::after { content: "GABINETE"; position: absolute; left: 10px; top: 8px; font: 600 10px var(--m-font-label); letter-spacing: .14em; color: var(--m-dim); }
+.mz { position: absolute; padding: 6px 10px; font-size: 12px; font-weight: 500; background: #10262A; border: 1px solid var(--m-teal); border-radius: 10px; cursor: grab; user-select: none; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+.mz:active { cursor: grabbing; }
+.mz small { display: block; font: 600 9px var(--m-font-label); letter-spacing: .1em; color: var(--m-dim); }
+.mz.ghost { border-style: dashed; border-color: rgba(157,185,182,.4); color: var(--m-dim); cursor: default; }
+.side { display: flex; flex-direction: column; gap: 8px; }
+
+/* Perfiles */
+.profiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.profile { position: relative; padding: 10px; text-align: left; color: var(--m-text); background: rgba(0,0,0,.18); border: 1px solid rgba(157,185,182,.16); border-radius: 14px; }
+.profile:hover { border-color: rgba(57,197,187,.45); }
+.profile.active { border-color: var(--m-teal); box-shadow: 0 0 0 3px rgba(57,197,187,.15); }
+.profile canvas { width: 100%; height: 40px; border-radius: 8px; display: block; margin-bottom: 8px; }
+.profile .p-name { font-weight: 500; }
+.profile .p-meta { font: 600 10px var(--m-font-label); letter-spacing: .1em; color: var(--m-dim); }
+.profile .star { position: absolute; top: 14px; right: 14px; color: #FFD166; }
+.profile.by-miku .p-meta { color: var(--m-pink-text); }
+.rules { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.rule { display: grid; grid-template-columns: 22px 1fr auto 44px; gap: 12px; align-items: center; padding: 8px 12px; background: rgba(0,0,0,.18); border: 1px solid rgba(157,185,182,.14); border-radius: 12px; font-size: 13px; }
+.rule .when { color: var(--m-muted); }
+.rule .then { font-weight: 500; }
+.rule .prio { font: 600 11px var(--m-font-label); color: var(--m-pink); }
+.kbd { font: 600 10px var(--m-font-label); padding: 2px 6px; border: 1px solid var(--m-line-soft); border-radius: 6px; color: var(--m-muted); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.row-gap { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .view.active { animation: none; } }
+</style>
+</head>
+<body>
+<div class="note">MAQUETA · PANEL LUCES · LOS EFECTOS ESTÁN SIMULADOS</div>
+
+<div class="window">
+  <div class="toolbar">
+    <div class="brand"><span class="wordmark">MIKU</span><span class="channel">CH·01</span></div>
+    <div class="tb-right">
+      <span class="tb-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></span>
+      <span class="tb-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></span>
+      <span class="tb-btn active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></span>
+      <span class="tb-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></span>
+    </div>
+  </div>
+
+  <div class="panel" role="dialog" aria-labelledby="t">
+    <div class="head">
+      <div class="heading"><h2 class="title" id="t">Luces</h2><span class="tag">RGB</span></div>
+      <div class="head-actions">
+        <button class="icon-btn" id="undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+        <button class="icon-btn" id="redo" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+        <button class="icon-btn" title="Cerrar luces" aria-label="Cerrar luces"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+    </div>
+
+    <div class="preview">
+      <canvas id="preview" width="1368" height="264" aria-label="Vista previa en vivo de las luces"></canvas>
+      <div class="preview-bar">
+        <button class="switch on" id="master" aria-pressed="true" aria-label="Luces prendidas" title="Prender / apagar todas las luces"><span></span></button>
+        <div class="bright">
+          <span class="dim">BRILLO</span>
+          <input type="range" id="bright" min="0" max="100" value="85" aria-label="Brillo general">
+          <span class="dim" id="brightVal" style="width:34px;text-align:right">85%</span>
+        </div>
+        <button class="btn" id="pause" title="Dejar los efectos quietos en este cuadro">Pausar</button>
+        <button class="btn" id="identify" title="Hace parpadear la zona elegida para encontrarla">Identificar</button>
+        <span class="scene-name">ESCENA · <b id="sceneName">MIKU TURQUESA</b></span>
+      </div>
+      <div class="tooltip" id="tip"></div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-view="escena">Escena</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="dispositivos">Dispositivos</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="mapa">Mapa</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="perfiles">Perfiles</button>
+      <span class="tab-spacer"></span>
+      <span class="dim" style="align-self:center">OpenRGB 1.1 · 30 fps</span>
+    </div>
+
+    <div class="body">
+      <!-- ESCENA -->
+      <section class="view active" id="v-escena">
+        <div class="scene-grid">
+          <div class="groups" id="groups"></div>
+          <div>
+            <div class="module">
+              <div class="row"><span class="label"><span class="n">01</span>EFECTO · <span id="groupLabel">TODO</span></span><span class="dim" id="fxDesc"></span></div>
+              <div class="fx-gallery" id="gallery"></div>
+
+              <div class="fx-section">
+                <span class="label"><span class="n">02</span>AJUSTES</span>
+                <div class="params">
+                  <div class="param"><div class="param-row"><span>Velocidad</span><span id="speedVal">50</span></div><input type="range" id="speed" min="1" max="100" value="50"></div>
+                  <div class="param"><div class="param-row"><span>Brillo del grupo</span><span id="gbVal">100</span></div><input type="range" id="gbright" min="0" max="100" value="100"></div>
+                  <div class="param"><div class="param-row"><span>Tamaño</span><span id="sizeVal">40</span></div><input type="range" id="size" min="5" max="100" value="40"></div>
+                  <div class="param"><div class="param-row"><span>Dirección</span></div>
+                    <div class="dir"><button class="btn" data-dir="-1">← Izquierda</button><button class="btn on" data-dir="1">Derecha →</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fx-section">
+                <span class="label"><span class="n">03</span>COLORES</span>
+                <div class="colors" id="palette"></div>
+                <div class="colors"><span class="dim" style="width:70px">RECIENTES</span><span id="recent" class="colors" style="margin:0"></span><input class="hex" id="hex" value="#39C5BB" aria-label="Color en hexadecimal"></div>
+                <div class="gradient" id="gradient" title="Arrastra los puntos; doble clic agrega uno"></div>
+              </div>
+
+              <div class="fx-section">
+                <div class="row"><span class="label"><span class="n">04</span>CAPAS</span><button class="btn">+ Capa</button></div>
+                <div class="layers">
+                  <div class="layer"><span class="grip">⋮⋮</span><span id="layerBase">Base · Ola</span><select class="mini-select"><option>Normal</option><option>Sumar</option><option>Multiplicar</option></select><input type="range" value="100" aria-label="Opacidad"><button class="icon-btn" style="width:28px;height:28px" aria-label="Ocultar capa"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+                  <div class="layer"><span class="grip">⋮⋮</span><span>Avisos · destello rosa</span><select class="mini-select"><option>Sumar</option><option>Normal</option></select><input type="range" value="70" aria-label="Opacidad"><button class="icon-btn" style="width:28px;height:28px" aria-label="Ocultar capa"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="miku-row">
+              <div><b>Que Miku lo decida</b><div class="muted">Elige y cambia las luces según la música, la hora y su ánimo. Tus perfiles automáticos mandan.</div></div>
+              <button class="switch" id="mikuDecides" aria-pressed="false" aria-label="Que Miku lo decida"><span></span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DISPOSITIVOS -->
+      <section class="view" id="v-dispositivos">
+        <div class="module service">
+          <span class="led"></span>
+          <div style="flex:1"><b>Servicio de OpenRGB</b><div class="dim">Corriendo · versión 1.1 · protocolo 5 · PawnIO listo (SMBus PIIX4)</div></div>
+          <button class="btn">Volver a buscar</button>
+        </div>
+
+        <div class="module">
+          <div class="dev-head"><span class="label">PLACA MADRE</span><span class="dev-name">B850 GAMING X WIFI6E</span></div>
+          <div class="zone"><span class="zsw empty"></span><div><div>Conector ARGB 1</div><div class="dim">Nada enchufado</div></div><span class="status off">VACÍO</span><button class="btn">Configurar</button></div>
+          <div class="zone"><span class="zsw" style="background:#39C5BB"></span><div><div>Conector ARGB 2</div><div class="dim">1 ventilador × 8 LEDs</div></div><span class="status ok">LISTO</span><button class="btn on" id="wizToggle">Ajustando…</button></div>
+          <div class="wizard" id="wizard">
+            <div><div class="dial" id="dial"><div class="center">TOCA DÓNDE<br>EMPIEZA</div></div></div>
+            <div class="wiz-rows">
+              <div class="row"><span>Ventiladores en el conector</span><div class="stepper"><button class="btn">−</button><span class="val">1</span><button class="btn">+</button></div></div>
+              <div class="row"><span>LEDs por ventilador</span><div class="stepper"><button class="btn">−</button><span class="val">8</span><button class="btn">+</button></div></div>
+              <div class="row"><span>Sentido de giro</span><div class="seg"><button class="on" id="cw">Horario</button><button id="ccw">Antihorario</button></div></div>
+              <div class="row"><span class="dim">Total: 8 LEDs · el rosa es el LED 1</span><div class="row-gap"><button class="btn" id="testLeds">Probar LEDs</button><button class="btn primary">Listo</button></div></div>
+            </div>
+          </div>
+          <div class="zone"><span class="zsw empty"></span><div><div>Conector ARGB 3</div><div class="dim">Nada enchufado</div></div><span class="status off">VACÍO</span><button class="btn">Configurar</button></div>
+          <div class="zone"><span class="zsw" style="background:#F0508F"></span><div><div>Luz del chipset</div><div class="dim">1 LED</div></div><span class="status ok">LISTO</span><button class="btn">Identificar</button></div>
+          <div class="zone"><span class="zsw" style="background:#F0508F"></span><div><div>Luz de la placa</div><div class="dim">1 LED</div></div><span class="status ok">LISTO</span><button class="btn">Identificar</button></div>
+        </div>
+
+        <div class="module">
+          <div class="dev-head"><span class="label">RAM</span><span class="dev-name">Silicon Power DDR5 · 2 módulos</span></div>
+          <div class="zone"><span class="zsw" style="background:#39C5BB"></span><div><div>Módulo 1</div><div class="dim">8 LEDs</div></div><span class="status ok">LISTO</span><button class="btn">Identificar</button></div>
+          <div class="zone"><span class="zsw" style="background:#39C5BB"></span><div><div>Módulo 2</div><div class="dim">8 LEDs</div></div><span class="status ok">LISTO</span><button class="btn">Identificar</button></div>
+          <div style="margin-top:10px" class="label">CORRECCIÓN DE COLOR</div>
+          <div class="wb" style="margin-top:8px"><span>Rojo</span><input type="range" value="100"><span class="dim">100%</span></div>
+          <div class="wb"><span>Verde</span><input type="range" value="92"><span class="dim">92%</span></div>
+          <div class="wb"><span>Azul</span><input type="range" value="85"><span class="dim">85%</span></div>
+          <div class="dim" style="margin-top:6px">Para que el blanco de la RAM se vea igual que el de los ventiladores.</div>
+        </div>
+
+        <div class="module">
+          <div class="dev-head"><span class="label">PERIFÉRICOS</span></div>
+          <div class="zone"><span class="zsw" style="background:linear-gradient(90deg,#39C5BB,#F0508F)"></span><div><div>Teclado AULA F87 Pro</div><div class="dim">102 LEDs · teclas en grilla</div></div><span class="status ok">LISTO</span><div class="row-gap"><span class="dim">Miku lo maneja</span><button class="switch on" aria-pressed="true"><span></span></button></div></div>
+          <div class="zone"><span class="zsw" style="background:#39C5BB"></span><div><div>Micrófono HyperX Quadcast S</div><div class="dim">2 LEDs</div></div><span class="status ok">LISTO</span><div class="row-gap"><span class="dim">Miku lo maneja</span><button class="switch on" aria-pressed="true"><span></span></button></div></div>
+        </div>
+
+        <div class="module">
+          <div class="dev-head"><span class="label">FUERA DE ALCANCE</span></div>
+          <div class="zone"><span class="zsw empty"></span><div><div>Ventiladores del gabinete</div><div class="dim">Hub por SATA con control propio: no se pueden manejar por software. Ver el plan, §0.</div></div><span class="status warn">SIN CONEXIÓN</span><span></span></div>
+        </div>
+      </section>
+
+      <!-- MAPA -->
+      <section class="view" id="v-mapa">
+        <div class="map-wrap">
+          <div class="case" id="case">
+            <div class="case-outline"></div>
+            <div class="mz" style="left:230px;top:150px" data-z="fan">Ventilador<small>ARGB 2 · 8 LEDs</small></div>
+            <div class="mz" style="left:150px;top:60px" data-z="ram1">RAM 1<small>8 LEDs</small></div>
+            <div class="mz" style="left:150px;top:110px" data-z="ram2">RAM 2<small>8 LEDs</small></div>
+            <div class="mz" style="left:110px;top:230px" data-z="chip">Chipset<small>1 LED</small></div>
+            <div class="mz" style="left:210px;top:270px" data-z="ledc">Luz placa<small>1 LED</small></div>
+            <div class="mz" style="right:14px;top:250px" data-z="kbd">Teclado<small>FUERA · 102 LEDs</small></div>
+            <div class="mz" style="right:14px;top:60px" data-z="mic">Micrófono<small>FUERA · 2 LEDs</small></div>
+            <div class="mz ghost" style="left:30px;top:300px">Ventiladores del gabinete<small>SIN CONEXIÓN</small></div>
+          </div>
+          <div class="side">
+            <span class="label">PLANTILLAS</span>
+            <button class="btn">3 al frente + 1 atrás</button>
+            <button class="btn">Torre con vidrio</button>
+            <button class="btn">Escritorio compacto</button>
+            <span class="label" style="margin-top:10px">ZONA ELEGIDA</span>
+            <span class="muted">Ventilador · ARGB 2</span>
+            <button class="btn">Rotar LED 1 ↻</button>
+            <button class="btn">Espejar</button>
+            <p class="dim">Arrastra cada zona a su lugar real: la ola y el cometa cruzan el gabinete según este mapa.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PERFILES -->
+      <section class="view" id="v-perfiles">
+        <div class="row" style="margin-bottom:10px"><span class="label"><span class="n">01</span>PERFILES</span><div class="row-gap"><button class="btn primary">Guardar escena</button><button class="btn">Importar</button><button class="btn">Exportar</button></div></div>
+        <div class="profiles" id="profiles"></div>
+
+        <div class="module" style="margin-top:14px">
+          <div class="row"><span class="label"><span class="n">02</span>AUTOMÁTICO</span><button class="btn">+ Regla</button></div>
+          <div class="dim" style="margin-top:4px">Se aplican de arriba hacia abajo: la primera que se cumple manda.</div>
+          <div class="rules">
+            <div class="rule"><span class="prio">1</span><span><span class="when">Jugando a <b>VALORANT</b> →</span> <span class="then">Pantalla (ambilight)</span></span><span class="kbd">MODO JUEGO</span><button class="switch on" aria-pressed="true"><span></span></button></div>
+            <div class="rule"><span class="prio">2</span><span><span class="when">En vivo en OBS →</span> <span class="then">Stream</span></span><span class="kbd">MODO STREAM</span><button class="switch on" aria-pressed="true"><span></span></button></div>
+            <div class="rule"><span class="prio">3</span><span><span class="when">Miku durmiendo →</span> <span class="then">Respirar lento al 15%</span></span><span class="kbd">ESTADO</span><button class="switch on" aria-pressed="true"><span></span></button></div>
+            <div class="rule"><span class="prio">4</span><span><span class="when">Suena música →</span> <span class="then">Música · golpe</span></span><span class="kbd">MÚSICA</span><button class="switch" aria-pressed="false"><span></span></button></div>
+            <div class="rule"><span class="prio">5</span><span><span class="when">De 0:00 a 7:00 →</span> <span class="then">Brillo al 20%</span></span><span class="kbd">HORARIO</span><button class="switch on" aria-pressed="true"><span></span></button></div>
+            <div class="rule"><span class="prio">6</span><span><span class="when">Ausente 10 min →</span> <span class="then">Apagar (vuelve al regresar)</span></span><span class="kbd">AUSENCIA</span><button class="switch on" aria-pressed="true"><span></span></button></div>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="row"><span class="label"><span class="n">03</span>AL CERRAR MIKU</span><div class="seg"><button class="on">Color fijo de la escena</button><button>Modo de hardware</button><button>Apagadas</button></div></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Modelo simulado: tu hardware real ----------
+const ZONES = [
+  { id: "fan",  name: "Ventilador · ARGB 2", group: "fans",  leds: 8,   kind: "ring" },
+  { id: "ram1", name: "RAM · módulo 1",      group: "ram",   leds: 8,   kind: "bar" },
+  { id: "ram2", name: "RAM · módulo 2",      group: "ram",   leds: 8,   kind: "bar" },
+  { id: "chip", name: "Luz del chipset",     group: "board", leds: 1,   kind: "dot" },
+  { id: "ledc", name: "Luz de la placa",     group: "board", leds: 1,   kind: "dot" },
+  { id: "kbd",  name: "Teclado AULA F87 Pro",group: "periph",leds: 102, kind: "grid" },
+  { id: "mic",  name: "Micrófono Quadcast S",group: "periph",leds: 2,   kind: "mic" },
+];
+const GROUPS = [
+  { id: "all",    name: "Todo" },
+  { id: "fans",   name: "Ventiladores" },
+  { id: "ram",    name: "RAM" },
+  { id: "board",  name: "Placa" },
+  { id: "periph", name: "Periféricos" },
+];
+const EFFECTS = [
+  { id: "static",  name: "Estático",  desc: "Un color o un degradado quieto." },
+  { id: "breathe", name: "Respirar",  desc: "Sube y baja suave." },
+  { id: "rainbow", name: "Arcoíris",  desc: "Recorre todo el espectro." },
+  { id: "wave",    name: "Ola",       desc: "Una banda que cruza el gabinete según el mapa." },
+  { id: "comet",   name: "Cometa",    desc: "Un punto con estela; en los ventiladores gira." },
+  { id: "sparkle", name: "Destellos", desc: "LEDs al azar que se prenden y apagan." },
+  { id: "fire",    name: "Fuego",     desc: "Parpadeo cálido." },
+  { id: "music",   name: "Música",    desc: "Pulsa con los golpes de lo que suena en la PC.", badge: "REACTIVO" },
+  { id: "voice",   name: "Su voz",    desc: "Respira con la voz de Miku cuando habla.", badge: "REACTIVO" },
+  { id: "mood",    name: "Su ánimo",  desc: "El color de su ánimo actual (lo elige ella).", badge: "MIKU" },
+];
+const PALETTE = ["#39C5BB", "#F0508F", "#FFFFFF", "#8A5CF6", "#2F6BFF", "#3DDC84", "#FFD166", "#FF8A3D", "#FF3B3B", "#000000"];
+// Posición de cada zona en el "mapa" (0..1), para los efectos espaciales.
+const POS = { fan: 0.55, ram1: 0.25, ram2: 0.3, chip: 0.15, ledc: 0.35, kbd: 0.8, mic: 0.95 };
+
+const state = {
+  on: true, bright: 85, paused: false, identify: null, t: 0, selectedZone: null,
+  groups: {
+    all:    null,
+    fans:   { fx: "wave",    speed: 50, gb: 100, size: 40, dir: 1, colors: ["#39C5BB", "#F0508F"] },
+    ram:    { fx: "wave",    speed: 50, gb: 100, size: 40, dir: 1, colors: ["#39C5BB", "#F0508F"] },
+    board:  { fx: "breathe", speed: 35, gb: 100, size: 40, dir: 1, colors: ["#F0508F"] },
+    periph: { fx: "static",  speed: 50, gb: 80,  size: 40, dir: 1, colors: ["#39C5BB", "#F0508F"] },
+  },
+  sel: "fans", recent: ["#39C5BB", "#F0508F", "#8A5CF6"], history: [], future: [],
+};
+
+// ---------- Efectos ----------
+const hex2rgb = (h) => { const v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+const mix = (a, b, t) => a.map((x, i) => x + (b[i] - x) * t);
+function gradientAt(colors, t) {
+  const c = colors.map(hex2rgb);
+  if (c.length === 1) return c[0];
+  const x = ((t % 1) + 1) % 1 * (c.length);
+  const i = Math.floor(x);
+  return mix(c[i % c.length], c[(i + 1) % c.length], x - i);
+}
+function hsv(h) { const f = (n) => { const k = (n + h * 6) % 6; return 255 * (1 - Math.max(Math.min(k, 4 - k, 1), 0)); }; return [f(5), f(3), f(1)]; }
+let seed = 1; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const sparkle = {};
+let beat = 0;
+
+function color(fxState, zoneId, i, n, t) {
+  const g = fxState, sp = g.speed / 50, pos = (POS[zoneId] ?? 0.5) + (n > 1 ? (i / n) * 0.12 : 0);
+  let rgb;
+  switch (g.fx) {
+    case "static": rgb = gradientAt(g.colors, n > 1 ? i / n : 0); break;
+    case "breathe": { const k = (Math.sin(t * sp * 2) + 1) / 2; rgb = gradientAt(g.colors, Math.floor(t * sp / Math.PI) / g.colors.length).map((x) => x * (0.12 + 0.88 * k)); break; }
+    case "rainbow": rgb = hsv((t * sp * 0.15 + (n > 1 ? i / n : 0) * g.dir) % 1); break;
+    case "wave": { const w = 0.15 + g.size / 120; rgb = gradientAt(g.colors, (pos / w - t * sp * 0.35 * g.dir)); break; }
+    case "comet": { const head = (t * sp * 0.8 * g.dir) % 1; let d = ((i / n) - head + 1) % 1; d = g.dir > 0 ? (1 - d) % 1 : d; const tail = Math.max(0, 1 - d * (6 - g.size / 25)); rgb = hex2rgb(g.colors[0]).map((x) => x * tail); break; }
+    case "sparkle": { const key = zoneId + i; if (!sparkle[key] || sparkle[key].until < t) sparkle[key] = { until: t + 0.2 + rand() * 1.4, on: rand() < g.size / 160, c: g.colors[Math.floor(rand() * g.colors.length)] }; rgb = sparkle[key].on ? hex2rgb(sparkle[key].c) : [6, 12, 14]; break; }
+    case "fire": { const f = 0.55 + 0.45 * Math.sin(t * 9 * sp + i * 1.7 + Math.sin(t * 3 + i)); rgb = mix([255, 60, 0], [255, 190, 40], f).map((x) => x * (0.5 + f / 2)); break; }
+    case "music": rgb = gradientAt(g.colors, pos + beat * 0.2).map((x) => x * (0.15 + 0.85 * beat)); break;
+    case "voice": { const v = Math.max(0, Math.sin(t * 7) * Math.sin(t * 2.3)); rgb = hex2rgb(g.colors[0]).map((x) => x * (0.2 + 0.8 * v)); break; }
+    case "mood": rgb = mix(hex2rgb("#39C5BB"), hex2rgb("#FFD166"), (Math.sin(t * 0.3) + 1) / 2); break;
+    default: rgb = [0, 0, 0];
+  }
+  return rgb.map((x) => x * (g.gb / 100));
+}
+
+function zoneColors(z, t) {
+  const g = state.groups[z.group];
+  const out = [];
+  for (let i = 0; i < z.leds; i++) {
+    let c = state.on ? color(g, z.id, i, z.leds, t).map((x) => x * state.bright / 100) : [0, 0, 0];
+    if (state.identify === z.id) c = (Math.floor(t * 4) % 2) ? [255, 255, 255] : [0, 0, 0];
+    out.push(c);
+  }
+  return out;
+}
+
+// ---------- Vista previa ----------
+const cv = document.getElementById("preview"), ctx = cv.getContext("2d");
+const S = 2; // canvas al doble para que se vea nítido
+const hit = [];
+function rgbStr(c, a = 1) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+function glow(x, y, r, c) {
+  const lum = (c[0] + c[1] + c[2]) / 765;
+  if (lum < 0.02) { ctx.fillStyle = "#162427"; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); return; }
+  ctx.shadowColor = rgbStr(c, 0.9); ctx.shadowBlur = 14 * S;
+  ctx.fillStyle = rgbStr(c); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0;
+}
+function label(text, x, y) { ctx.fillStyle = "#7E9B98"; ctx.font = `600 ${9 * S}px Chakra Petch`; ctx.fillText(text, x, y); }
+function drawPreview(t) {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  hit.length = 0;
+  // gabinete
+  ctx.strokeStyle = "rgba(157,185,182,.3)"; ctx.lineWidth = 2 * S; ctx.beginPath(); ctx.roundRect(14 * S, 10 * S, 380 * S, 112 * S, 12 * S); ctx.stroke();
+  label("GABINETE", 24 * S, 24 * S);
+  // fan ring
+  const fan = ZONES[0], fc = zoneColors(fan, t), cx = 300 * S, cy = 66 * S, R = 34 * S;
+  ctx.strokeStyle = "rgba(157,185,182,.18)"; ctx.lineWidth = 6 * S; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+  fc.forEach((c, i) => { const a = -Math.PI / 2 + (i / fan.leds) * Math.PI * 2; glow(cx + Math.cos(a) * R, cy + Math.sin(a) * R, 5 * S, c); });
+  label("ARGB 2", cx - 18 * S, cy + 4 * S); hit.push({ z: fan, x: cx - R - 8 * S, y: cy - R - 8 * S, w: 2 * R + 16 * S, h: 2 * R + 16 * S });
+  // RAM
+  [ZONES[1], ZONES[2]].forEach((z, k) => {
+    const x0 = (130 + k * 26) * S, y0 = 32 * S, cs = zoneColors(z, t);
+    ctx.fillStyle = "#0E1B1D"; ctx.fillRect(x0 - 6 * S, y0 - 6 * S, 16 * S, 84 * S);
+    cs.forEach((c, i) => glow(x0 + 2 * S, y0 + i * 9.6 * S, 3.6 * S, c));
+    hit.push({ z, x: x0 - 8 * S, y: y0 - 8 * S, w: 20 * S, h: 88 * S });
+  });
+  label("RAM", 132 * S, 118 * S);
+  // chipset y placa
+  const ch = zoneColors(ZONES[3], t)[0]; glow(60 * S, 92 * S, 7 * S, ch); hit.push({ z: ZONES[3], x: 48 * S, y: 80 * S, w: 24 * S, h: 24 * S }); label("CHIPSET", 40 * S, 112 * S);
+  const lc = zoneColors(ZONES[4], t)[0]; ctx.shadowColor = rgbStr(lc, .9); ctx.shadowBlur = 12 * S; ctx.fillStyle = rgbStr(lc); ctx.fillRect(40 * S, 48 * S, 60 * S, 5 * S); ctx.shadowBlur = 0; hit.push({ z: ZONES[4], x: 36 * S, y: 40 * S, w: 68 * S, h: 20 * S }); label("PLACA", 52 * S, 70 * S);
+  // teclado
+  const kb = zoneColors(ZONES[5], t), kx = 420 * S, ky = 52 * S;
+  for (let i = 0; i < 102; i++) { const col = i % 17, row = Math.floor(i / 17); ctx.fillStyle = rgbStr(kb[i]); ctx.shadowColor = rgbStr(kb[i], .6); ctx.shadowBlur = 4 * S; ctx.beginPath(); ctx.roundRect(kx + col * 11.2 * S, ky + row * 11 * S, 9 * S, 9 * S, 2 * S); ctx.fill(); }
+  ctx.shadowBlur = 0; hit.push({ z: ZONES[5], x: kx - 4 * S, y: ky - 4 * S, w: 194 * S, h: 70 * S }); label("TECLADO", kx, 46 * S);
+  // micrófono
+  const mc = zoneColors(ZONES[6], t), mx = 650 * S, my = 66 * S;
+  ctx.strokeStyle = "rgba(157,185,182,.3)"; ctx.lineWidth = 2 * S; ctx.beginPath(); ctx.roundRect(mx - 14 * S, my - 32 * S, 28 * S, 54 * S, 14 * S); ctx.stroke();
+  glow(mx, my - 12 * S, 8 * S, mc[0]); glow(mx, my + 6 * S, 8 * S, mc[1]);
+  hit.push({ z: ZONES[6], x: mx - 18 * S, y: my - 36 * S, w: 36 * S, h: 62 * S }); label("MIC", mx - 9 * S, 124 * S);
+  // selección
+  const sel = hit.find((h) => h.z.id === state.selectedZone);
+  if (sel) { ctx.strokeStyle = "#7FE3DA"; ctx.lineWidth = 1.5 * S; ctx.setLineDash([5 * S, 4 * S]); ctx.strokeRect(sel.x, sel.y, sel.w, sel.h); ctx.setLineDash([]); }
+}
+const tip = document.getElementById("tip");
+cv.addEventListener("mousemove", (e) => {
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * S, y = (e.clientY - r.top) * S;
+  const h = hit.find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h);
+  if (h) { tip.style.display = "block"; tip.textContent = `${h.z.name} · ${h.z.leds} ${h.z.leds === 1 ? "LED" : "LEDs"}`; tip.style.left = (e.clientX - r.left + 14) + "px"; tip.style.top = (e.clientY - r.top + 10) + "px"; }
+  else tip.style.display = "none";
+});
+cv.addEventListener("mouseleave", () => (tip.style.display = "none"));
+cv.addEventListener("click", (e) => {
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * S, y = (e.clientY - r.top) * S;
+  const h = hit.find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h);
+  state.selectedZone = h ? h.z.id : null;
+  if (h) selectGroup(h.z.group);
+});
+
+// ---------- Miniaturas animadas ----------
+function miniRing(c, fxState, t, zoneId = "fan") {
+  const g = c.getContext("2d"), w = c.width, h = c.height; g.clearRect(0, 0, w, h); g.fillStyle = "#081113"; g.fillRect(0, 0, w, h);
+  const n = 12, R = Math.min(w, h) * 0.32;
+  for (let i = 0; i < n; i++) {
+    const col = color(fxState, zoneId, i, n, t), a = -Math.PI / 2 + i / n * Math.PI * 2;
+    g.fillStyle = rgbStr(col); g.shadowColor = rgbStr(col, .8); g.shadowBlur = 6; g.beginPath(); g.arc(w / 2 + Math.cos(a) * R, h / 2 + Math.sin(a) * R, Math.max(2, R * 0.2), 0, 7); g.fill();
+  }
+  g.shadowBlur = 0;
+}
+
+// ---------- Pestaña Escena ----------
+const groupsEl = document.getElementById("groups");
+function renderGroups() {
+  groupsEl.innerHTML = "";
+  GROUPS.forEach((g) => {
+    const b = document.createElement("button");
+    b.className = "group" + (state.sel === g.id ? " sel" : "");
+    const fx = g.id === "all" ? "Mezcla de efectos" : EFFECTS.find((e) => e.id === state.groups[g.id].fx).name;
+    b.innerHTML = `<canvas width="60" height="60" data-g="${g.id}"></canvas><span class="g-text"><span class="g-name">${g.name}</span><span class="g-fx">${fx}</span></span>`;
+    b.onclick = () => selectGroup(g.id);
+    groupsEl.appendChild(b);
+  });
+  const add = document.createElement("button"); add.className = "group add"; add.textContent = "+ Grupo nuevo"; groupsEl.appendChild(add);
+}
+const gallery = document.getElementById("gallery");
+function current() { return state.sel === "all" ? state.groups.fans : state.groups[state.sel]; }
+function renderGallery() {
+  gallery.innerHTML = "";
+  EFFECTS.forEach((fx) => {
+    const b = document.createElement("button");
+    b.className = "fx" + (current().fx === fx.id ? " sel" : "");
+    b.innerHTML = `<canvas width="144" height="88" data-fx="${fx.id}"></canvas><span>${fx.name}</span>${fx.badge ? `<span class="badge">${fx.badge}</span>` : ""}`;
+    b.onclick = () => change(() => applyToSel({ fx: fx.id }));
+    gallery.appendChild(b);
+  });
+  const fx = EFFECTS.find((e) => e.id === current().fx);
+  document.getElementById("fxDesc").textContent = fx.desc;
+  document.getElementById("layerBase").textContent = "Base · " + fx.name;
+}
+function applyToSel(patch) {
+  const ids = state.sel === "all" ? ["fans", "ram", "board", "periph"] : [state.sel];
+  ids.forEach((id) => Object.assign(state.groups[id], patch));
+}
+function selectGroup(id) {
+  state.sel = id;
+  document.getElementById("groupLabel").textContent = GROUPS.find((g) => g.id === id).name.toUpperCase();
+  syncControls(); renderGroups(); renderGallery(); renderPalette();
+}
+function syncControls() {
+  const g = current();
+  for (const [k, el, v] of [["speed", "speed", "speedVal"], ["gb", "gbright", "gbVal"], ["size", "size", "sizeVal"]]) {
+    document.getElementById(el).value = g[k]; document.getElementById(v).textContent = g[k];
+  }
+  document.querySelectorAll("[data-dir]").forEach((b) => b.classList.toggle("on", +b.dataset.dir === g.dir));
+  renderGradient();
+}
+for (const [k, el, v] of [["speed", "speed", "speedVal"], ["gb", "gbright", "gbVal"], ["size", "size", "sizeVal"]]) {
+  const input = document.getElementById(el);
+  input.addEventListener("pointerdown", () => snapshot());
+  input.addEventListener("input", () => { applyToSel({ [k]: +input.value }); document.getElementById(v).textContent = input.value; });
+}
+document.querySelectorAll("[data-dir]").forEach((b) => (b.onclick = () => change(() => { applyToSel({ dir: +b.dataset.dir }); syncControls(); })));
+
+const paletteEl = document.getElementById("palette");
+function renderPalette() {
+  paletteEl.innerHTML = "";
+  PALETTE.forEach((c) => {
+    const b = document.createElement("button"); b.className = "chip" + (current().colors[0] === c ? " sel" : ""); b.style.background = c; b.title = c; b.setAttribute("aria-label", c);
+    b.onclick = () => change(() => setFirstColor(c));
+    paletteEl.appendChild(b);
+  });
+  const recent = document.getElementById("recent"); recent.innerHTML = "";
+  state.recent.forEach((c) => { const b = document.createElement("button"); b.className = "chip"; b.style.background = c; b.title = c; b.onclick = () => change(() => setFirstColor(c)); recent.appendChild(b); });
+  document.getElementById("hex").value = current().colors[0];
+  renderGradient();
+}
+function setFirstColor(c) {
+  const colors = [...current().colors]; colors[0] = c; applyToSel({ colors });
+  state.recent = [c, ...state.recent.filter((x) => x !== c)].slice(0, 6);
+  renderPalette();
+}
+document.getElementById("hex").addEventListener("change", (e) => { const v = e.target.value.trim(); if (/^#?[0-9a-f]{6}$/i.test(v)) change(() => setFirstColor("#" + v.replace("#", "").toUpperCase())); });
+
+const gradEl = document.getElementById("gradient");
+function renderGradient() {
+  const cs = current().colors;
+  gradEl.style.background = cs.length > 1 ? `linear-gradient(90deg, ${cs.join(",")})` : cs[0];
+  gradEl.innerHTML = "";
+  cs.forEach((c, i) => {
+    const s = document.createElement("span"); s.className = "stop"; s.style.left = (cs.length > 1 ? (i / (cs.length - 1)) * 100 : 50) + "%"; s.style.setProperty("--c", c); s.title = c;
+    gradEl.appendChild(s);
+  });
+}
+gradEl.addEventListener("dblclick", () => change(() => { applyToSel({ colors: [...current().colors, PALETTE[(current().colors.length + 2) % PALETTE.length]] }); renderGradient(); }));
+
+// Deshacer / rehacer
+function snapshot() { state.history.push(JSON.stringify(state.groups)); state.future = []; updateUndo(); }
+function change(fn) { snapshot(); fn(); renderGroups(); renderGallery(); renderPalette(); }
+function updateUndo() { document.getElementById("undo").disabled = !state.history.length; document.getElementById("redo").disabled = !state.future.length; }
+function undo() { if (!state.history.length) return; state.future.push(JSON.stringify(state.groups)); state.groups = JSON.parse(state.history.pop()); selectGroup(state.sel); updateUndo(); }
+function redo() { if (!state.future.length) return; state.history.push(JSON.stringify(state.groups)); state.groups = JSON.parse(state.future.pop()); selectGroup(state.sel); updateUndo(); }
+document.getElementById("undo").onclick = undo; document.getElementById("redo").onclick = redo;
+addEventListener("keydown", (e) => { if (e.ctrlKey && e.key === "z") { e.preventDefault(); undo(); } if (e.ctrlKey && e.key === "y") { e.preventDefault(); redo(); } });
+
+// Barra de la vista previa
+const master = document.getElementById("master");
+master.onclick = () => { state.on = !state.on; master.classList.toggle("on", state.on); master.setAttribute("aria-pressed", state.on); };
+document.getElementById("bright").addEventListener("input", (e) => { state.bright = +e.target.value; document.getElementById("brightVal").textContent = e.target.value + "%"; });
+document.getElementById("pause").onclick = (e) => { state.paused = !state.paused; e.target.classList.toggle("on", state.paused); e.target.textContent = state.paused ? "Seguir" : "Pausar"; };
+document.getElementById("identify").onclick = () => { state.identify = state.selectedZone ?? "fan"; setTimeout(() => (state.identify = null), 3000); };
+const mikuSw = document.getElementById("mikuDecides");
+mikuSw.onclick = () => { const on = !mikuSw.classList.contains("on"); mikuSw.classList.toggle("on", on); mikuSw.setAttribute("aria-pressed", on); document.getElementById("sceneName").textContent = on ? "LA ELIGE MIKU" : "MIKU TURQUESA"; };
+
+// Pestañas
+document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => {
+  document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x === t));
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "v-" + t.dataset.view));
+}));
+
+// ---------- Dispositivos: asistente del ventilador ----------
+const dial = document.getElementById("dial"); let first = 0, cw = true;
+function renderDial() {
+  dial.querySelectorAll("button").forEach((b) => b.remove());
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI / 2 + i / 8 * Math.PI * 2, b = document.createElement("button");
+    b.style.left = 70 + Math.cos(a) * 56 + "px"; b.style.top = 70 + Math.sin(a) * 56 + "px";
+    if (i === first) b.className = "first";
+    b.title = i === first ? "LED 1" : "Empieza aquí"; b.onclick = () => { first = i; renderDial(); };
+    dial.appendChild(b);
+  }
+}
+document.getElementById("cw").onclick = () => { cw = true; document.getElementById("cw").classList.add("on"); document.getElementById("ccw").classList.remove("on"); };
+document.getElementById("ccw").onclick = () => { cw = false; document.getElementById("ccw").classList.add("on"); document.getElementById("cw").classList.remove("on"); };
+document.getElementById("testLeds").onclick = () => {
+  let k = 0; const btns = [...dial.querySelectorAll("button")];
+  const id = setInterval(() => { btns.forEach((b, i) => (b.style.background = i === ((first + (cw ? k : -k)) % 8 + 8) % 8 ? "#FFFFFF" : "#163033")); if (++k > 8) { clearInterval(id); renderDial(); } }, 220);
+};
+document.getElementById("wizToggle").onclick = (e) => { const w = document.getElementById("wizard"); const open = w.style.display !== "none"; w.style.display = open ? "none" : "grid"; e.target.textContent = open ? "Ajustar" : "Ajustando…"; e.target.classList.toggle("on", !open); };
+
+// ---------- Mapa: arrastrar zonas ----------
+document.querySelectorAll(".mz:not(.ghost)").forEach((el) => {
+  el.addEventListener("pointerdown", (e) => {
+    el.setPointerCapture(e.pointerId);
+    const start = { x: e.clientX, y: e.clientY, l: el.offsetLeft, t: el.offsetTop };
+    el.style.right = "auto"; el.style.left = start.l + "px";
+    const move = (ev) => { el.style.left = start.l + ev.clientX - start.x + "px"; el.style.top = start.t + ev.clientY - start.y + "px"; POS[el.dataset.z] = Math.min(1, Math.max(0, (el.offsetLeft) / 560)); };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", () => el.removeEventListener("pointermove", move), { once: true });
+  });
+});
+
+// ---------- Perfiles ----------
+const PROFILES = [
+  { name: "Miku turquesa", meta: "OLA · CTRL+ALT+1", fx: { fx: "wave", speed: 50, gb: 100, size: 40, dir: 1, colors: ["#39C5BB", "#F0508F"] }, star: true, active: true },
+  { name: "Noche", meta: "RESPIRAR · 20% · CTRL+ALT+2", fx: { fx: "breathe", speed: 20, gb: 40, size: 40, dir: 1, colors: ["#8A5CF6"] } },
+  { name: "Juego", meta: "PANTALLA · CTRL+ALT+3", fx: { fx: "fire", speed: 60, gb: 100, size: 40, dir: 1, colors: ["#FF3B3B"] } },
+  { name: "Fiesta", meta: "MÚSICA · GOLPE", fx: { fx: "music", speed: 50, gb: 100, size: 40, dir: 1, colors: ["#F0508F", "#39C5BB", "#FFD166"] } },
+  { name: "Stream", meta: "ARCOÍRIS LENTO", fx: { fx: "rainbow", speed: 25, gb: 100, size: 40, dir: 1, colors: ["#FFFFFF"] } },
+  { name: "Cebollín", meta: "DISEÑADO POR ELLA", fx: { fx: "comet", speed: 45, gb: 100, size: 60, dir: 1, colors: ["#3DDC84"] }, byMiku: true },
+];
+const profEl = document.getElementById("profiles");
+PROFILES.forEach((p) => {
+  const b = document.createElement("button");
+  b.className = "profile" + (p.active ? " active" : "") + (p.byMiku ? " by-miku" : "");
+  b.innerHTML = `<canvas width="240" height="80"></canvas><div class="p-name">${p.name}</div><div class="p-meta">${p.meta}</div>${p.star ? '<span class="star">★</span>' : ""}`;
+  b.onclick = () => change(() => {
+    document.querySelectorAll(".profile").forEach((x) => x.classList.remove("active")); b.classList.add("active");
+    ["fans", "ram", "board", "periph"].forEach((id) => Object.assign(state.groups[id], JSON.parse(JSON.stringify(p.fx))));
+    document.getElementById("sceneName").textContent = p.name.toUpperCase();
+  });
+  b._fx = p.fx; profEl.appendChild(b);
+});
+
+// ---------- Bucle ----------
+let last = performance.now();
+function loop(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (!state.paused) state.t += dt;
+  beat = Math.max(0, beat - dt * 3); if ((state.t % 0.5) < dt) beat = 1; // golpe simulado a 120 BPM
+  const t = state.t;
+  drawPreview(t);
+  document.querySelectorAll("canvas[data-g]").forEach((c) => miniRing(c, c.dataset.g === "all" ? state.groups.fans : state.groups[c.dataset.g], t));
+  document.querySelectorAll("canvas[data-fx]").forEach((c) => miniRing(c, { ...current(), fx: c.dataset.fx }, t));
+  document.querySelectorAll(".profile").forEach((b) => {
+    const c = b.querySelector("canvas"), g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height);
+    for (let i = 0; i < 24; i++) { g.fillStyle = rgbStr(color(b._fx, "fan", i, 24, t)); g.fillRect(i * 10, 0, 9, 80); }
+  });
+  requestAnimationFrame(loop);
+}
+renderGroups(); selectGroup("fans"); renderDial(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
