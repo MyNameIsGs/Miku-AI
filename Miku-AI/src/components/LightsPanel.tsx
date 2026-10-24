@@ -1,19 +1,33 @@
 import { useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { IconClose, IconReload } from "./Icons";
 import type { MotionPhase } from "../hooks/usePresenceMotion";
 import {
+  DEFAULT_GLOBAL,
+  EFFECT_KINDS,
+  EFFECT_NAMES,
+  EffectKind,
+  LightsGlobal,
   RgbDevice,
   RgbZone,
+  Scene,
+  allZoneKeys,
   deviceKeys,
   deviceTitle,
+  effectOfZone,
   isResizable,
   listDevices,
   loadLightsState,
+  makeEffect,
   normalizeHex,
-  paintDevices,
-  paintZone,
+  probeZone,
   resizeZone,
+  rgbToHex,
   saveLightsState,
+  sendGlobal,
+  setPreview,
+  setScene,
+  withZoneEffect,
   zoneKey,
   zoneLabel,
 } from "../lib/lights";
@@ -34,7 +48,6 @@ const PALETTE = [
   { hex: "#FF8A3D", name: "Naranja" },
   { hex: "#FF3B3B", name: "Rojo" },
 ];
-const OFF = "#000000";
 
 // Asistente de los ventiladores: mientras se ajusta, todos los LEDs en
 // turquesa y el último en rosa -- el número está bien cuando el rosa cae
@@ -45,20 +58,28 @@ const SETUP_LAST = "#F0508F";
 // Orden de los dispositivos en el panel.
 const KIND_ORDER = ["placa madre", "RAM", "tarjeta de video", "refrigeración", "tira LED", "gabinete", "teclado", "mouse", "micrófono"];
 
-type FanSetup = { deviceIndex: number; zoneIndex: number; count: number; original: number };
+type FanSetup = { deviceIndex: number; zoneIndex: number; key: string; count: number; original: number };
+type PreviewZone = { key: string; colors: [number, number, number][] };
 
-// Panel de luces RGB (2026-10-22, pedido de Sebastián): todos los
-// dispositivos que ve OpenRGB con sus zonas, un color por zona, y el
-// asistente para decirle a la placa cuántos LEDs tiene lo enchufado en cada
-// conector ARGB. Mismo marco que los demás paneles (diseño v1 §4).
+// Panel de luces RGB. Fase 1 de docs/luces-argb/PLAN.md: además del color
+// por zona y el asistente de ventiladores, un efecto para todo a la vez
+// (lo dibuja el motor en Rust, lights_engine.rs), brillo general y el
+// interruptor. La fase 2 lo reemplaza por el panel de la maqueta.
 export function LightsPanel({ onClose, motion }: LightsPanelProps) {
   const [devices, setDevices] = useState<RgbDevice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [colors, setColors] = useState<Record<string, string>>({});
+  const [scene, setSceneState] = useState<Scene | null>(null);
+  const [global, setGlobalState] = useState<LightsGlobal>(DEFAULT_GLOBAL);
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const [setup, setSetup] = useState<FanSetup | null>(null);
-  const paintTimers = useRef<Record<string, number>>({});
+  // Lo que están mostrando las luces ahora (primer LED de cada zona).
+  const [live, setLive] = useState<Record<string, string>>({});
+  // "Todo a la vez": efecto y dos colores.
+  const [allKind, setAllKind] = useState<EffectKind>("static");
+  const [allColors, setAllColors] = useState<[string, string]>(["#39C5BB", "#F0508F"]);
+  const [allSpeed, setAllSpeed] = useState(50);
+  const timers = useRef<Record<string, number>>({});
 
   async function refresh() {
     setLoading(true);
@@ -66,8 +87,16 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
     try {
       const [list, state] = await Promise.all([listDevices(), loadLightsState()]);
       setDevices(list);
-      setColors(state.colors);
+      setSceneState(state.scene);
+      setGlobalState(state.global);
       setSizes(state.sizes);
+      // Si toda la escena es un solo grupo, "todo a la vez" arranca con él.
+      const only = state.scene?.groups.length === 1 ? state.scene.groups[0].effect : null;
+      if (only) {
+        setAllKind(only.kind);
+        setAllColors([only.colors[0] ?? "#39C5BB", only.colors[1] ?? only.colors[0] ?? "#F0508F"]);
+        setAllSpeed(only.speed);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -77,36 +106,55 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
 
   useEffect(() => {
     refresh();
+    setPreview(true).catch(console.error);
+    const unlisten = listen<PreviewZone[]>("luces-cuadro", (event) => {
+      const next: Record<string, string> = {};
+      for (const zone of event.payload) if (zone.colors[0]) next[zone.key] = rgbToHex(zone.colors[0]);
+      setLive(next);
+    });
+    return () => {
+      setPreview(false).catch(console.error);
+      unlisten.then((u) => u());
+    };
   }, []);
 
   const keys = devices ? deviceKeys(devices) : new Map<number, string>();
   const keyOf = (device: RgbDevice, zone: RgbZone) => zoneKey(keys.get(device.index) ?? device.name, zone.name);
+  const fail = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
 
-  function persist(nextColors: Record<string, string>, nextSizes: Record<string, number>) {
-    saveLightsState({ colors: nextColors, sizes: nextSizes });
+  // Se manda como mucho cada 80 ms por cosa (los deslizadores y el selector
+  // de color mandan cambios sin parar mientras se arrastran).
+  function later(id: string, fn: () => void) {
+    clearTimeout(timers.current[id]);
+    timers.current[id] = window.setTimeout(fn, 80);
   }
 
-  // El selector de color manda cambios sin parar mientras se arrastra: se
-  // pinta como mucho cada 80 ms por zona.
+  function updateScene(next: Scene) {
+    setSceneState(next);
+    later("scene", () => setScene(next).catch(fail));
+  }
+
+  function updateGlobal(next: LightsGlobal) {
+    setGlobalState(next);
+    later("global", async () => {
+      try {
+        await sendGlobal(next);
+        const state = await loadLightsState();
+        await saveLightsState({ ...state, global: next });
+      } catch (err) {
+        fail(err);
+      }
+    });
+  }
+
+  function applyAll(kind: EffectKind, colors: [string, string], speed: number) {
+    if (!devices) return;
+    const effectColors = kind === "static" ? [colors[0]] : colors;
+    updateScene({ groups: [{ zones: allZoneKeys(devices), effect: makeEffect(kind, effectColors, { speed }) }], positions: scene?.positions ?? {} });
+  }
+
   function setZoneColor(device: RgbDevice, zone: RgbZone, hex: string) {
-    const key = keyOf(device, zone);
-    const color = normalizeHex(hex);
-    const next = { ...colors, [key]: color };
-    setColors(next);
-    clearTimeout(paintTimers.current[key]);
-    paintTimers.current[key] = window.setTimeout(() => {
-      paintZone(device, zone, [color]).catch((err) => setError(String(err)));
-      persist(next, sizes);
-    }, 80);
-  }
-
-  async function setAllColor(hex: string) {
-    try {
-      await paintDevices(hex, []);
-      setColors((await loadLightsState()).colors);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    updateScene(withZoneEffect(scene, keyOf(device, zone), makeEffect("static", [normalizeHex(hex)])));
   }
 
   // --- Asistente de ventiladores ---
@@ -115,38 +163,34 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
     setDevices((list) => list?.map((d) => (d.index === updated.index ? updated : d)) ?? null);
   }
 
-  async function showSetupCount(deviceIndex: number, zoneIndex: number, count: number) {
-    const device = devices?.find((d) => d.index === deviceIndex);
-    const zone = device?.zones.find((z) => z.index === zoneIndex);
+  async function showSetupCount(current: FanSetup, count: number) {
+    const device = devices?.find((d) => d.index === current.deviceIndex);
+    const zone = device?.zones.find((z) => z.index === current.zoneIndex);
     if (!device || !zone) return;
     try {
-      const updated = await resizeZone(device, zone, count);
-      replaceDevice(updated);
-      const resized = updated.zones.find((z) => z.index === zoneIndex)!;
-      if (resized.leds > 0) {
-        await paintZone(updated, resized, [...Array(resized.leds - 1).fill(SETUP_BODY), SETUP_LAST]);
-      }
+      replaceDevice(await resizeZone(device, zone, count));
+      await probeZone(current.key, [...Array(Math.max(0, count - 1)).fill(SETUP_BODY), SETUP_LAST]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      fail(err);
     }
   }
 
   function startSetup(device: RgbDevice, zone: RgbZone) {
-    const count = zone.leds > 0 ? zone.leds : 8;
-    setSetup({ deviceIndex: device.index, zoneIndex: zone.index, count, original: zone.leds });
-    showSetupCount(device.index, zone.index, count);
+    const next = { deviceIndex: device.index, zoneIndex: zone.index, key: keyOf(device, zone), count: zone.leds > 0 ? zone.leds : 8, original: zone.leds };
+    setSetup(next);
+    showSetupCount(next, next.count);
   }
 
   function changeSetupCount(delta: number | null, exact?: number) {
     if (!setup) return;
-    const device = devices?.find((d) => d.index === setup.deviceIndex);
-    const zone = device?.zones.find((z) => z.index === setup.zoneIndex);
+    const zone = devices?.find((d) => d.index === setup.deviceIndex)?.zones.find((z) => z.index === setup.zoneIndex);
     if (!zone) return;
     const wanted = exact ?? setup.count + (delta ?? 0);
     const count = Math.max(Math.max(1, zone.ledsMin), Math.min(zone.ledsMax, Math.round(wanted)));
     if (count === setup.count) return;
-    setSetup({ ...setup, count });
-    showSetupCount(setup.deviceIndex, setup.zoneIndex, count);
+    const next = { ...setup, count };
+    setSetup(next);
+    showSetupCount(next, count);
   }
 
   async function finishSetup(save: boolean) {
@@ -156,19 +200,47 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
     const device = devices?.find((d) => d.index === current.deviceIndex);
     const zone = device?.zones.find((z) => z.index === current.zoneIndex);
     if (!device || !zone) return;
-    const key = keyOf(device, zone);
     try {
       const size = save ? current.count : current.original;
-      const updated = await resizeZone(device, zone, size);
-      replaceDevice(updated);
-      const nextSizes = save ? { ...sizes, [key]: size } : sizes;
+      replaceDevice(await resizeZone(device, zone, size));
+      await probeZone(current.key, null);
+      const nextSizes = save ? { ...sizes, [current.key]: size } : sizes;
       setSizes(nextSizes);
-      persist(colors, nextSizes);
-      // Vuelve al color de la zona (o al de Miku si todavía no tenía).
-      const resized = updated.zones.find((z) => z.index === current.zoneIndex)!;
-      if (resized.leds > 0) await paintZone(updated, resized, [colors[key] ?? SETUP_BODY]);
+      // Una zona nueva sin efecto: entra con el turquesa de Miku.
+      let nextScene = scene;
+      if (save && size > 0 && !effectOfZone(scene, current.key)) {
+        nextScene = withZoneEffect(scene, current.key, makeEffect("static", Array.of(SETUP_BODY)));
+        setSceneState(nextScene);
+        await setScene(nextScene);
+      }
+      const state = await loadLightsState();
+      await saveLightsState({ ...state, sizes: nextSizes, scene: nextScene });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      fail(err);
+    }
+  }
+
+  // Volver a empezar con un conector: 0 LEDs, sin tamaño guardado y fuera
+  // de la escena (pedido de Sebastián: no había forma de deshacerlo).
+  async function resetZone(device: RgbDevice, zone: RgbZone) {
+    const key = keyOf(device, zone);
+    try {
+      replaceDevice(await resizeZone(device, zone, 0));
+      const nextSizes = { ...sizes };
+      delete nextSizes[key];
+      setSizes(nextSizes);
+      const nextScene = scene
+        ? {
+            ...scene,
+            groups: scene.groups.map((g) => ({ ...g, zones: g.zones.filter((z) => z !== key) })).filter((g) => g.zones.length > 0),
+          }
+        : null;
+      setSceneState(nextScene);
+      if (nextScene) await setScene(nextScene);
+      const state = await loadLightsState();
+      await saveLightsState({ ...state, sizes: nextSizes, scene: nextScene });
+    } catch (err) {
+      fail(err);
     }
   }
 
@@ -202,10 +274,30 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
         </div>
       </div>
 
-      <p className="lights-hint">
-        Las luces de tu PC a través de OpenRGB. Los colores se guardan y vuelven solos al prender la PC; Miku también
-        puede cambiarlos si se lo pides.
-      </p>
+      <div className="lights-global">
+        <button
+          className={`lights-switch ${global.on ? "on" : ""}`}
+          onClick={() => updateGlobal({ ...global, on: !global.on })}
+          aria-pressed={global.on}
+          aria-label={global.on ? "Apagar todas las luces" : "Prender las luces"}
+          title={global.on ? "Apagar todas las luces" : "Prender las luces"}
+        >
+          <span className="lights-switch-knob" />
+        </button>
+        <span className="lights-global-label">BRILLO</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={global.brightness}
+          onChange={(e) => updateGlobal({ ...global, brightness: Number(e.target.value) })}
+          aria-label="Brillo general"
+        />
+        <span className="lights-global-value">{global.brightness}%</span>
+        <button className={`m-btn m-btn-small ${global.paused ? "on" : ""}`} onClick={() => updateGlobal({ ...global, paused: !global.paused })}>
+          {global.paused ? "Seguir" : "Pausar"}
+        </button>
+      </div>
 
       <div className="m-panel-body">
         {error && (
@@ -227,29 +319,72 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
           <>
             <section className="lights-module lights-all" aria-label="Todas las luces">
               <div className="lights-module-title">TODO A LA VEZ</div>
+              <div className="lights-effects" role="radiogroup" aria-label="Efecto">
+                {EFFECT_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    role="radio"
+                    aria-checked={allKind === kind}
+                    className={`lights-effect ${allKind === kind ? "on" : ""}`}
+                    onClick={() => {
+                      setAllKind(kind);
+                      applyAll(kind, allColors, allSpeed);
+                    }}
+                  >
+                    {EFFECT_NAMES[kind]}
+                  </button>
+                ))}
+              </div>
               <div className="lights-swatches">
                 {PALETTE.map((c) => (
                   <button
                     key={c.hex}
                     className="lights-swatch"
                     style={{ background: c.hex }}
-                    onClick={() => setAllColor(c.hex)}
-                    aria-label={`Todo en ${c.name}`}
+                    onClick={() => {
+                      const next: [string, string] = [c.hex, allColors[1]];
+                      setAllColors(next);
+                      applyAll(allKind, next, allSpeed);
+                    }}
+                    aria-label={`Color 1: ${c.name}`}
                     title={c.name}
                   />
                 ))}
-                <label className="lights-swatch lights-swatch-custom" title="Otro color">
-                  <input
-                    type="color"
-                    defaultValue="#39C5BB"
-                    onChange={(e) => setAllColor(e.target.value)}
-                    aria-label="Todo en otro color"
-                  />
-                </label>
-                <button className="m-btn m-btn-small" onClick={() => setAllColor(OFF)}>
-                  Apagar todo
-                </button>
+                {[0, 1].map((slot) => (
+                  <label key={slot} className="lights-slot" title={`Color ${slot + 1}`}>
+                    <span className="lights-slot-color" style={{ background: allColors[slot] }}>
+                      <input
+                        type="color"
+                        value={allColors[slot].toLowerCase()}
+                        onChange={(e) => {
+                          const next: [string, string] = slot === 0 ? [normalizeHex(e.target.value), allColors[1]] : [allColors[0], normalizeHex(e.target.value)];
+                          setAllColors(next);
+                          applyAll(allKind, next, allSpeed);
+                        }}
+                        aria-label={`Color ${slot + 1}`}
+                      />
+                    </span>
+                    <span className="lights-slot-label">{slot + 1}</span>
+                  </label>
+                ))}
               </div>
+              {allKind !== "static" && (
+                <div className="lights-speed">
+                  <span className="lights-global-label">VELOCIDAD</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={100}
+                    value={allSpeed}
+                    onChange={(e) => {
+                      setAllSpeed(Number(e.target.value));
+                      applyAll(allKind, allColors, Number(e.target.value));
+                    }}
+                    aria-label="Velocidad del efecto"
+                  />
+                  <span className="lights-global-value">{allSpeed}</span>
+                </div>
+              )}
             </section>
 
             {sorted.map((device) => (
@@ -261,20 +396,21 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
                 <ul className="lights-zones">
                   {device.zones.map((zone) => {
                     const key = keyOf(device, zone);
-                    const color = colors[key] ?? "#39C5BB";
+                    const effect = effectOfZone(scene, key);
+                    const shown = live[key] ?? effect?.colors[0] ?? "#39C5BB";
                     const resizable = isResizable(zone);
-                    const inSetup = setup?.deviceIndex === device.index && setup.zoneIndex === zone.index;
+                    const inSetup = setup?.key === key;
                     return (
                       <li key={zone.index} className={`lights-zone ${inSetup ? "setup" : ""}`}>
                         <div className="lights-zone-main">
                           <label
                             className={`lights-zone-color ${zone.leds === 0 ? "empty" : ""}`}
-                            style={zone.leds > 0 ? { background: color } : undefined}
+                            style={zone.leds > 0 ? { background: shown } : undefined}
                             title={zone.leds > 0 ? "Cambiar color" : "Primero dile cuántos LEDs tiene"}
                           >
                             <input
                               type="color"
-                              value={color.toLowerCase()}
+                              value={(effect?.colors[0] ?? "#39C5BB").toLowerCase()}
                               disabled={zone.leds === 0 || inSetup}
                               onChange={(e) => setZoneColor(device, zone, e.target.value)}
                               aria-label={`Color de ${zoneLabel(zone)}`}
@@ -285,9 +421,19 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
                             <span className="lights-zone-detail">
                               {resizable && zone.leds === 0
                                 ? "Sin configurar: dile cuántos LEDs tiene lo enchufado"
-                                : `${zone.leds} ${zone.leds === 1 ? "LED" : "LEDs"}`}
+                                : `${zone.leds} ${zone.leds === 1 ? "LED" : "LEDs"}${effect ? ` · ${EFFECT_NAMES[effect.kind]}` : ""}`}
                             </span>
                           </div>
+                          {resizable && !inSetup && zone.leds > 0 && (
+                            <button
+                              className="m-btn m-btn-small"
+                              onClick={() => resetZone(device, zone)}
+                              disabled={setup !== null}
+                              title="Dejar este conector sin configurar, para empezar de cero"
+                            >
+                              Desconfigurar
+                            </button>
+                          )}
                           {resizable && !inSetup && (
                             <button
                               className={`m-btn m-btn-small ${zone.leds === 0 ? "m-btn-primary" : ""}`}

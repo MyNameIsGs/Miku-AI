@@ -20,6 +20,7 @@ mod music_beat;
 mod location;
 mod tray;
 mod openrgb;
+mod lights_engine;
 
 // Tamaño de toda la app (Miku, barra y paneles), pedido de Sebastián: que
 // ocupe menos pantalla. Es el zoom del webview -- el diseño sigue midiendo
@@ -306,7 +307,9 @@ pub fn run() {
             if let Err(e) = tray::create(app.handle()) {
                 eprintln!("[BANDEJA] No se pudo crear el ícono: {e}");
             }
-            // Luces RGB: deja OpenRGB abierto con su servidor (ver openrgb.rs).
+            // Luces RGB: el motor de efectos (ver lights_engine.rs) y OpenRGB
+            // abierto con su servidor (ver openrgb.rs).
+            lights_engine::start(app.handle().clone());
             tauri::async_runtime::spawn(async {
                 if let Err(e) = openrgb::ensure_server().await {
                     eprintln!("[LUCES] {e}");
@@ -328,6 +331,10 @@ pub fn run() {
             openrgb::rgb_poner_color,
             openrgb::rgb_pintar_zona,
             openrgb::rgb_redimensionar_zona,
+            lights_engine::luces_escena,
+            lights_engine::luces_global,
+            lights_engine::luces_probar_zona,
+            lights_engine::luces_vista_previa,
             text_input::escribir_texto,
             window_control::minimizar_ventana,
             window_control::mover_ventana,
@@ -361,6 +368,7 @@ pub fn run() {
 
     app.run(|_app_handle, event| {
         if let tauri::RunEvent::Exit = event {
+            lights_engine::on_exit();
             kill_voice_server();
         }
     });

@@ -1,14 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 
-// Luces RGB de la PC (2026-10-22): lo que comparten el panel Luces y la tool
-// controlar_luces. El hardware lo maneja el servicio de OpenRGB; esto habla
-// con él por openrgb.rs.
+// Luces RGB de la PC: lo que comparten el panel Luces y la tool
+// controlar_luces. El hardware lo maneja el servicio de OpenRGB (ver
+// openrgb.rs); los efectos los dibuja el motor en Rust (lights_engine.rs).
 //
-// Los colores y los tamaños de los conectores ARGB se guardan acá (local,
-// .settings.dat) y se vuelven a poner al arrancar la app: al reiniciar la
-// PC, la RAM vuelve a su efecto de hardware y la placa se olvida de cuántos
-// LEDs tiene cada ventilador.
+// Lo que se ve es una *escena*: grupos de zonas, cada uno con su efecto.
+// Se guarda acá (local, .settings.dat) junto con cuántos LEDs tiene cada
+// conector ARGB, y se vuelve a mandar al motor al abrir la app: al
+// reiniciar la PC, la RAM vuelve a su efecto de hardware y la placa se
+// olvida de cuántos LEDs tiene cada ventilador.
 
 export type RgbZone = {
   index: number;
@@ -29,22 +30,62 @@ export type RgbDevice = {
   activeMode: number;
 };
 
+export const EFFECT_KINDS = ["static", "breathe", "rainbow", "wave", "comet", "sparkle", "fire"] as const;
+export type EffectKind = (typeof EFFECT_KINDS)[number];
+
+export const EFFECT_NAMES: Record<EffectKind, string> = {
+  static: "Estático",
+  breathe: "Respirar",
+  rainbow: "Arcoíris",
+  wave: "Ola",
+  comet: "Cometa",
+  sparkle: "Destellos",
+  fire: "Fuego",
+};
+
+export type Effect = {
+  kind: EffectKind;
+  colors: string[]; // "#39C5BB"
+  speed: number; // 1-100
+  brightness: number; // 0-100
+  size: number; // 1-100
+  direction: 1 | -1;
+};
+
+export type LightGroup = { zones: string[]; effect: Effect };
+export type Scene = { groups: LightGroup[]; positions: Record<string, number> };
+export type LightsGlobal = { on: boolean; brightness: number; paused: boolean; fps: number };
+
 type LightsState = {
-  // Por zona (ver zoneKey): cuántos LEDs tiene lo enchufado, y su color.
   sizes: Record<string, number>;
-  colors: Record<string, string>;
+  scene: Scene | null;
+  global: LightsGlobal;
 };
 
 const STORE_KEY = "lights";
+export const DEFAULT_GLOBAL: LightsGlobal = { on: true, brightness: 100, paused: false, fps: 30 };
+
+export function makeEffect(kind: EffectKind, colors: string[], patch: Partial<Effect> = {}): Effect {
+  return { kind, colors, speed: 50, brightness: 100, size: 40, direction: 1, ...patch };
+}
 
 export async function loadLightsState(): Promise<LightsState> {
   try {
     const store = await load(".settings.dat", { autoSave: false });
-    const saved = await store.get<LightsState>(STORE_KEY);
-    return { sizes: saved?.sizes ?? {}, colors: saved?.colors ?? {} };
+    const saved = await store.get<Partial<LightsState> & { colors?: Record<string, string> }>(STORE_KEY);
+    let scene = saved?.scene ?? null;
+    // Antes (737c876) se guardaba un color suelto por zona: pasa a una
+    // escena con un grupo estático por zona.
+    if (!scene && saved?.colors && Object.keys(saved.colors).length > 0) {
+      scene = {
+        groups: Object.entries(saved.colors).map(([zone, color]) => ({ zones: [zone], effect: makeEffect("static", [color]) })),
+        positions: {},
+      };
+    }
+    return { sizes: saved?.sizes ?? {}, scene, global: { ...DEFAULT_GLOBAL, ...saved?.global } };
   } catch (err) {
     console.error("[Luces] No se pudo cargar lo guardado:", err);
-    return { sizes: {}, colors: {} };
+    return { sizes: {}, scene: null, global: DEFAULT_GLOBAL };
   }
 }
 
@@ -58,9 +99,63 @@ export async function saveLightsState(state: LightsState) {
   }
 }
 
-// Clave estable de cada dispositivo: su nombre, y si hay varios iguales
-// (los dos módulos de RAM se llaman "ENE DRAM") el orden entre ellos. El
-// número que da OpenRGB puede cambiar si aparece un dispositivo nuevo.
+// --- Al motor ---
+
+function toEngine(scene: Scene) {
+  return {
+    groups: scene.groups.map((g) => ({ zones: g.zones, effect: { ...g.effect, colors: g.effect.colors.map(hexToRgb) } })),
+    positions: scene.positions,
+  };
+}
+
+export const sendScene = (scene: Scene) => invoke("luces_escena", { escena: toEngine(scene) });
+export const sendGlobal = (global: LightsGlobal) => invoke("luces_global", { global });
+// El asistente de ventiladores: pinta la zona a mano (null la devuelve al efecto).
+export const probeZone = (zoneKey: string, colors: string[] | null) =>
+  invoke("luces_probar_zona", { zona: zoneKey, colores: colors ? colors.map(hexToRgb) : null });
+export const setPreview = (active: boolean) => invoke("luces_vista_previa", { activa: active });
+
+export async function setScene(scene: Scene) {
+  await sendScene(scene);
+  const state = await loadLightsState();
+  await saveLightsState({ ...state, scene });
+}
+
+export async function setGlobal(global: LightsGlobal) {
+  await sendGlobal(global);
+  const state = await loadLightsState();
+  await saveLightsState({ ...state, global });
+}
+
+// --- Escenas ---
+
+// La zona pasa a tener su propio efecto: sale del grupo donde estaba.
+export function withZoneEffect(scene: Scene | null, zoneKey: string, effect: Effect): Scene {
+  const groups = (scene?.groups ?? [])
+    .map((g) => ({ ...g, zones: g.zones.filter((z) => z !== zoneKey) }))
+    .filter((g) => g.zones.length > 0);
+  return { groups: [...groups, { zones: [zoneKey], effect }], positions: scene?.positions ?? {} };
+}
+
+// Varias zonas juntas con un mismo efecto (las demás quedan como estaban).
+export function withZonesEffect(scene: Scene | null, zoneKeys: string[], effect: Effect): Scene {
+  const set = new Set(zoneKeys);
+  const groups = (scene?.groups ?? [])
+    .map((g) => ({ ...g, zones: g.zones.filter((z) => !set.has(z)) }))
+    .filter((g) => g.zones.length > 0);
+  return { groups: [...groups, { zones: zoneKeys, effect }], positions: scene?.positions ?? {} };
+}
+
+export function effectOfZone(scene: Scene | null, zoneKey: string): Effect | null {
+  return scene?.groups.find((g) => g.zones.includes(zoneKey))?.effect ?? null;
+}
+
+// --- Dispositivos ---
+
+// Clave estable de cada dispositivo, igual que openrgb::device_keys: su
+// nombre, y si hay varios iguales (los dos módulos de RAM se llaman "ENE
+// DRAM") el orden entre ellos. El número que da OpenRGB puede cambiar si
+// aparece un dispositivo nuevo.
 export function deviceKeys(devices: RgbDevice[]): Map<number, string> {
   const seen = new Map<string, number>();
   const keys = new Map<number, string>();
@@ -73,6 +168,13 @@ export function deviceKeys(devices: RgbDevice[]): Map<number, string> {
 }
 
 export const zoneKey = (deviceKey: string, zoneName: string) => `${deviceKey}|${zoneName}`;
+
+export function allZoneKeys(devices: RgbDevice[], indices: number[] = []): string[] {
+  const keys = deviceKeys(devices);
+  return devices
+    .filter((d) => indices.length === 0 || indices.includes(d.index))
+    .flatMap((d) => d.zones.map((z) => zoneKey(keys.get(d.index)!, z.name)));
+}
 
 // Los conectores ARGB de la placa: la placa no sabe qué hay enchufado.
 export const isResizable = (zone: RgbZone) => zone.ledsMax > zone.ledsMin;
@@ -103,23 +205,14 @@ export function hexToRgb(hex: string): [number, number, number] {
   return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
 }
 
-export function isHexColor(text: string): boolean {
-  return /^#?[0-9a-f]{6}$/i.test(text.trim());
-}
+export const rgbToHex = ([r, g, b]: [number, number, number]) =>
+  `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
 
 export function normalizeHex(text: string): string {
   return `#${text.trim().replace("#", "").toUpperCase()}`;
 }
 
 export const listDevices = () => invoke<RgbDevice[]>("rgb_listar");
-
-export function paintZone(device: RgbDevice, zone: RgbZone, colors: string[]) {
-  return invoke("rgb_pintar_zona", {
-    dispositivo: device.index,
-    zona: zone.index,
-    colores: colors.map(hexToRgb),
-  });
-}
 
 export function resizeZone(device: RgbDevice, zone: RgbZone, size: number) {
   return invoke<RgbDevice>("rgb_redimensionar_zona", {
@@ -129,30 +222,30 @@ export function resizeZone(device: RgbDevice, zone: RgbZone, size: number) {
   });
 }
 
-// Un color para dispositivos enteros (la tool de Miku, "todo de este color"
-// en el panel). Vacío = todos. Lo guarda para cada zona. Devuelve los
-// nombres de los que cambió.
-export async function paintDevices(hex: string, indices: number[]): Promise<string[]> {
-  const color = normalizeHex(hex);
-  const [r, g, b] = hexToRgb(color);
-  const changed = await invoke<string[]>("rgb_poner_color", { r, g, b, dispositivos: indices });
+// Un efecto en dispositivos enteros (la tool de Miku, "todo a la vez" en el
+// panel). Vacío = todos. Devuelve los nombres de los que cambió.
+export async function applyToDevices(effect: Effect, indices: number[]): Promise<string[]> {
   const devices = await listDevices();
-  const keys = deviceKeys(devices);
+  const targets = devices.filter((d) => indices.length === 0 || indices.includes(d.index));
   const state = await loadLightsState();
-  for (const device of devices) {
-    if (indices.length > 0 && !indices.includes(device.index)) continue;
-    for (const zone of device.zones) state.colors[zoneKey(keys.get(device.index)!, zone.name)] = color;
-  }
-  await saveLightsState(state);
-  return changed;
+  const zones = allZoneKeys(devices, indices);
+  // Todo a la vez: la escena entera pasa a ser este grupo.
+  const scene = indices.length === 0 ? { groups: [{ zones, effect }], positions: state.scene?.positions ?? {} } : withZonesEffect(state.scene, zones, effect);
+  await setScene(scene);
+  return targets.map((d) => deviceTitle(d, devices));
 }
 
-// Al arrancar: vuelve a poner los tamaños de los conectores y los colores
-// guardados. El servicio de OpenRGB puede estar todavía detectando si la PC
-// recién prendió, así que se reintenta un par de veces.
+// Al arrancar: vuelve a poner los tamaños de los conectores y le manda al
+// motor la escena guardada. El servicio de OpenRGB puede estar todavía
+// detectando si la PC recién prendió, así que se reintenta un par de veces
+// (el motor solo, por su lado, se reconecta cuando OpenRGB vuelve).
 export async function restoreLights() {
   const state = await loadLightsState();
-  if (Object.keys(state.sizes).length === 0 && Object.keys(state.colors).length === 0) return;
+  if (state.scene) {
+    await sendGlobal(state.global);
+    await sendScene(state.scene);
+  }
+  if (Object.keys(state.sizes).length === 0) return;
   for (const waitMs of [0, 20000, 60000]) {
     if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
     try {
@@ -160,20 +253,15 @@ export async function restoreLights() {
       if (devices.length === 0) continue;
       const keys = deviceKeys(devices);
       for (const device of devices) {
-        const key = keys.get(device.index)!;
         let current = device;
         for (const zone of device.zones) {
-          const size = state.sizes[zoneKey(key, zone.name)];
+          const size = state.sizes[zoneKey(keys.get(device.index)!, zone.name)];
           if (size !== undefined && isResizable(zone) && zone.leds !== size) {
             current = await resizeZone(current, zone, size);
           }
         }
-        for (const zone of current.zones) {
-          const color = state.colors[zoneKey(key, zone.name)];
-          if (color && zone.leds > 0) await paintZone(current, zone, [color]);
-        }
       }
-      console.log("[Luces] Colores y tamaños guardados restaurados.");
+      console.log("[Luces] Tamaños de los conectores restaurados.");
       return;
     } catch (err) {
       console.warn("[Luces] Todavía no se pudieron restaurar:", err);

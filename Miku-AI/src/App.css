@@ -3140,3 +3140,127 @@ a:hover {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Luces, fase 1: interruptor, brillo general, efectos y los dos colores. */
+.lights-global {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  background: rgba(57, 197, 187, 0.07);
+  border: 1px solid var(--m-line);
+  border-radius: 14px;
+}
+.lights-global input[type="range"],
+.lights-speed input[type="range"] {
+  flex: 1;
+}
+.lights-global-label {
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--m-dim);
+}
+.lights-global-value {
+  width: 40px;
+  text-align: right;
+  font-family: var(--m-font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-teal);
+}
+.m-panel .lights-switch {
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  background: rgba(157, 185, 182, 0.25);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.lights-switch-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--m-muted);
+}
+.m-panel .lights-switch.on {
+  justify-content: flex-end;
+  background: var(--m-teal);
+}
+.lights-switch.on .lights-switch-knob {
+  background: var(--m-on-teal);
+}
+.m-panel .m-btn.on {
+  color: var(--m-teal);
+  background: rgba(57, 197, 187, 0.14);
+  border-color: rgba(57, 197, 187, 0.45);
+}
+.lights-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.m-panel .lights-effect {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--m-muted);
+  background: transparent;
+  border: 1px solid var(--m-line-soft);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.m-panel .lights-effect:hover {
+  color: var(--m-text);
+  border-color: rgba(57, 197, 187, 0.45);
+}
+.m-panel .lights-effect.on {
+  color: var(--m-on-teal);
+  background: var(--m-teal);
+  border-color: var(--m-teal);
+  font-weight: 700;
+}
+.lights-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  cursor: pointer;
+}
+.lights-slot-color {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--m-text);
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+.lights-slot-color input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+}
+.lights-slot-label {
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--m-dim);
+}
+.lights-speed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

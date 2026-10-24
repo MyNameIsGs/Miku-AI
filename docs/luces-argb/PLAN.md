@@ -92,6 +92,7 @@ Mismo marco que los paneles de la ronda 1 (726 × 656, tokens `--m-*`, Dela / Ch
 - El esquema del gabinete con cada zona arrastrable a su lugar real (frente, arriba, atrás, RAM, placa). Los efectos espaciales usan este mapa.
 - Se puede rotar un ventilador (dónde queda su LED 1) y espejar una tira.
 - Plantillas para empezar: «gabinete con 3 ventiladores al frente + 1 atrás», etc.
+- **Ajuste aprobado (maqueta, 2026-10-22):** en el mapa, el teclado y el micrófono se dibujan con su forma real (un teclado con sus teclas y un micrófono de pie, con los LEDs en su lugar), no como fichas de texto.
 
 ### 3.5 Pestaña «Perfiles»
 - **Perfiles con nombre:** guardar la escena actual, renombrar, duplicar, borrar (con el diálogo propio de confirmación), marcar como favorito.

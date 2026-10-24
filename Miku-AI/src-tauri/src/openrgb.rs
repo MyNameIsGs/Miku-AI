@@ -45,7 +45,7 @@ const REQUEST_PROTOCOL_VERSION: u32 = 40;
 const SET_CLIENT_NAME: u32 = 50;
 const RESIZEZONE: u32 = 1000;
 const UPDATELEDS: u32 = 1050;
-const UPDATEZONELEDS: u32 = 1051;
+pub(crate) const UPDATEZONELEDS: u32 = 1051;
 const SETCUSTOMMODE: u32 = 1100;
 const UPDATEMODE: u32 = 1101;
 
@@ -76,7 +76,7 @@ pub struct RgbDevice {
     pub active_mode: i32,
     // Cada modo tal cual vino del servidor, para devolvérselo en UPDATEMODE.
     #[serde(skip)]
-    raw_modes: Vec<Vec<u8>>,
+    pub(crate) raw_modes: Vec<Vec<u8>>,
 }
 
 // Orden de device_type en RGBController.h de OpenRGB.
@@ -114,13 +114,13 @@ fn header(device: u32, packet: u32, size: usize) -> Vec<u8> {
     out
 }
 
-struct Connection {
-    stream: TcpStream,
+pub(crate) struct Connection {
+    pub(crate) stream: TcpStream,
     protocol: u32,
 }
 
 impl Connection {
-    async fn open() -> Result<Self, String> {
+    pub(crate) async fn open() -> Result<Self, String> {
         let stream = timeout(CONNECT_TIMEOUT, TcpStream::connect(SERVER))
             .await
             .map_err(|_| not_running())?
@@ -141,7 +141,7 @@ impl Connection {
         Ok(conn)
     }
 
-    async fn send(&mut self, device: u32, packet: u32, data: &[u8]) -> Result<(), String> {
+    pub(crate) async fn send(&mut self, device: u32, packet: u32, data: &[u8]) -> Result<(), String> {
         let mut out = header(device, packet, data.len());
         out.extend_from_slice(data);
         self.stream
@@ -322,7 +322,7 @@ async fn wait_for_detection(conn: &mut Connection) -> Result<(), String> {
 
 // Conexión lista para usar: abre OpenRGB si hace falta y, si lo acaba de
 // abrir, espera a que detecte.
-async fn connect() -> Result<Connection, String> {
+pub(crate) async fn connect() -> Result<Connection, String> {
     let launched = ensure_server().await?;
     let mut conn = Connection::open().await?;
     if launched {
@@ -447,7 +447,7 @@ fn parse_controller(index: u32, data: &[u8], protocol: u32) -> Result<RgbDevice,
     Ok(RgbDevice { index, name, kind: kind_name(device_type).into(), zones, leds, modes, active_mode, raw_modes })
 }
 
-async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>, String> {
+pub(crate) async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>, String> {
     let count = conn.controller_count().await?;
     let mut devices = Vec::with_capacity(count as usize);
     for index in 0..count {
@@ -464,7 +464,7 @@ async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>, String> {
 // Sebastián; el micrófono, que solo tiene "Direct", sí cambiaba. Por eso
 // además se manda UPDATEMODE con el modo Direct, como hace la ventana de
 // OpenRGB al elegir un modo.
-async fn set_direct(conn: &mut Connection, device: &RgbDevice) -> Result<(), String> {
+pub(crate) async fn set_direct(conn: &mut Connection, device: &RgbDevice) -> Result<(), String> {
     conn.send(device.index, SETCUSTOMMODE, &[]).await?;
     if let Some(direct) = device.modes.iter().position(|m| m.eq_ignore_ascii_case("direct")) {
         let mode = &device.raw_modes[direct];
@@ -476,6 +476,38 @@ async fn set_direct(conn: &mut Connection, device: &RgbDevice) -> Result<(), Str
         conn.send(device.index, UPDATEMODE, &payload).await?;
     }
     Ok(())
+}
+
+// Paquete UPDATEZONELEDS: data_size (incluye sus propios 4 bytes) + zona
+// + cantidad + un RGBColor por LED (bytes R, G, B, 0).
+pub(crate) fn zone_leds_payload(zone: u32, colors: &[[u8; 3]]) -> Vec<u8> {
+    let size = 4 + 4 + 2 + 4 * colors.len();
+    let mut payload = Vec::with_capacity(size);
+    payload.extend_from_slice(&(size as u32).to_le_bytes());
+    payload.extend_from_slice(&zone.to_le_bytes());
+    payload.extend_from_slice(&(colors.len() as u16).to_le_bytes());
+    for [r, g, b] in colors {
+        payload.extend_from_slice(&[*r, *g, *b, 0]);
+    }
+    payload
+}
+
+// Clave estable de cada dispositivo, igual que deviceKeys en lib/lights.ts:
+// su nombre, y si hay varios iguales (los dos módulos de RAM se llaman "ENE
+// DRAM") "#2", "#3"... por orden. El número que da OpenRGB puede cambiar.
+pub(crate) fn device_keys(devices: &[RgbDevice]) -> Vec<(u32, String)> {
+    let mut sorted: Vec<&RgbDevice> = devices.iter().collect();
+    sorted.sort_by_key(|d| d.index);
+    let mut seen: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+    sorted
+        .into_iter()
+        .map(|d| {
+            let n = seen.entry(d.name.as_str()).or_insert(0);
+            *n += 1;
+            let key = if *n == 1 { d.name.clone() } else { format!("{}#{}", d.name, n) };
+            (d.index, key)
+        })
+        .collect()
 }
 
 fn find_device(devices: Vec<RgbDevice>, index: u32) -> Result<RgbDevice, String> {
@@ -536,15 +568,8 @@ pub async fn rgb_pintar_zona(dispositivo: u32, zona: u32, colores: Vec<[u8; 3]>)
     }
     set_direct(&mut conn, &device).await?;
     let count = zone.leds as usize;
-    let size = 4 + 4 + 2 + 4 * count;
-    let mut payload = Vec::with_capacity(size);
-    payload.extend_from_slice(&(size as u32).to_le_bytes());
-    payload.extend_from_slice(&zona.to_le_bytes());
-    payload.extend_from_slice(&(count as u16).to_le_bytes());
-    for i in 0..count {
-        let [r, g, b] = if colores.len() == 1 { colores[0] } else { colores[i.min(colores.len() - 1)] };
-        payload.extend_from_slice(&[r, g, b, 0]);
-    }
+    let colors: Vec<[u8; 3]> = (0..count).map(|i| colores[i.min(colores.len() - 1)]).collect();
+    let payload = zone_leds_payload(zona, &colors);
     conn.send(device.index, UPDATEZONELEDS, &payload).await?;
     let _ = conn.stream.flush().await;
     Ok(())
@@ -570,6 +595,8 @@ pub async fn rgb_redimensionar_zona(dispositivo: u32, zona: u32, tamano: u32) ->
     payload.extend_from_slice(&(size as i32).to_le_bytes());
     conn.send(device.index, RESIZEZONE, &payload).await?;
     let _ = conn.stream.flush().await;
+    // El motor de efectos tiene que volver a leer cuántos LEDs hay.
+    crate::lights_engine::devices_changed();
     conn.controller(dispositivo).await
 }
 
@@ -651,5 +678,82 @@ mod tests {
         println!("después: {:?}", after.zones.iter().map(|z| (&z.name, z.leds, z.start)).collect::<Vec<_>>());
         let back = rgb_redimensionar_zona(board.index, zone.index, zone.leds).await.expect("volver");
         println!("vuelta: {:?}", back.zones.iter().map(|z| (&z.name, z.leds)).collect::<Vec<_>>());
+    }
+
+    // Cuánto tarda OpenRGB en procesar una actualización de cada zona
+    // (manda el color que ya tienen: no cambia nada a la vista). La
+    // respuesta a REQUEST_CONTROLLER_COUNT llega recién cuando el servidor
+    // terminó lo anterior de esta conexión.
+    #[tokio::test]
+    #[ignore]
+    async fn mide_cuanto_tarda_cada_zona() {
+        let mut conn = Connection::open().await.expect("OpenRGB abierto");
+        let devices = all_devices(&mut conn).await.expect("lista");
+        let color = [43u8, 148, 140];
+        for d in &devices {
+            for z in d.zones.iter().filter(|z| z.leds > 0) {
+                let colors = vec![color; z.leds as usize];
+                let start = std::time::Instant::now();
+                for _ in 0..5 {
+                    conn.send(d.index, UPDATEZONELEDS, &zone_leds_payload(z.index, &colors)).await.unwrap();
+                }
+                conn.controller_count().await.unwrap();
+                println!("{} / {}: {:.1} ms por actualización", d.name, z.name, start.elapsed().as_secs_f64() * 1000.0 / 5.0);
+            }
+        }
+    }
+
+    // Diagnóstico del conector ARGB 2 (con Miku cerrada, para que el motor
+    // no se meta): cuatro formas de pintarlo, 8 s cada una.
+    #[tokio::test]
+    #[ignore]
+    async fn diagnostico_argb() {
+        let mut conn = Connection::open().await.expect("OpenRGB abierto");
+        let mut board = all_devices(&mut conn).await.unwrap().into_iter().find(|d| d.kind == "placa madre").expect("placa");
+        let zone = board.zones.iter().find(|z| z.name == "ARGB_V2_2").expect("ARGB_V2_2").index;
+        if board.zones[zone as usize].leds == 0 {
+            let mut p = (zone as i32).to_le_bytes().to_vec();
+            p.extend_from_slice(&8i32.to_le_bytes());
+            conn.send(board.index, RESIZEZONE, &p).await.unwrap();
+            board = conn.controller(board.index).await.unwrap();
+        }
+        let z = board.zones[zone as usize].clone();
+        println!("ARGB_V2_2: {} LEDs desde el LED {}; dispositivo {} LEDs", z.leds, z.start, board.leds);
+        let wait = || tokio::time::sleep(Duration::from_secs(8));
+
+        println!("1/4 ROJO: solo la zona (UPDATEZONELEDS), sin tocar el modo");
+        conn.send(board.index, UPDATEZONELEDS, &zone_leds_payload(zone, &vec![[255, 0, 0]; z.leds as usize])).await.unwrap();
+        wait().await;
+
+        println!("2/4 VERDE: el dispositivo entero (UPDATELEDS)");
+        let mut p = Vec::new();
+        let size = 4 + 2 + 4 * board.leds as usize;
+        p.extend_from_slice(&(size as u32).to_le_bytes());
+        p.extend_from_slice(&board.leds.to_le_bytes());
+        for _ in 0..board.leds { p.extend_from_slice(&[0, 255, 0, 0]); }
+        conn.send(board.index, UPDATELEDS, &p).await.unwrap();
+        wait().await;
+
+        println!("3/4 AZUL: modo directo de nuevo y después la zona");
+        set_direct(&mut conn, &board).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        conn.send(board.index, UPDATEZONELEDS, &zone_leds_payload(zone, &vec![[0, 0, 255]; z.leds as usize])).await.unwrap();
+        wait().await;
+
+        println!("4/4 AMARILLO: modo de hardware Static de la placa");
+        if let Some(idx) = board.modes.iter().position(|m| m == "Static") {
+            let mut mode = board.raw_modes[idx].clone();
+            let n = mode.len();
+            // Los colores del modo van al final (4 bytes cada uno): se cambia
+            // el último.
+            if n >= 6 { mode[n - 4..].copy_from_slice(&[255, 200, 0, 0]); }
+            let mut p = Vec::new();
+            p.extend_from_slice(&((8 + mode.len()) as u32).to_le_bytes());
+            p.extend_from_slice(&(idx as i32).to_le_bytes());
+            p.extend_from_slice(&mode);
+            conn.send(board.index, UPDATEMODE, &p).await.unwrap();
+        }
+        wait().await;
+        println!("listo");
     }
 }
