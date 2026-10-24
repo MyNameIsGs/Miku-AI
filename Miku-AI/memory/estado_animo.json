@@ -1,7 +1,7 @@
 {
-  "mood": "happy",
-  "intensity": 15,
+  "mood": "relaxed",
+  "intensity": 0.8721933804699695,
   "halfLifeMs": 1200000,
-  "setAt": 1792811161204,
+  "setAt": 1792811264914,
   "device": "pc"
 }
