@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { rgbCss } from "../../lib/lightEffects";
-import { RgbDevice, RgbZone, deviceKeys, isResizable, zoneKey, zoneLabel, deviceTitle } from "../../lib/lights";
+import { RgbDevice, RgbZone, Scene, deviceKeys, isResizable, zoneKey, zoneLabel, deviceTitle, zoneOptions } from "../../lib/lights";
 
 type Rgb = [number, number, number];
 
 type LightsPreviewProps = {
   devices: RgbDevice[];
+  // Para cuántos ventiladores hay en cada conector y qué zonas no se tocan.
+  scene: Scene | null;
   // Lo que están mostrando las luces ahora, por zona (los cuadros del motor).
   frame: Record<string, Rgb[]>;
   selected: string | null;
@@ -24,7 +26,7 @@ const S = 2; // el canvas va al doble para que se vea nítido
 // en esquema con lo que detecta OpenRGB -- cada ventilador como un anillo
 // de sus LEDs, la RAM como barras, las luces de la placa, el teclado como
 // grilla y el micrófono -- pintado con los cuadros reales del motor.
-export function LightsPreview({ devices, frame, selected, identifying, onSelect }: LightsPreviewProps) {
+export function LightsPreview({ devices, scene, frame, selected, identifying, onSelect }: LightsPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hits = useRef<Hit[]>([]);
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -35,7 +37,7 @@ export function LightsPreview({ devices, frame, selected, identifying, onSelect 
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
     blink.current += 1;
-    draw(ctx, devices, frame, selected, identifying, blink.current, hits.current);
+    draw(ctx, devices, scene, frame, selected, identifying, blink.current, hits.current);
   });
 
   function hitAt(e: React.MouseEvent) {
@@ -72,6 +74,7 @@ export function LightsPreview({ devices, frame, selected, identifying, onSelect 
 function draw(
   ctx: CanvasRenderingContext2D,
   devices: RgbDevice[],
+  scene: Scene | null,
   frame: Record<string, Rgb[]>,
   selected: string | null,
   identifying: string | null,
@@ -147,24 +150,37 @@ function draw(
   });
   if (ram.length) label("RAM", 162, 122);
 
-  // Ventiladores: un anillo por conector ARGB con algo enchufado.
-  const fans = board.flatMap((d) => d.zones.filter((z) => isResizable(z) && z.leds > 0).map((z) => ({ d, z })));
-  fans.forEach(({ d, z }, k) => {
-    const key = keyOf(d, z);
-    const cx = 268 + k * 74;
+  // Ventiladores: un anillo por ventilador (un conector puede tener varios
+  // encadenados, ver ZoneOptions.fans), en el orden físico de sus LEDs.
+  const fans = board.flatMap((d) =>
+    d.zones
+      .filter((z) => isResizable(z) && z.leds > 0)
+      .flatMap((z) => {
+        const key = keyOf(d, z);
+        const count = Math.max(1, Math.min(zoneOptions(scene, key).fans, z.leds));
+        const per = Math.max(1, Math.floor(z.leds / count));
+        return Array.from({ length: count }, (_, f) => ({ z, key, f, count, from: f * per, size: f === count - 1 ? z.leds - f * per : per }));
+      }),
+  );
+  const ringR = fans.length > 2 ? 22 : 30;
+  const ringGap = fans.length > 2 ? 52 : 74;
+  fans.forEach(({ z, key, f, count, from, size }, k) => {
+    const cx = (fans.length > 2 ? 250 : 268) + k * ringGap;
     const cy = 66;
-    const r = 30;
+    const r = ringR;
     ctx.strokeStyle = "rgba(157,185,182,.16)";
     ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
-    colorsOf(key, z.leds).forEach((c, i) => {
-      const a = -Math.PI / 2 + (i / z.leds) * Math.PI * 2;
-      led(cx + Math.cos(a) * r, cy + Math.sin(a) * r, z.leds > 16 ? 3 : 4.5, c);
+    const cs = colorsOf(key, z.leds).slice(from, from + size);
+    cs.forEach((c, i) => {
+      const a = -Math.PI / 2 + (i / size) * Math.PI * 2;
+      led(cx + Math.cos(a) * r, cy + Math.sin(a) * r, size > 16 ? 3 : 4, c);
     });
-    label(zoneLabel(z).replace("Conector ", "").toUpperCase(), cx - 20, cy + 3);
-    addHit(key, zoneLabel(z), z.leds, cx - r - 8, cy - r - 8, 2 * r + 16, 2 * r + 16);
+    const name = zoneLabel(z).replace("Conector ", "").toUpperCase();
+    label(count > 1 ? `${name}·${f + 1}` : name, cx - (count > 1 ? 24 : 20), cy + 3);
+    addHit(key, count > 1 ? `${zoneLabel(z)} · ventilador ${f + 1}` : zoneLabel(z), size, cx - r - 8, cy - r - 8, 2 * r + 16, 2 * r + 16);
   });
   if (fans.length === 0) label("SIN VENTILADORES CONFIGURADOS", 236, 70);
 

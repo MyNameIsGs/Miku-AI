@@ -69,6 +69,64 @@ pub struct Scene {
     // reparten en orden.
     #[serde(default)]
     pub positions: HashMap<String, f32>,
+    // Cómo está armada cada zona de verdad (fase 3): cuántos ventiladores
+    // hay en un conector, dónde está su LED 1, hacia dónde gira, y la
+    // corrección de color del dispositivo.
+    #[serde(default)]
+    pub zones: HashMap<String, ZoneOptions>,
+    // Zonas que Miku no toca (quedan con lo que les ponga su propio
+    // programa).
+    #[serde(default)]
+    pub excluded: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ZoneOptions {
+    // Ventiladores encadenados en el conector (cada uno con leds/fans LEDs).
+    #[serde(default = "one")]
+    pub fans: u32,
+    // Qué LED (de cada ventilador) es el primero del efecto.
+    #[serde(default)]
+    pub offset: u32,
+    // Al revés: el efecto recorre los LEDs en el otro sentido.
+    #[serde(default)]
+    pub reverse: bool,
+    // Multiplicador por canal (0 a 1): que el blanco de la RAM y el de los
+    // ventiladores se vean iguales.
+    #[serde(default = "full_gain")]
+    pub gain: [f32; 3],
+}
+
+fn one() -> u32 {
+    1
+}
+fn full_gain() -> [f32; 3] {
+    [1.0, 1.0, 1.0]
+}
+
+impl Default for ZoneOptions {
+    fn default() -> Self {
+        ZoneOptions { fans: 1, offset: 0, reverse: false, gain: full_gain() }
+    }
+}
+
+// Qué LED del efecto le toca a cada LED físico de la zona: dentro de qué
+// ventilador cae, y en qué lugar de ese ventilador según su LED 1 y su
+// sentido. Devuelve (ventilador, índice en el ventilador, LEDs de ese
+// ventilador).
+fn map_led(physical: usize, leds: usize, options: &ZoneOptions) -> (usize, usize, usize) {
+    let fans = (options.fans.max(1) as usize).min(leds.max(1));
+    let per = (leds / fans).max(1);
+    let fan = (physical / per).min(fans - 1);
+    let size = if fan == fans - 1 { leds - fan * per } else { per };
+    let j = physical - fan * per;
+    let offset = options.offset as usize % size.max(1);
+    let mut logical = (j + size - offset) % size.max(1);
+    if options.reverse {
+        logical = (size - logical) % size.max(1);
+    }
+    (fan, logical, size)
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -279,11 +337,21 @@ fn render(
             if zone.leds == 0 {
                 continue;
             }
+            if scene.excluded.contains(key) {
+                continue;
+            }
             let pos = scene.positions.get(key).copied().unwrap_or_else(|| {
                 resolved.order.iter().position(|o| o == key).unwrap_or(0) as f32 / total
             });
+            let options = scene.zones.get(key).cloned().unwrap_or_default();
             let colors = (0..zone.leds)
-                .map(|i| scale(renderer.color(&group.effect, key, pos, i, zone.leds, t), k))
+                .map(|p| {
+                    let (fan, i, n) = map_led(p, zone.leds, &options);
+                    // Cada ventilador un poco más allá en el mapa: la ola
+                    // pasa de uno al siguiente.
+                    let c = scale(renderer.color(&group.effect, key, pos + fan as f32 * 0.06, i, n, t), k);
+                    [0, 1, 2].map(|ch| (c[ch] as f32 * options.gain[ch].clamp(0.0, 1.0)).round() as u8)
+                })
                 .collect();
             frame.insert(key.clone(), colors);
         }
@@ -474,6 +542,8 @@ pub fn on_exit() {
                 })
                 .collect(),
             positions: scene.positions.clone(),
+            zones: scene.zones.clone(),
+            excluded: scene.excluded.clone(),
         };
         let mut renderer = Renderer { rng: 1, sparkles: HashMap::new() };
         let frame = render(&mut renderer, &still, &global, &BTreeMap::new(), &resolved, 0.0);
@@ -543,6 +613,20 @@ mod tests {
     #[test]
     fn el_brillo_general_en_cero_apaga() {
         assert_eq!(scale([255.0, 128.0, 10.0], 0.0), [0, 0, 0]);
+    }
+
+    #[test]
+    fn el_led_1_y_el_sentido_reordenan_cada_ventilador() {
+        let normal = ZoneOptions::default();
+        assert_eq!(map_led(0, 8, &normal), (0, 0, 8));
+        let shifted = ZoneOptions { offset: 2, ..ZoneOptions::default() };
+        assert_eq!(map_led(2, 8, &shifted), (0, 0, 8));
+        let reversed = ZoneOptions { reverse: true, ..ZoneOptions::default() };
+        assert_eq!(map_led(1, 8, &reversed), (0, 7, 8));
+        let three = ZoneOptions { fans: 3, ..ZoneOptions::default() };
+        assert_eq!(map_led(9, 24, &three), (1, 1, 8));
+        // Si no divide justo, el último ventilador se queda con el resto.
+        assert_eq!(map_led(9, 10, &ZoneOptions { fans: 3, ..ZoneOptions::default() }), (2, 3, 4));
     }
 
     #[test]

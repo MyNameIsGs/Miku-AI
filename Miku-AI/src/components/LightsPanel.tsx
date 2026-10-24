@@ -28,6 +28,7 @@ import {
 import { LightsPreview } from "./lights/LightsPreview";
 import { LightsSceneTab } from "./lights/LightsSceneTab";
 import { LightsDevicesTab } from "./lights/LightsDevicesTab";
+import { LightsMapTab } from "./lights/LightsMapTab";
 
 type LightsPanelProps = {
   onClose: () => void;
@@ -36,7 +37,8 @@ type LightsPanelProps = {
 
 type Rgb = [number, number, number];
 type PreviewZone = { key: string; colors: Rgb[] };
-type Tab = "escena" | "dispositivos";
+type Tab = "escena" | "dispositivos" | "mapa";
+const TAB_NAMES: Record<Tab, string> = { escena: "Escena", dispositivos: "Dispositivos", mapa: "Mapa" };
 type Selection = CategoryId | "all";
 
 const UNDO_LIMIT = 50;
@@ -53,8 +55,8 @@ function loadRecent(): string[] {
 
 // Panel de luces RGB, fase 2 de docs/luces-argb/PLAN.md (maqueta en
 // docs/luces-argb/maqueta.html): vista previa en vivo arriba con el brillo
-// general, y pestañas Escena y Dispositivos. Mapa y Perfiles llegan en las
-// fases 3 y 5. Los efectos los dibuja el motor en Rust (lights_engine.rs);
+// general, y pestañas Escena, Dispositivos y Mapa. Perfiles llega en la
+// fase 5. Los efectos los dibuja el motor en Rust (lights_engine.rs);
 // el panel solo arma la escena y se la manda.
 export function LightsPanel({ onClose, motion }: LightsPanelProps) {
   const [devices, setDevices] = useState<RgbDevice[] | null>(null);
@@ -264,7 +266,7 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
       </div>
 
       <div className="lights-preview">
-        {devices && <LightsPreview devices={devices} frame={frame} selected={selectedZone} identifying={identifying} onSelect={selectZone} />}
+        {devices && <LightsPreview devices={devices} scene={scene} frame={frame} selected={selectedZone} identifying={identifying} onSelect={selectZone} />}
         <div className="lights-preview-bar">
           <button
             className={`lights-switch ${global.on ? "on" : ""}`}
@@ -288,9 +290,9 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
       </div>
 
       <div className="lights-tabs" role="tablist">
-        {(["escena", "dispositivos"] as Tab[]).map((t) => (
+        {(Object.keys(TAB_NAMES) as Tab[]).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`lights-tab ${tab === t ? "on" : ""}`} onClick={() => setTab(t)}>
-            {t === "escena" ? "Escena" : "Dispositivos"}
+            {TAB_NAMES[t]}
           </button>
         ))}
       </div>
@@ -321,9 +323,11 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             onDevice={(updated) => setDevices((list) => list?.map((d) => (d.index === updated.index ? updated : d)) ?? null)}
             onSizes={changeSizes}
             onIdentify={identify}
+            onRefresh={refresh}
             onError={fail}
           />
         )}
+        {devices && devices.length > 0 && scene && tab === "mapa" && <LightsMapTab devices={devices} scene={scene} frame={frame} onScene={changeScene} />}
       </div>
     </div>
   );

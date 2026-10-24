@@ -517,6 +517,54 @@ fn find_device(devices: Vec<RgbDevice>, index: u32) -> Result<RgbDevice, String>
         .ok_or_else(|| format!("No hay ningún dispositivo con el número {index}."))
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RgbStatus {
+    // "corriendo", "detenido" o "no instalado".
+    pub service: String,
+    // Versión del protocolo con que se habla (0 si no responde).
+    pub protocol: u32,
+    pub devices: usize,
+    pub error: Option<String>,
+}
+
+fn service_state() -> String {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    match std::process::Command::new("sc.exe")
+        .args(["query", "OpenRGB"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+    {
+        Ok(out) if out.status.success() => {
+            if String::from_utf8_lossy(&out.stdout).contains("RUNNING") {
+                "corriendo".into()
+            } else {
+                "detenido".into()
+            }
+        }
+        _ => "no instalado".into(),
+    }
+}
+
+// Estado de OpenRGB para la pestaña Dispositivos del panel Luces.
+#[tauri::command]
+pub async fn rgb_estado() -> RgbStatus {
+    let service = service_state();
+    match Connection::open().await {
+        Ok(mut conn) => {
+            let protocol = conn.protocol;
+            match conn.controller_count().await {
+                Ok(n) => RgbStatus { service, protocol, devices: n as usize, error: None },
+                Err(e) => RgbStatus { service, protocol, devices: 0, error: Some(e) },
+            }
+        }
+        Err(e) => RgbStatus { service, protocol: 0, devices: 0, error: Some(e) },
+    }
+}
+
 #[tauri::command]
 pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
     let mut conn = connect().await?;

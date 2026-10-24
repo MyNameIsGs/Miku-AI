@@ -56,7 +56,25 @@ export type Effect = {
 // con su propio efecto (un color elegido a mano en Dispositivos), que se
 // dibuja encima de su grupo. El motor no mira estos campos.
 export type LightGroup = { zones: string[]; effect: Effect; category?: CategoryId };
-export type Scene = { groups: LightGroup[]; positions: Record<string, number> };
+// Cómo está armada una zona de verdad (fase 3, ver ZoneOptions en
+// lights_engine.rs): ventiladores encadenados en un conector, dónde está
+// el LED 1 de cada uno, el sentido, y la corrección de color (0 a 1 por
+// canal).
+export type ZoneOptions = { fans: number; offset: number; reverse: boolean; gain: [number, number, number] };
+export const DEFAULT_ZONE_OPTIONS: ZoneOptions = { fans: 1, offset: 0, reverse: false, gain: [1, 1, 1] };
+
+export type Scene = {
+  groups: LightGroup[];
+  // Posición de cada zona en el mapa del gabinete (0 a 1 en cada eje); el
+  // motor usa la x para que la ola cruce el PC entero.
+  positions: Record<string, number>;
+  layout?: Record<string, { x: number; y: number }>;
+  zones?: Record<string, ZoneOptions>;
+  // Zonas que Miku no toca.
+  excluded?: string[];
+};
+
+export const zoneOptions = (scene: Scene | null, key: string): ZoneOptions => ({ ...DEFAULT_ZONE_OPTIONS, ...scene?.zones?.[key] });
 export type LightsGlobal = { on: boolean; brightness: number; paused: boolean; fps: number };
 
 type LightsState = {
@@ -108,6 +126,8 @@ function toEngine(scene: Scene) {
   return {
     groups: scene.groups.map((g) => ({ zones: g.zones, effect: { ...g.effect, colors: g.effect.colors.map(hexToRgb) } })),
     positions: scene.positions,
+    zones: scene.zones ?? {},
+    excluded: scene.excluded ?? [],
   };
 }
 
@@ -139,7 +159,7 @@ export function withZoneEffect(scene: Scene | null, zoneKey: string, effect: Eff
   const groups = (scene?.groups ?? [])
     .map((g) => (g.category ? g : { ...g, zones: g.zones.filter((z) => z !== zoneKey) }))
     .filter((g) => g.category || g.zones.length > 0);
-  return { groups: [...groups, { zones: [zoneKey], effect }], positions: scene?.positions ?? {} };
+  return { ...scene, groups: [...groups, { zones: [zoneKey], effect }], positions: scene?.positions ?? {} };
 }
 
 // Varias zonas juntas con un mismo efecto (las demás quedan como estaban).
@@ -148,7 +168,7 @@ export function withZonesEffect(scene: Scene | null, zoneKeys: string[], effect:
   const groups = (scene?.groups ?? [])
     .map((g) => (g.category ? g : { ...g, zones: g.zones.filter((z) => !set.has(z)) }))
     .filter((g) => g.category || g.zones.length > 0);
-  return { groups: [...groups, { zones: zoneKeys, effect }], positions: scene?.positions ?? {} };
+  return { ...scene, groups: [...groups, { zones: zoneKeys, effect }], positions: scene?.positions ?? {} };
 }
 
 // El efecto que se ve en una zona: el último grupo que la nombra (el motor
@@ -209,7 +229,7 @@ export function normalizeScene(scene: Scene | null, devices: RgbDevice[]): Scene
       if (category && JSON.stringify(category.effect) !== JSON.stringify(g.effect)) own.push({ zones: [zone], effect: g.effect });
     }
   }
-  return { groups: [...groups, ...own], positions: scene?.positions ?? {} };
+  return { ...scene, groups: [...groups, ...own], positions: scene?.positions ?? {} };
 }
 
 // Cambia el efecto de un grupo del panel ("all" = los cuatro). Las zonas
