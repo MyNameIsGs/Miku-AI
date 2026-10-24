@@ -3141,19 +3141,46 @@ a:hover {
   gap: 8px;
 }
 
-/* Luces, fase 1: interruptor, brillo general, efectos y los dos colores. */
-.lights-global {
+/* Luces, fase 2 (docs/luces-argb/maqueta.html): vista previa, pestañas,
+   escena y dispositivos. */
+.lights-panel {
+  gap: 12px;
+}
+.lights-preview {
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(57, 197, 187, 0.22);
+  border-radius: 16px;
+}
+.lights-preview-canvas {
+  position: relative;
+}
+.lights-preview-canvas canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 684 / 132;
+  cursor: pointer;
+}
+.lights-preview-tip {
+  position: absolute;
+  pointer-events: none;
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  background: var(--m-dialog);
+  border: 1px solid var(--m-line);
+  border-radius: 8px;
+}
+.lights-preview-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-  padding: 10px 14px;
-  background: rgba(57, 197, 187, 0.07);
-  border: 1px solid var(--m-line);
-  border-radius: 14px;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(157, 185, 182, 0.12);
 }
-.lights-global input[type="range"],
-.lights-speed input[type="range"] {
+.lights-preview-bar input[type="range"] {
   flex: 1;
 }
 .lights-global-label {
@@ -3203,14 +3230,15 @@ a:hover {
   background: rgba(57, 197, 187, 0.14);
   border-color: rgba(57, 197, 187, 0.45);
 }
-.lights-effects {
+
+.lights-tabs {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
+  flex-shrink: 0;
 }
-.m-panel .lights-effect {
+.m-panel .lights-tab {
   height: 32px;
-  padding: 0 12px;
+  padding: 0 14px;
   font-size: 13px;
   color: var(--m-muted);
   background: transparent;
@@ -3218,32 +3246,216 @@ a:hover {
   border-radius: 999px;
   cursor: pointer;
 }
-.m-panel .lights-effect:hover {
+.m-panel .lights-tab:hover {
   color: var(--m-text);
   border-color: rgba(57, 197, 187, 0.45);
 }
-.m-panel .lights-effect.on {
+.m-panel .lights-tab.on {
   color: var(--m-on-teal);
   background: var(--m-teal);
   border-color: var(--m-teal);
   font-weight: 700;
 }
-.lights-slot {
-  display: inline-flex;
+
+/* Escena */
+.lights-scene {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.lights-scene > * {
+  min-width: 0;
+}
+.lights-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.m-panel .lights-group {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 6px;
+  gap: 10px;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--m-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
   cursor: pointer;
 }
-.lights-slot-color {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--m-text);
-  border-radius: 10px;
-  box-sizing: border-box;
+.m-panel .lights-group:hover {
+  background: var(--m-hover-fill);
 }
-.lights-slot-color input {
+.m-panel .lights-group.sel {
+  background: rgba(57, 197, 187, 0.1);
+  border-color: rgba(57, 197, 187, 0.45);
+}
+.m-panel .lights-group:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.lights-group canvas {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+.lights-group-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lights-group-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.lights-group-fx {
+  font-size: 11px;
+  color: var(--m-dim);
+}
+.lights-editor-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lights-n {
+  margin-right: 6px;
+  color: var(--m-pink);
+}
+.lights-hint-small {
+  font-size: 12px;
+  color: var(--m-dim);
+  text-align: right;
+}
+.lights-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.m-panel .lights-fx {
+  padding: 6px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--m-muted);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(157, 185, 182, 0.14);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.lights-fx canvas {
+  width: 100%;
+  aspect-ratio: 144 / 88;
+  border-radius: 8px;
+}
+.m-panel .lights-fx:hover {
+  color: var(--m-text);
+  border-color: rgba(57, 197, 187, 0.45);
+}
+.m-panel .lights-fx.sel {
+  color: var(--m-teal);
+  border-color: var(--m-teal);
+  box-shadow: 0 0 0 3px rgba(57, 197, 187, 0.15);
+}
+.lights-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.lights-params {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.lights-param {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lights-param-row {
+  display: flex;
+  justify-content: space-between;
+}
+.lights-param-label {
+  font-size: 13px;
+}
+.lights-param-value {
+  font-family: var(--m-font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-teal);
+}
+.lights-dir {
+  display: flex;
+  gap: 6px;
+}
+.lights-gradient-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lights-gradient {
+  position: relative;
+  flex: 1;
+  height: 26px;
+  margin: 10px 10px 4px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+}
+.m-panel .lights-stop {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  padding: 0;
+  background: var(--c);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+.m-panel .lights-stop.sel {
+  box-shadow: 0 0 0 3px var(--m-teal), 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.lights-colors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.lights-colors-label {
+  width: 78px;
+  font-family: var(--m-font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--m-dim);
+}
+.m-panel .lights-chip {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+.m-panel .lights-chip.sel {
+  box-shadow: 0 0 0 2px #0b1719, 0 0 0 4px var(--m-teal);
+}
+.lights-chip-custom {
+  display: inline-block;
+  box-sizing: border-box;
+  background: conic-gradient(#ff3b3b, #ff8a3d, #ffe14d, #3ddc84, #39c5bb, #2f6bff, #8a5cf6, #f0508f, #ff3b3b);
+}
+.lights-chip-custom input {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -3253,14 +3465,42 @@ a:hover {
   border: 0;
   padding: 0;
 }
-.lights-slot-label {
+.m-panel .lights-hex {
+  width: 92px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 8px;
   font-family: var(--m-font-label);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--m-dim);
+  color: var(--m-text);
+  background: var(--m-fill-soft);
+  border: 1px solid var(--m-line-soft);
+  border-radius: 8px;
+  box-shadow: none;
 }
-.lights-speed {
+.m-panel .lights-hex:focus {
+  outline: none;
+  border-color: var(--m-teal);
+  box-shadow: 0 0 0 3px rgba(57, 197, 187, 0.2);
+}
+
+/* Dispositivos */
+.lights-zone-actions {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.lights-badge {
+  margin-left: 8px;
+  padding: 2px 7px;
+  font-family: var(--m-font-label);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--m-pink-text);
+  background: rgba(240, 80, 143, 0.12);
+  border-radius: 999px;
+  vertical-align: middle;
 }

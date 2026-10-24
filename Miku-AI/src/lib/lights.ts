@@ -52,7 +52,10 @@ export type Effect = {
   direction: 1 | -1;
 };
 
-export type LightGroup = { zones: string[]; effect: Effect };
+// `category`: grupo del panel (ver CATEGORIES). Sin category, es una zona
+// con su propio efecto (un color elegido a mano en Dispositivos), que se
+// dibuja encima de su grupo. El motor no mira estos campos.
+export type LightGroup = { zones: string[]; effect: Effect; category?: CategoryId };
 export type Scene = { groups: LightGroup[]; positions: Record<string, number> };
 export type LightsGlobal = { on: boolean; brightness: number; paused: boolean; fps: number };
 
@@ -131,9 +134,11 @@ export async function setGlobal(global: LightsGlobal) {
 
 // La zona pasa a tener su propio efecto: sale del grupo donde estaba.
 export function withZoneEffect(scene: Scene | null, zoneKey: string, effect: Effect): Scene {
+  // Los grupos del panel la siguen nombrando (el efecto propio se dibuja
+  // encima); de los demás sale.
   const groups = (scene?.groups ?? [])
-    .map((g) => ({ ...g, zones: g.zones.filter((z) => z !== zoneKey) }))
-    .filter((g) => g.zones.length > 0);
+    .map((g) => (g.category ? g : { ...g, zones: g.zones.filter((z) => z !== zoneKey) }))
+    .filter((g) => g.category || g.zones.length > 0);
   return { groups: [...groups, { zones: [zoneKey], effect }], positions: scene?.positions ?? {} };
 }
 
@@ -141,13 +146,88 @@ export function withZoneEffect(scene: Scene | null, zoneKey: string, effect: Eff
 export function withZonesEffect(scene: Scene | null, zoneKeys: string[], effect: Effect): Scene {
   const set = new Set(zoneKeys);
   const groups = (scene?.groups ?? [])
-    .map((g) => ({ ...g, zones: g.zones.filter((z) => !set.has(z)) }))
-    .filter((g) => g.zones.length > 0);
+    .map((g) => (g.category ? g : { ...g, zones: g.zones.filter((z) => !set.has(z)) }))
+    .filter((g) => g.category || g.zones.length > 0);
   return { groups: [...groups, { zones: zoneKeys, effect }], positions: scene?.positions ?? {} };
 }
 
+// El efecto que se ve en una zona: el último grupo que la nombra (el motor
+// dibuja en orden, así que el último gana).
 export function effectOfZone(scene: Scene | null, zoneKey: string): Effect | null {
-  return scene?.groups.find((g) => g.zones.includes(zoneKey))?.effect ?? null;
+  const groups = scene?.groups ?? [];
+  for (let i = groups.length - 1; i >= 0; i--) if (groups[i].zones.includes(zoneKey)) return groups[i].effect;
+  return null;
+}
+
+// --- Grupos del panel (fase 2) ---
+
+export type CategoryId = "fans" | "ram" | "board" | "periph";
+
+export const CATEGORIES: { id: CategoryId; name: string }[] = [
+  { id: "fans", name: "Ventiladores" },
+  { id: "ram", name: "RAM" },
+  { id: "board", name: "Placa" },
+  { id: "periph", name: "Periféricos" },
+];
+
+export function categoryOf(device: RgbDevice, zone: RgbZone): CategoryId {
+  if (isResizable(zone)) return "fans";
+  if (device.kind === "RAM") return "ram";
+  if (device.kind === "placa madre") return "board";
+  return "periph";
+}
+
+export function zonesByCategory(devices: RgbDevice[]): Record<CategoryId, string[]> {
+  const keys = deviceKeys(devices);
+  const out: Record<CategoryId, string[]> = { fans: [], ram: [], board: [], periph: [] };
+  for (const device of devices) {
+    for (const zone of device.zones) out[categoryOf(device, zone)].push(zoneKey(keys.get(device.index)!, zone.name));
+  }
+  return out;
+}
+
+const DEFAULT_EFFECT = makeEffect("static", ["#39C5BB"]);
+
+// Lleva cualquier escena (las de la fase 1 eran un grupo con todo, o un
+// grupo por zona) a la forma del panel: un grupo por categoría, con el
+// efecto que tenía su primera zona, y después las zonas con efecto propio.
+export function normalizeScene(scene: Scene | null, devices: RgbDevice[]): Scene {
+  const byCategory = zonesByCategory(devices);
+  const groups: LightGroup[] = CATEGORIES.map(({ id }) => {
+    const existing = scene?.groups.find((g) => g.category === id);
+    const first = byCategory[id][0];
+    const fromZone = !existing && first ? scene?.groups.find((g) => g.zones.includes(first))?.effect : null;
+    return { category: id, zones: byCategory[id], effect: existing?.effect ?? fromZone ?? DEFAULT_EFFECT };
+  });
+  // Zonas con efecto propio: las que en la escena vieja no tenían el mismo
+  // efecto que su grupo.
+  const own: LightGroup[] = [];
+  for (const g of scene?.groups ?? []) {
+    if (g.category) continue;
+    for (const zone of g.zones) {
+      const category = groups.find((c) => c.zones.includes(zone));
+      if (category && JSON.stringify(category.effect) !== JSON.stringify(g.effect)) own.push({ zones: [zone], effect: g.effect });
+    }
+  }
+  return { groups: [...groups, ...own], positions: scene?.positions ?? {} };
+}
+
+// Cambia el efecto de un grupo del panel ("all" = los cuatro). Las zonas
+// de ese grupo dejan de tener efecto propio: "ventiladores en ola" es todos.
+export function withCategoryEffect(scene: Scene, category: CategoryId | "all", effect: Effect): Scene {
+  const ids = category === "all" ? CATEGORIES.map((c) => c.id) : [category];
+  const touched = new Set(scene.groups.filter((g) => g.category && ids.includes(g.category)).flatMap((g) => g.zones));
+  return {
+    ...scene,
+    groups: scene.groups
+      .map((g) => (g.category && ids.includes(g.category) ? { ...g, effect } : g))
+      .filter((g) => g.category || !g.zones.some((z) => touched.has(z))),
+  };
+}
+
+export function categoryEffect(scene: Scene, category: CategoryId | "all"): Effect {
+  const id = category === "all" ? "fans" : category;
+  return scene.groups.find((g) => g.category === id)?.effect ?? DEFAULT_EFFECT;
 }
 
 // --- Dispositivos ---
@@ -229,8 +309,11 @@ export async function applyToDevices(effect: Effect, indices: number[]): Promise
   const targets = devices.filter((d) => indices.length === 0 || indices.includes(d.index));
   const state = await loadLightsState();
   const zones = allZoneKeys(devices, indices);
-  // Todo a la vez: la escena entera pasa a ser este grupo.
-  const scene = indices.length === 0 ? { groups: [{ zones, effect }], positions: state.scene?.positions ?? {} } : withZonesEffect(state.scene, zones, effect);
+  // Todo a la vez: los cuatro grupos del panel con este efecto.
+  const scene =
+    indices.length === 0
+      ? withCategoryEffect(normalizeScene(state.scene, devices), "all", effect)
+      : withZonesEffect(normalizeScene(state.scene, devices), zones, effect);
   await setScene(scene);
   return targets.map((d) => deviceTitle(d, devices));
 }
