@@ -25,8 +25,9 @@ import {
 // Barra superior del diseño v1 (docs/diseno-ui-v1/README.md §3): marca,
 // estado, ánimo y botones. Toda la barra sirve para arrastrar la ventana
 // (los handlers vienen de App.tsx, igual que antes). Micrófono, detener y
-// ocultar texto viven en el panel de controles de abajo; lo de la cámara,
-// que la maqueta no traía, va en su propio menú.
+// ocultar texto viven en el panel de controles de abajo; lo de la cámara y
+// el bloqueo (click-through) van juntos en el menú "Vista" (2026-10-25:
+// la barra se saturaba y el botón de cerrar quedaba cortado).
 
 export type AvatarState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -267,8 +268,7 @@ export function TopBar(props: TopBarProps) {
           )}
           {/* El ánimo va con el estado normal, como en la maqueta. */}
           {shownPresence.kind === "normal" && (
-            <div className="toolbar-mood" title="Su ánimo de base ahora">
-              <span>ÁNIMO</span>
+            <div className="toolbar-mood" title="Su ánimo ahora">
               <span className="toolbar-mood-value">{mood}</span>
             </div>
           )}
@@ -279,25 +279,12 @@ export function TopBar(props: TopBarProps) {
             ref={cameraButtonRef}
             className={`toolbar-btn ${cameraMenuOpen || props.freeCamera ? "active" : ""}`}
             onClick={() => setCameraMenuOpen((open) => !open)}
-            aria-label="Cámara"
+            aria-label="Vista: cámara y bloqueo"
             aria-haspopup="menu"
             aria-expanded={cameraMenuOpen}
-            title="Cámara"
+            title="Vista: cámara y bloqueo"
           >
             <IconCamera />
-          </button>
-          <button
-            className={`toolbar-btn ${props.clickThrough ? "active" : ""}`}
-            onClick={props.onToggleClickThrough}
-            aria-label="Bloquear a Miku"
-            aria-pressed={props.clickThrough}
-            title={
-              props.clickThrough
-                ? "Miku está bloqueada: los clics pasan a lo que hay detrás (clic o Ctrl+Shift+M para desbloquear)"
-                : "Bloquear a Miku: los clics pasan a lo que hay detrás (Ctrl+Shift+M)"
-            }
-          >
-            <IconLock />
           </button>
           <button
             className={`toolbar-btn ${props.showAppLauncher ? "active" : ""}`}
@@ -365,11 +352,11 @@ export function TopBar(props: TopBarProps) {
           ref={menuRef}
           className="toolbar-menu"
           role="menu"
-          aria-label="Cámara"
+          aria-label="Vista"
           style={{ left: menuLeft }}
           onKeyDown={handleMenuKeyDown}
         >
-          <div className="toolbar-menu-heading">CÁMARA</div>
+          <div className="toolbar-menu-heading">VISTA</div>
           <button
             role="menuitemcheckbox"
             aria-checked={props.freeCamera}
@@ -392,6 +379,20 @@ export function TopBar(props: TopBarProps) {
             </span>
             <span className="toolbar-menu-label">{cameraSaved ? "Posición guardada" : "Guardar posición"}</span>
             <span className="toolbar-menu-hint">así arranca la próxima vez</span>
+          </button>
+          <button
+            role="menuitem"
+            className="toolbar-menu-item"
+            onClick={() => {
+              setCameraMenuOpen(false);
+              props.onToggleClickThrough();
+            }}
+          >
+            <span className="toolbar-menu-icon" aria-hidden="true">
+              <IconLock size={16} />
+            </span>
+            <span className="toolbar-menu-label">Bloquear a Miku</span>
+            <span className="toolbar-menu-hint">los clics pasan a lo de atrás · Ctrl+Shift+M</span>
           </button>
         </div>
       )}

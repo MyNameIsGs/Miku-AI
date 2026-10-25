@@ -4130,3 +4130,21 @@ a:hover {
 .lights-hwmode {
   margin-top: 8px;
 }
+
+/* Barra de arriba más holgada (2026-10-25: con todos los botones se
+   saturaba y el de cerrar quedaba cortado): botones un poco más angostos,
+   y si igual no entra, el ánimo se acorta con "…" en vez de empujar. */
+.toolbar .toolbar-btn {
+  width: 36px;
+}
+.toolbar-left {
+  min-width: 0;
+  overflow: hidden;
+}
+.toolbar-mood {
+  min-width: 0;
+}
+.toolbar-mood-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
