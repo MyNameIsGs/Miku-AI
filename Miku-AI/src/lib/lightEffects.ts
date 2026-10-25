@@ -84,6 +84,12 @@ export function effectColor(effect: Effect, id: string, pos: number, i: number, 
     // se simulan (un golpe a 120 BPM, una voz hablando, un ánimo que va y
     // viene, una pantalla que cambia, un aviso cada tanto).
     case "music": {
+      // Miniaturas: un volumen y unas bandas de mentira que se mueven.
+      if (effect.mode === "vumetro" || effect.mode === "espectro") {
+        const level = 0.35 + 0.35 * Math.abs(Math.sin(t * 2.1)) + 0.25 * Math.abs(Math.sin(t * 5.3));
+        const band = effect.mode === "vumetro" ? (along < level ? 1 : 0.06) : 0.1 + 0.9 * Math.abs(Math.sin(t * (2 + along * 6) + along * 4));
+        return gradientAt(colors, along * 0.999).map((x) => x * band) as Rgb;
+      }
       const beat = Math.floor(t / 0.5);
       const pulse = Math.exp(-((t % 0.5) * 1000) / (60 + effect.size * 4));
       return gradientAt(colors, beat / Math.max(1, colors.length) + (pos + along * 0.2) * 0.3).map((x) => x * (0.08 + 0.92 * pulse)) as Rgb;

@@ -38,6 +38,11 @@ pub struct Effect {
     // 1 o -1.
     #[serde(default = "default_direction")]
     pub direction: f32,
+    // Variante del efecto: en "music", "" (golpe) | "vumetro" | "espectro";
+    // en "screen", "juegos" = solo mientras hay un juego (si no, sus colores
+    // quietos).
+    #[serde(default)]
+    pub mode: String,
 }
 
 fn default_speed() -> f32 {
@@ -266,6 +271,11 @@ const VOICE_STALE: Duration = Duration::from_millis(400);
 struct Signals {
     // 0-1: cae después de cada golpe de la música.
     beat_pulse: f32,
+    // Al instante (ver music_beat::live_levels): volumen y graves, medios y
+    // agudos, 0-1.
+    live_level: f32,
+    bands: [f32; 3],
+    in_game: bool,
     // Cuántos golpes van: para cambiar de color con cada uno.
     beat_count: f32,
     // Volumen de lo que suena, 0-1.
@@ -284,6 +294,9 @@ impl Default for Signals {
     fn default() -> Self {
         Signals {
             beat_pulse: 0.0,
+            live_level: 0.0,
+            bands: [0.0; 3],
+            in_game: false,
             beat_count: 0.0,
             music_level: 0.0,
             music_confident: false,
@@ -310,8 +323,13 @@ fn read_signals(now: Instant, decay_ms: f32) -> Signals {
         out.music_confident = beat.confidence > 0.3 && since_estimate < 2000.0;
         if since_estimate > 2000.0 {
             out.music_level = 0.0;
+        } else {
+            let [level, bass, mid, treble] = crate::music_beat::live_levels();
+            out.live_level = level;
+            out.bands = [bass, mid, treble];
         }
     }
+    out.in_game = IN_GAME.load(Ordering::SeqCst);
     let fresh_voice = s.voice_at.map(|at| now.duration_since(at) < VOICE_STALE).unwrap_or(false);
     out.voice = if fresh_voice { s.voice.clamp(0.0, 1.0) } else { 0.0 };
     if !s.miku_state.is_empty() {
@@ -371,6 +389,13 @@ fn start_screen_sampler() {
 }
 
 // Lo llama music_beat.rs con cada estimación (unas 4 por segundo).
+// Hay un juego en primer plano (lo dice game_mode.rs): para "Pantalla solo
+// en juegos".
+static IN_GAME: AtomicBool = AtomicBool::new(false);
+pub fn set_in_game(active: bool) {
+    IN_GAME.store(active, Ordering::SeqCst);
+}
+
 pub fn music_beat(beat: &crate::music_beat::MusicBeat) {
     SIGNALS.lock().unwrap().music = Some((beat.clone(), Instant::now()));
 }
@@ -529,6 +554,18 @@ impl Renderer {
             }
             // Música: pulsa con cada golpe y cambia de color con el
             // siguiente; sin un pulso claro (voz, ruido), sigue el volumen.
+            // Vúmetro: la zona se llena según el volumen, del primer color al
+            // último a lo largo.
+            "music" if effect.mode == "vumetro" => {
+                let lit = if along < sig.live_level { 1.0 } else { 0.06 };
+                gradient_at(colors, along * 0.999).map(|x| x * lit)
+            }
+            // Espectro: a lo largo de la zona, de los graves a los agudos.
+            "music" if effect.mode == "espectro" => {
+                let x = along * 2.0;
+                let band = if x < 1.0 { sig.bands[0] + (sig.bands[1] - sig.bands[0]) * x } else { sig.bands[1] + (sig.bands[2] - sig.bands[1]) * (x - 1.0) };
+                gradient_at(colors, along * 0.999).map(|c| c * (0.05 + 0.95 * band))
+            }
             "music" => {
                 let c = gradient_at(colors, sig.beat_count / colors.len().max(1) as f32 + (pos + along * 0.2) * 0.3);
                 let k = if sig.music_confident { sig.beat_pulse.max(sig.music_level * 0.35) } else { sig.music_level };
@@ -559,6 +596,7 @@ impl Renderer {
                 c.map(|x| x * k)
             }
             // Ambilight: el color promedio de la pantalla.
+            "screen" if effect.mode == "juegos" && !sig.in_game => gradient_at(colors, along),
             "screen" => sig.screen,
             // "static" y cualquiera desconocido: el degradado quieto.
             _ => gradient_at(colors, along),
@@ -776,7 +814,14 @@ async fn run() {
             sent.clear();
         }
         let (conn, resolved) = link.as_mut().unwrap();
-        let wants_screen = uses_kind(&scene, "screen");
+        // La pantalla se mira solo si algún efecto la usa ahora (con "solo
+        // en juegos" y sin juego, no).
+        let in_game = IN_GAME.load(Ordering::SeqCst);
+        let wants_screen = scene.groups.iter().any(|g| {
+            std::iter::once(&g.effect)
+                .chain(g.layers.iter().filter(|l| l.visible).map(|l| &l.effect))
+                .any(|e| e.kind == "screen" && (e.mode != "juegos" || in_game))
+        });
         SCREEN_WANTED.store(wants_screen, Ordering::SeqCst);
         if wants_screen {
             start_screen_sampler();
@@ -1094,7 +1139,15 @@ mod tests {
     use super::*;
 
     fn effect(kind: &str) -> Effect {
-        Effect { kind: kind.into(), colors: vec![[57, 197, 187], [240, 80, 143]], speed: 50.0, brightness: 100.0, size: 40.0, direction: 1.0 }
+        Effect {
+            kind: kind.into(),
+            colors: vec![[57, 197, 187], [240, 80, 143]],
+            speed: 50.0,
+            brightness: 100.0,
+            size: 40.0,
+            direction: 1.0,
+            mode: String::new(),
+        }
     }
 
     #[test]
@@ -1174,6 +1227,20 @@ mod tests {
         assert!(at(&mut r, 0.125) > 240.0);
         assert!(at(&mut r, 0.4) > 150.0);
         assert!(at(&mut r, 0.9) < 40.0);
+    }
+
+    #[test]
+    fn el_vumetro_se_llena_con_el_volumen_y_la_pantalla_espera_un_juego() {
+        let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
+        let vu = Effect { mode: "vumetro".into(), ..effect("music") };
+        let half = Signals { live_level: 0.5, ..Signals::default() };
+        let low = r.color(&vu, "z", 0.0, 1, 10, 0.0, &half).0;
+        let high = r.color(&vu, "z", 0.0, 8, 10, 0.0, &half).0;
+        assert!(low[1] > 100.0 && high[1] < 20.0);
+        let screen = Effect { mode: "juegos".into(), ..effect("screen") };
+        let playing = Signals { in_game: true, screen: [9.0, 9.0, 9.0], ..Signals::default() };
+        assert_eq!(r.color(&screen, "z", 0.0, 0, 1, 0.0, &playing).0, [9.0, 9.0, 9.0]);
+        assert_eq!(r.color(&screen, "z", 0.0, 0, 1, 0.0, &Signals::default()).0, [57.0, 197.0, 187.0]);
     }
 
     #[test]

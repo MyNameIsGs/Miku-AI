@@ -49,6 +49,43 @@ function defaultLayout(zones: MapZone[]): Record<string, { x: number; y: number 
   return out;
 }
 
+// Plantillas para empezar (PLAN.md §3.4): dónde van los conectores de
+// ventiladores en el gabinete. En el mapa la izquierda es la parte de atrás
+// (donde está la placa) y la derecha el frente, así que la ola entra por
+// atrás y sale por el frente. La RAM y la placa quedan donde siempre.
+type Template = { id: string; name: string; fans: (n: number, total: number) => { x: number; y: number } };
+
+const column = (x: number, n: number, total: number) => ({ x, y: total === 1 ? 0.45 : 0.18 + (n * 0.6) / Math.max(1, total - 1) });
+const row = (y: number, n: number, total: number) => ({ x: total === 1 ? 0.6 : 0.36 + (n * 0.48) / Math.max(1, total - 1), y });
+
+const TEMPLATES: Template[] = [
+  {
+    id: "front-back",
+    name: "Frente + uno atrás",
+    // El último conector atrás; los demás al frente, en columna.
+    fans: (n, total) => (total > 1 && n === total - 1 ? { x: 0.08, y: 0.25 } : column(0.9, n, Math.max(1, total - 1))),
+  },
+  { id: "front", name: "Todo al frente", fans: (n, total) => column(0.9, n, total) },
+  { id: "top", name: "Arriba (techo)", fans: (n, total) => row(0.1, n, total) },
+  { id: "bottom", name: "Abajo (piso)", fans: (n, total) => row(0.88, n, total) },
+  {
+    id: "front-top",
+    name: "Frente + techo",
+    // La mitad al frente y la otra mitad arriba.
+    fans: (n, total) =>
+      n < Math.ceil(total / 2) ? column(0.9, n, Math.ceil(total / 2)) : row(0.1, n - Math.ceil(total / 2), Math.floor(total / 2)),
+  },
+];
+
+function templateLayout(template: Template, zones: MapZone[]): Record<string, { x: number; y: number }> {
+  const out = defaultLayout(zones);
+  const fans = zones.filter((z) => z.shape === "fan");
+  fans.forEach((z, n) => {
+    out[z.key] = template.fans(n, fans.length);
+  });
+  return out;
+}
+
 // Pestaña Mapa del panel Luces (PLAN.md §3.4): cada zona con su forma real
 // -- el teclado con sus teclas y el micrófono de pie, como pidió Sebastián
 // al aprobar la maqueta --, arrastrable a su lugar en el gabinete. La
@@ -65,11 +102,17 @@ export function LightsMapTab({ devices, scene, frame, onScene }: LightsMapTabPro
       .filter((zone) => zone.leds > 0)
       .map((zone) => {
         const shape = shapeOf(device, zone);
-        return { key: zoneKey(keys.get(device.index)!, zone.name), device, zone, shape, inside: shape !== "keyboard" && shape !== "mic" && shape !== "strip" };
+        return {
+          key: zoneKey(keys.get(device.index)!, zone.name),
+          device,
+          zone,
+          shape,
+          inside: shape !== "keyboard" && shape !== "mic" && shape !== "strip",
+        };
       }),
   );
   const auto = defaultLayout(zones);
-  const posOf = (key: string) => (dragging?.key === key ? dragging : scene.layout?.[key] ?? auto[key]);
+  const posOf = (key: string) => (dragging?.key === key ? dragging : (scene.layout?.[key] ?? auto[key]));
   const colorsOf = (key: string, n: number): Rgb[] => Array.from({ length: n }, (_, i) => frame[key]?.[i] ?? DARK);
 
   function save(layout: Record<string, { x: number; y: number }>) {
@@ -124,13 +167,23 @@ export function LightsMapTab({ devices, scene, frame, onScene }: LightsMapTabPro
                 const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
                 if (!d) return;
                 e.preventDefault();
-                save({ ...auto, ...scene.layout, [z.key]: { x: Math.min(0.97, Math.max(0.03, p.x + d[0])), y: Math.min(0.94, Math.max(0.06, p.y + d[1])) } });
+                save({
+                  ...auto,
+                  ...scene.layout,
+                  [z.key]: { x: Math.min(0.97, Math.max(0.03, p.x + d[0])), y: Math.min(0.94, Math.max(0.06, p.y + d[1])) },
+                });
               }}
               aria-label={`${zoneLabel(z.zone)} de ${deviceTitle(z.device, devices)}: arrástralo o muévelo con las flechas`}
               title={`${deviceTitle(z.device, devices)} · ${zoneLabel(z.zone)}`}
             >
-              <ZoneShape shape={z.shape} colors={colorsOf(z.key, z.zone.leds)} fans={Math.max(1, Math.min(zoneOptions(scene, z.key).fans, z.zone.leds))} />
-              <span className="lights-map-name">{z.shape === "ram" ? deviceTitle(z.device, devices).replace("RAM · ", "") : zoneLabel(z.zone).replace("Conector ", "")}</span>
+              <ZoneShape
+                shape={z.shape}
+                colors={colorsOf(z.key, z.zone.leds)}
+                fans={Math.max(1, Math.min(zoneOptions(scene, z.key).fans, z.zone.leds))}
+              />
+              <span className="lights-map-name">
+                {z.shape === "ram" ? deviceTitle(z.device, devices).replace("RAM · ", "") : zoneLabel(z.zone).replace("Conector ", "")}
+              </span>
             </button>
           );
         })}
@@ -146,13 +199,17 @@ export function LightsMapTab({ devices, scene, frame, onScene }: LightsMapTabPro
               <>
                 <button
                   className="m-btn m-btn-small"
-                  onClick={() => onScene({ ...scene, zones: { ...scene.zones, [sel.key]: { ...selOptions, offset: selOptions.offset + 1 } } }, true)}
+                  onClick={() =>
+                    onScene({ ...scene, zones: { ...scene.zones, [sel.key]: { ...selOptions, offset: selOptions.offset + 1 } } }, true)
+                  }
                 >
                   Rotar LED 1 ↻
                 </button>
                 <button
                   className={`m-btn m-btn-small ${selOptions.reverse ? "on" : ""}`}
-                  onClick={() => onScene({ ...scene, zones: { ...scene.zones, [sel.key]: { ...selOptions, reverse: !selOptions.reverse } } }, true)}
+                  onClick={() =>
+                    onScene({ ...scene, zones: { ...scene.zones, [sel.key]: { ...selOptions, reverse: !selOptions.reverse } } }, true)
+                  }
                 >
                   Espejar
                 </button>
@@ -162,18 +219,33 @@ export function LightsMapTab({ devices, scene, frame, onScene }: LightsMapTabPro
         ) : (
           <span className="lights-zone-detail">Toca una zona del mapa.</span>
         )}
-        <button
-          className="m-btn m-btn-small"
-          onClick={() => {
-            const rest = { ...scene };
-            delete rest.layout;
-            onScene({ ...rest, positions: {} }, true);
-          }}
-          disabled={!scene.layout}
-        >
-          Ordenar solo
-        </button>
-        <p className="lights-zone-detail">Arrastra cada zona a su lugar real: la ola cruza el gabinete de izquierda a derecha según este mapa.</p>
+        <span className="lights-module-title lights-map-templates-title">PLANTILLAS</span>
+        <div className="lights-map-templates">
+          {TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              className="m-btn m-btn-small"
+              onClick={() => save(templateLayout(t, zones))}
+              title="Acomoda los ventiladores así; después puedes moverlos"
+            >
+              {t.name}
+            </button>
+          ))}
+          <button
+            className="m-btn m-btn-small"
+            onClick={() => {
+              const rest = { ...scene };
+              delete rest.layout;
+              onScene({ ...rest, positions: {} }, true);
+            }}
+            disabled={!scene.layout}
+          >
+            Ordenar solo
+          </button>
+        </div>
+        <p className="lights-zone-detail">
+          Arrastra cada zona a su lugar real: la ola cruza el gabinete de izquierda a derecha según este mapa.
+        </p>
       </aside>
     </div>
   );
@@ -196,7 +268,16 @@ function ZoneShape({ shape, colors, fans }: { shape: Shape; colors: Rgb[]; fans:
               ))}
               {own.map((c, i) => {
                 const a = -Math.PI / 2 + (i / own.length) * Math.PI * 2;
-                return <circle key={i} cx={23 + Math.cos(a) * 19} cy={23 + Math.sin(a) * 19} r="3" fill={fill(c)} style={{ filter: `drop-shadow(0 0 3px ${fill(c)})` }} />;
+                return (
+                  <circle
+                    key={i}
+                    cx={23 + Math.cos(a) * 19}
+                    cy={23 + Math.sin(a) * 19}
+                    r="3"
+                    fill={fill(c)}
+                    style={{ filter: `drop-shadow(0 0 3px ${fill(c)})` }}
+                  />
+                );
               })}
             </svg>
           );
@@ -209,7 +290,15 @@ function ZoneShape({ shape, colors, fans }: { shape: Shape; colors: Rgb[]; fans:
       <svg width="16" height="62" viewBox="0 0 16 62" aria-hidden="true">
         <rect x="1" y="1" width="14" height="60" rx="2" fill="#0E1B1D" stroke="rgba(157,185,182,.3)" />
         {colors.map((c, i) => (
-          <rect key={i} x="4" y={4 + (i * 30) / Math.max(1, colors.length)} width="8" height={Math.max(2, 28 / Math.max(1, colors.length))} rx="1" fill={fill(c)} />
+          <rect
+            key={i}
+            x="4"
+            y={4 + (i * 30) / Math.max(1, colors.length)}
+            width="8"
+            height={Math.max(2, 28 / Math.max(1, colors.length))}
+            rx="1"
+            fill={fill(c)}
+          />
         ))}
       </svg>
     );
@@ -224,7 +313,13 @@ function ZoneShape({ shape, colors, fans }: { shape: Shape; colors: Rgb[]; fans:
             <line x1={p} y1="25" x2={p} y2="29" />
           </g>
         ))}
-        <circle cx="15" cy="15" r="5" fill={fill(colors[0] ?? DARK)} style={{ filter: `drop-shadow(0 0 4px ${fill(colors[0] ?? DARK)})` }} />
+        <circle
+          cx="15"
+          cy="15"
+          r="5"
+          fill={fill(colors[0] ?? DARK)}
+          style={{ filter: `drop-shadow(0 0 4px ${fill(colors[0] ?? DARK)})` }}
+        />
       </svg>
     );
   }
@@ -251,7 +346,14 @@ function ZoneShape({ shape, colors, fans }: { shape: Shape; colors: Rgb[]; fans:
       <svg width="34" height="70" viewBox="0 0 34 70" aria-hidden="true">
         <rect x="8" y="2" width="18" height="34" rx="9" fill="#0E1B1D" stroke="rgba(157,185,182,.4)" />
         {colors.map((c, i) => (
-          <circle key={i} cx="17" cy={11 + i * (16 / Math.max(1, colors.length - 1))} r="5" fill={fill(c)} style={{ filter: `drop-shadow(0 0 4px ${fill(c)})` }} />
+          <circle
+            key={i}
+            cx="17"
+            cy={11 + i * (16 / Math.max(1, colors.length - 1))}
+            r="5"
+            fill={fill(c)}
+            style={{ filter: `drop-shadow(0 0 4px ${fill(c)})` }}
+          />
         ))}
         <path d="M5 26 a12 12 0 0 0 24 0" fill="none" stroke="rgba(157,185,182,.4)" strokeWidth="2" />
         <line x1="17" y1="38" x2="17" y2="62" stroke="rgba(157,185,182,.4)" strokeWidth="2" />

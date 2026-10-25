@@ -4148,3 +4148,16 @@ a:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Plantillas del mapa. */
+.lights-map-templates-title {
+  margin-top: 6px;
+}
+.lights-map-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lights-map-templates .m-btn {
+  justify-content: flex-start;
+}

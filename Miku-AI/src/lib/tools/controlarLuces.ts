@@ -92,7 +92,8 @@ export const controlarLuces: ToolDefinition = {
           colores: {
             type: "array",
             items: { type: "string" },
-            description: "Para 'efecto' y 'crear_efecto': uno o más colores en hexadecimal. La ola, el degradado y los destellos usan varios.",
+            description:
+              "Para 'efecto' y 'crear_efecto': uno o más colores en hexadecimal. La ola, el degradado y los destellos usan varios.",
           },
           velocidad: {
             type: "number",
@@ -101,7 +102,8 @@ export const controlarLuces: ToolDefinition = {
           grupo: {
             type: "string",
             enum: Object.keys(GRUPOS),
-            description: "Para 'color', 'efecto', 'crear_efecto' y 'usar_efecto': a qué grupo del panel. Si lo omites (y no das 'dispositivos'), va a todo.",
+            description:
+              "Para 'color', 'efecto', 'crear_efecto' y 'usar_efecto': a qué grupo del panel. Si lo omites (y no das 'dispositivos'), va a todo.",
           },
           brillo_grupo: {
             type: "number",
@@ -109,7 +111,14 @@ export const controlarLuces: ToolDefinition = {
           },
           tamano: {
             type: "number",
-            description: "Para 'efecto' y 'crear_efecto': de 1 a 100; ancho de la ola, largo de la estela del cometa, cantidad de destellos.",
+            description:
+              "Para 'efecto' y 'crear_efecto': de 1 a 100; ancho de la ola, largo de la estela del cometa, cantidad de destellos.",
+          },
+          variante: {
+            type: "string",
+            enum: ["golpe", "vumetro", "espectro", "juegos"],
+            description:
+              "Para 'efecto' y 'crear_efecto': con 'music', 'golpe' (pulsa con el ritmo), 'vumetro' (se llena con el volumen) o 'espectro' (graves a agudos); con 'screen', 'juegos' = solo mientras hay un juego.",
           },
           direccion: {
             type: "string",
@@ -136,7 +145,8 @@ export const controlarLuces: ToolDefinition = {
           tira: {
             type: "string",
             enum: [...TIRAS],
-            description: "Para 'tiras': 'abajo' (las dos de abajo del teclado), 'arriba' (la de debajo de DEL/END) o 'ambas' (por defecto).",
+            description:
+              "Para 'tiras': 'abajo' (las dos de abajo del teclado), 'arriba' (la de debajo de DEL/END) o 'ambas' (por defecto).",
           },
           modo_tira: {
             type: "string",
@@ -159,8 +169,7 @@ export const controlarLuces: ToolDefinition = {
           dispositivos: {
             type: "array",
             items: { type: "number" },
-            description:
-              "Números de los dispositivos (los que da 'listar') para 'color' o 'efecto'. Si lo omites, se aplica a todos.",
+            description: "Números de los dispositivos (los que da 'listar') para 'color' o 'efecto'. Si lo omites, se aplica a todos.",
           },
         },
         required: ["accion"],
@@ -172,9 +181,7 @@ export const controlarLuces: ToolDefinition = {
     if (!ACCIONES.includes(accion as (typeof ACCIONES)[number])) {
       return `Error: acción de luces desconocida "${accion}".`;
     }
-    const dispositivos = Array.isArray(args.dispositivos)
-      ? args.dispositivos.filter((n): n is number => typeof n === "number")
-      : [];
+    const dispositivos = Array.isArray(args.dispositivos) ? args.dispositivos.filter((n): n is number => typeof n === "number") : [];
 
     try {
       if (accion === "listar") {
@@ -252,7 +259,8 @@ async function changeStrips(args: Record<string, unknown>): Promise<string> {
   const level = (v: unknown, max: number) => (typeof v === "number" ? Math.max(0, Math.min(max, Math.round(v))) : null);
   const brightness = level(args.brillo_tira, STRIP_BRIGHTNESS_MAX);
   const speed = level(args.velocidad_tira, STRIP_SPEED_MAX);
-  if (mode === null && color === null && brightness === null && speed === null) return "Error: dime qué cambiar (modo_tira, color_tira, brillo_tira o velocidad_tira).";
+  if (mode === null && color === null && brightness === null && speed === null)
+    return "Error: dime qué cambiar (modo_tira, color_tira, brillo_tira o velocidad_tira).";
 
   const state = await loadLightsState();
   const scene = state.scene ?? { groups: [], positions: {} };
@@ -287,6 +295,7 @@ function effectFromArgs(args: Record<string, unknown>): Effect | string {
     brightness: num(args.brillo_grupo, 0, 100, 100),
     size: num(args.tamano, 1, 100, 40),
     direction: args.direccion === "izquierda" ? -1 : 1,
+    mode: args.variante === "vumetro" || args.variante === "espectro" || args.variante === "juegos" ? String(args.variante) : undefined,
   });
 }
 
@@ -315,7 +324,10 @@ async function profileAction(accion: "perfil" | "guardar_perfil", args: Record<s
   // Uno de Sebastián con ese nombre no se pisa.
   if (existing && existing.by !== "miku") return `Ya hay un perfil de Sebastián que se llama "${existing.name}": elige otro nombre.`;
   const profile: Profile = { id: existing?.id ?? newId(), name, scene, favorite: existing?.favorite ?? false, by: "miku" };
-  await saveProfiles({ ...state, profiles: existing ? state.profiles.map((p) => (p.id === existing.id ? profile : p)) : [...state.profiles, profile] });
+  await saveProfiles({
+    ...state,
+    profiles: existing ? state.profiles.map((p) => (p.id === existing.id ? profile : p)) : [...state.profiles, profile],
+  });
   return `Guardado el perfil "${name}" (queda como tuyo en la pestaña Perfiles).`;
 }
 

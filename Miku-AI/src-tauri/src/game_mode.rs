@@ -247,6 +247,7 @@ fn start_watcher(window: WebviewWindow) {
                 tracked = next_tracked(tracked.take(), &mut missing);
                 let next = tracked.as_ref().map(|g| g.state.clone()).unwrap_or_else(GameModeState::inactive);
                 if next != last_state {
+                    crate::lights_engine::set_in_game(next.active);
                     let _ = window.emit("game-mode", next.clone());
                     last_state = next;
                 }

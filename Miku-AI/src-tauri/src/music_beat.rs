@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{Emitter, WebviewWindow};
 
@@ -40,12 +40,32 @@ const BPM_PRIOR_CENTER: f32 = 115.0;
 const BPM_PRIOR_OCTAVES_SIGMA: f32 = 0.7;
 // Corte del filtro de graves (bombo, bajo).
 const LOW_CUTOFF_HZ: f32 = 150.0;
+// Por encima de esto, "agudos" (para el efecto espectro de las luces).
+const HIGH_CUTOFF_HZ: f32 = 2000.0;
+
+// Niveles al instante, para las luces (vúmetro y espectro): volumen,
+// graves, medios y agudos, 0-1, relativos al máximo reciente de cada uno
+// (así responde igual con la música baja o alta). Se escriben en cada
+// cuadro del análisis (~86 por segundo); las estimaciones de pulso van
+// aparte, cada 250 ms.
+static LIVE: [AtomicU32; 4] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+
+pub fn live_levels() -> [f32; 4] {
+    LIVE.each_ref().map(|v| f32::from_bits(v.load(Ordering::Relaxed)))
+}
 
 pub struct BeatTracker {
     hop: usize,
     fps: f32,
     lp_state: f32,
     lp_alpha: f32,
+    hp_state: f32,
+    hp_alpha: f32,
+    acc_high: f32,
+    // Máximo reciente de cada nivel (volumen, graves, medios, agudos) y el
+    // valor suavizado que se publica.
+    peaks: [f32; 4],
+    smooth: [f32; 4],
     acc_low: f32,
     acc_all: f32,
     acc_n: usize,
@@ -62,11 +82,17 @@ impl BeatTracker {
         let fps = sample_rate / hop as f32;
         let dt = 1.0 / sample_rate;
         let rc = 1.0 / (2.0 * std::f32::consts::PI * LOW_CUTOFF_HZ);
+        let rc_high = 1.0 / (2.0 * std::f32::consts::PI * HIGH_CUTOFF_HZ);
         BeatTracker {
             hop,
             fps,
             lp_state: 0.0,
             lp_alpha: dt / (rc + dt),
+            hp_state: 0.0,
+            hp_alpha: dt / (rc_high + dt),
+            acc_high: 0.0,
+            peaks: [1e-4; 4],
+            smooth: [0.0; 4],
             acc_low: 0.0,
             acc_all: 0.0,
             acc_n: 0,
@@ -82,6 +108,10 @@ impl BeatTracker {
         for &s in mono {
             self.lp_state += self.lp_alpha * (s - self.lp_state);
             self.acc_low += self.lp_state * self.lp_state;
+            // Lo que queda por encima de HIGH_CUTOFF_HZ.
+            self.hp_state += self.hp_alpha * (s - self.hp_state);
+            let high = s - self.hp_state;
+            self.acc_high += high * high;
             self.acc_all += s * s;
             self.acc_n += 1;
             if self.acc_n == self.hop {
@@ -108,9 +138,28 @@ impl BeatTracker {
             self.env.pop_front();
             self.rms.pop_front();
         }
+        self.publish_live(n);
         self.acc_low = 0.0;
+        self.acc_high = 0.0;
         self.acc_all = 0.0;
         self.acc_n = 0;
+    }
+
+    fn publish_live(&mut self, n: f32) {
+        let all = self.acc_all / n;
+        let low = self.acc_low / n;
+        let high = self.acc_high / n;
+        let mid = (all - low - high).max(0.0);
+        let raw = [all.sqrt(), low.sqrt(), mid.sqrt(), high.sqrt()];
+        for k in 0..4 {
+            // El máximo baja despacio (~10 s) para adaptarse al volumen.
+            self.peaks[k] = (self.peaks[k] * 0.9988).max(raw[k]).max(1e-4);
+            let v = if all.sqrt() < 0.001 { 0.0 } else { (raw[k] / self.peaks[k]).min(1.0) };
+            // Sube rápido y baja más lento, como un vúmetro.
+            let rate = if v > self.smooth[k] { 0.6 } else { 0.12 };
+            self.smooth[k] += (v - self.smooth[k]) * rate;
+            LIVE[k].store(self.smooth[k].to_bits(), Ordering::Relaxed);
+        }
     }
 
     pub fn estimate(&self) -> Option<MusicBeat> {

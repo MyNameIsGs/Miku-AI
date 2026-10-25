@@ -6,6 +6,7 @@ import {
   CategoryId,
   EFFECT_KINDS,
   EFFECT_NAMES,
+  MUSIC_MODES,
   Effect,
   EffectKind,
   Layer,
@@ -71,10 +72,12 @@ const USES: Record<EffectKind, { speed: boolean; size: boolean; direction: boole
   comet: { speed: true, size: true, direction: true, colors: true },
   sparkle: { speed: false, size: true, direction: false, colors: true },
   fire: { speed: true, size: false, direction: false, colors: false },
+  // El tamaño solo cuenta en "Golpe" (cuánto dura el pulso).
   music: { speed: false, size: true, direction: false, colors: true },
   voice: { speed: false, size: false, direction: false, colors: true },
   mood: { speed: false, size: false, direction: false, colors: true },
-  screen: { speed: false, size: false, direction: false, colors: false },
+  // Los colores son los de fuera de un juego (con "Solo en juegos").
+  screen: { speed: false, size: false, direction: false, colors: true },
   notify: { speed: false, size: false, direction: false, colors: true },
 };
 
@@ -331,7 +334,7 @@ export function LightsSceneTab({
                   suffix="%"
                   onChange={(v, f) => update({ brightness: v }, f)}
                 />
-                {uses.size && (
+                {uses.size && !(effect.kind === "music" && effect.mode) && (
                   <Slider
                     label={
                       effect.kind === "sparkle"
@@ -349,6 +352,41 @@ export function LightsSceneTab({
                     max={100}
                     onChange={(v, f) => update({ size: v }, f)}
                   />
+                )}
+                {effect.kind === "music" && (
+                  <div className="lights-param">
+                    <span className="lights-param-label">Modo</span>
+                    <div className="lights-seg" role="radiogroup" aria-label="Modo de la música">
+                      {MUSIC_MODES.map((m) => (
+                        <button
+                          key={m.id}
+                          role="radio"
+                          aria-checked={(effect.mode ?? "") === m.id}
+                          className={(effect.mode ?? "") === m.id ? "on" : ""}
+                          onClick={() => update({ mode: m.id })}
+                          title={m.hint}
+                        >
+                          {m.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {effect.kind === "screen" && (
+                  <div className="lights-param">
+                    <span className="lights-param-label">Solo en juegos</span>
+                    <div className="lights-fanopts-row">
+                      <span className="lights-zone-detail">Fuera de un juego, sus colores quietos</span>
+                      <button
+                        className={`lights-switch lights-switch-small ${effect.mode === "juegos" ? "on" : ""}`}
+                        onClick={() => update({ mode: effect.mode === "juegos" ? "" : "juegos" })}
+                        aria-pressed={effect.mode === "juegos"}
+                        aria-label="Pantalla solo en juegos"
+                      >
+                        <span className="lights-switch-knob" />
+                      </button>
+                    </div>
+                  </div>
                 )}
                 {uses.direction && (
                   <div className="lights-param">

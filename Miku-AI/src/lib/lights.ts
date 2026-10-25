@@ -75,7 +75,16 @@ export type Effect = {
   brightness: number; // 0-100
   size: number; // 1-100
   direction: 1 | -1;
+  // Variante (ver Effect en lights_engine.rs): en "music", "" (golpe) |
+  // "vumetro" | "espectro"; en "screen", "juegos" = solo con un juego.
+  mode?: string;
 };
+
+export const MUSIC_MODES: { id: string; name: string; hint: string }[] = [
+  { id: "", name: "Golpe", hint: "Pulsa con cada golpe y cambia de color." },
+  { id: "vumetro", name: "Vúmetro", hint: "Cada zona se llena según el volumen." },
+  { id: "espectro", name: "Espectro", hint: "A lo largo de cada zona, de los graves a los agudos." },
+];
 
 // `category`: grupo del panel (ver CATEGORIES). Sin category, es una zona
 // con su propio efecto (un color elegido a mano en Dispositivos), que se
