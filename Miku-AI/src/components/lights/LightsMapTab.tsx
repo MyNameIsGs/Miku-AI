@@ -50,39 +50,57 @@ function defaultLayout(zones: MapZone[]): Record<string, { x: number; y: number 
 }
 
 // Plantillas para empezar (PLAN.md §3.4): dónde van los conectores de
-// ventiladores en el gabinete. En el mapa la izquierda es la parte de atrás
+// ventiladores en el gabinete (y en algunas, la RAM y la placa). En el mapa la izquierda es la parte de atrás
 // (donde está la placa) y la derecha el frente, así que la ola entra por
 // atrás y sale por el frente. La RAM y la placa quedan donde siempre.
-type Template = { id: string; name: string; fans: (n: number, total: number) => { x: number; y: number } };
+type Template = {
+  id: string;
+  name: string;
+  fans: (n: number, total: number) => { x: number; y: number };
+  others?: (zone: MapZone, n: number) => { x: number; y: number } | null;
+};
 
 const column = (x: number, n: number, total: number) => ({ x, y: total === 1 ? 0.45 : 0.18 + (n * 0.6) / Math.max(1, total - 1) });
 const row = (y: number, n: number, total: number) => ({ x: total === 1 ? 0.6 : 0.36 + (n * 0.48) / Math.max(1, total - 1), y });
 
+// Las tres de la maqueta aprobada (docs/luces-argb/maqueta.html). Cada
+// una dice dónde van los conectores de ventiladores (en orden: el primero,
+// el segundo...) y, si quiere, la RAM y la placa.
 const TEMPLATES: Template[] = [
   {
-    id: "front-back",
-    name: "Frente + uno atrás",
-    // El último conector atrás; los demás al frente, en columna.
-    fans: (n, total) => (total > 1 && n === total - 1 ? { x: 0.08, y: 0.25 } : column(0.9, n, Math.max(1, total - 1))),
+    id: "3-front-1-back",
+    name: "3 al frente + 1 atrás",
+    // Hasta tres al frente, en columna; el cuarto (y los que sigan) atrás.
+    fans: (n, total) => (n < 3 ? column(0.9, n, Math.min(3, total)) : { x: 0.08, y: 0.22 + (n - 3) * 0.2 }),
   },
-  { id: "front", name: "Todo al frente", fans: (n, total) => column(0.9, n, total) },
-  { id: "top", name: "Arriba (techo)", fans: (n, total) => row(0.1, n, total) },
-  { id: "bottom", name: "Abajo (piso)", fans: (n, total) => row(0.88, n, total) },
   {
-    id: "front-top",
-    name: "Frente + techo",
-    // La mitad al frente y la otra mitad arriba.
+    id: "glass-tower",
+    name: "Torre con vidrio",
+    // Tres al frente, dos en el techo y uno atrás; la RAM y la placa a la
+    // vista en el medio, como se ven por el vidrio.
     fans: (n, total) =>
-      n < Math.ceil(total / 2) ? column(0.9, n, Math.ceil(total / 2)) : row(0.1, n - Math.ceil(total / 2), Math.floor(total / 2)),
+      n < 3 ? column(0.9, n, Math.min(3, total)) : n < 5 ? row(0.1, n - 3, Math.min(2, total - 3)) : { x: 0.08, y: 0.3 },
+    others: (z, n) => (z.shape === "ram" ? { x: 0.42 + n * 0.07, y: 0.32 } : z.shape === "chip" ? { x: 0.28, y: 0.52 + n * 0.18 } : null),
+  },
+  {
+    id: "compact-desk",
+    name: "Escritorio compacto",
+    // Gabinete chico: los ventiladores juntos al frente, la RAM y la placa
+    // pegadas a ellos.
+    fans: (n, total) => ({ x: 0.84, y: total === 1 ? 0.5 : 0.3 + (n * 0.4) / Math.max(1, total - 1) }),
+    others: (z, n) => (z.shape === "ram" ? { x: 0.5 + n * 0.07, y: 0.45 } : z.shape === "chip" ? { x: 0.32, y: 0.45 + n * 0.18 } : null),
   },
 ];
 
 function templateLayout(template: Template, zones: MapZone[]): Record<string, { x: number; y: number }> {
   const out = defaultLayout(zones);
+  const count: Record<Shape, number> = { fan: 0, ram: 0, chip: 0, keyboard: 0, mic: 0, strip: 0 };
   const fans = zones.filter((z) => z.shape === "fan");
-  fans.forEach((z, n) => {
-    out[z.key] = template.fans(n, fans.length);
-  });
+  for (const z of zones) {
+    const n = count[z.shape]++;
+    const place = z.shape === "fan" ? template.fans(n, fans.length) : template.others?.(z, n);
+    if (place) out[z.key] = place;
+  }
   return out;
 }
 
