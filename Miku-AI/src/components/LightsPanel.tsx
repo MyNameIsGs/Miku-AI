@@ -20,8 +20,11 @@ import {
   saveLightsState,
   sendGlobal,
   sendScene,
+  KeyboardStrips,
+  readStrips,
   setPreview,
   withCategoryEffect,
+  withStripsSnapshot,
   withCategoryLayers,
   zoneKey,
   zonesByCategory,
@@ -31,9 +34,9 @@ import { LightsSceneTab } from "./lights/LightsSceneTab";
 import { LightsDevicesTab } from "./lights/LightsDevicesTab";
 import { LightsMapTab } from "./lights/LightsMapTab";
 import { LightsProfilesTab } from "./lights/LightsProfilesTab";
-import { LightsStripsCard } from "./lights/LightsStripsCard";
 import { LightsMikuBar } from "./lights/LightsMikuBar";
 import { MikuLightsState, deleteMikuEffect, loadMikuLights, onMikuLightsChange } from "../lib/mikuLights";
+import { Profile, loadProfiles, saveProfiles } from "../lib/lightProfiles";
 
 type LightsPanelProps = {
   onClose: () => void;
@@ -44,7 +47,7 @@ type Rgb = [number, number, number];
 type PreviewZone = { key: string; colors: Rgb[] };
 type Tab = "escena" | "dispositivos" | "mapa" | "perfiles";
 const TAB_NAMES: Record<Tab, string> = { escena: "Escena", dispositivos: "Dispositivos", mapa: "Mapa", perfiles: "Perfiles" };
-type Selection = CategoryId | "all";
+type Selection = CategoryId | "all" | "strips";
 
 const UNDO_LIMIT = 50;
 const RECENT_KEY = "miku.lights.recent";
@@ -77,6 +80,12 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [history, setHistory] = useState<{ past: Scene[]; future: Scene[] }>({ past: [], future: [] });
   const [mine, setMine] = useState<MikuLightsState | null>(null);
+  // Perfil que se está editando (desde la pestaña Perfiles).
+  const [editing, setEditing] = useState<Profile | null>(null);
+  const [savedNotice, setSavedNotice] = useState(false);
+  // Cómo están las tiras en el teclado, mientras la escena no diga nada de
+  // ellas (lo que se haya puesto con Fn).
+  const [stripsNow, setStripsNow] = useState<KeyboardStrips | null>(null);
   // La escena al empezar un arrastre (para deshacer el arrastre entero).
   const dragStart = useRef<Scene | null>(null);
   const timers = useRef<Record<string, number>>({});
@@ -88,6 +97,10 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
     setError(null);
     try {
       const [list, state] = await Promise.all([listDevices(), loadLightsState()]);
+      if (list.some((d) => /aula/i.test(d.name)))
+        readStrips()
+          .then(setStripsNow)
+          .catch(() => setStripsNow(null));
       setDevices(list);
       setSceneState(normalizeScene(state.scene, list));
       setGlobalState(state.global);
@@ -106,7 +119,11 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
     return onMikuLightsChange((state) => {
       setMine(state);
       loadLightsState()
-        .then((saved) => setSceneState((current) => (current && saved.scene && devicesRef.current ? normalizeScene(saved.scene, devicesRef.current) : current)))
+        .then((saved) =>
+          setSceneState((current) =>
+            current && saved.scene && devicesRef.current ? normalizeScene(saved.scene, devicesRef.current) : current,
+          ),
+        )
         .catch(console.error);
     });
   }, []);
@@ -195,7 +212,7 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
   }, []);
 
   function changeGroupEffect(effect: Effect, final: boolean) {
-    if (!scene) return;
+    if (!scene || group === "strips") return;
     changeScene(withCategoryEffect(scene, group, effect), final);
     if (final) {
       const next = [...effect.colors, ...recent.filter((c) => !effect.colors.includes(c))].slice(0, 8);
@@ -207,6 +224,19 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
           // Sin almacenamiento local: los recientes duran lo que dure el panel.
         }
       }
+    }
+  }
+
+  async function saveEditing() {
+    if (!editing || !scene) return;
+    try {
+      const next = await withStripsSnapshot(scene);
+      const state = await loadProfiles();
+      await saveProfiles({ ...state, profiles: state.profiles.map((p) => (p.id === editing.id ? { ...p, scene: next } : p)) });
+      setSavedNotice(true);
+      window.setTimeout(() => setSavedNotice(false), 2000);
+    } catch (err) {
+      fail(err);
     }
   }
 
@@ -263,19 +293,57 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
           <span className="m-panel-tag">RGB</span>
         </div>
         <div className="lights-header-actions">
-          <button className="m-btn m-btn-small m-btn-icon" onClick={undo} disabled={history.past.length === 0} aria-label="Deshacer" title="Deshacer (Ctrl+Z)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <button
+            className="m-btn m-btn-small m-btn-icon"
+            onClick={undo}
+            disabled={history.past.length === 0}
+            aria-label="Deshacer"
+            title="Deshacer (Ctrl+Z)"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M9 14 4 9l5-5" />
               <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
             </svg>
           </button>
-          <button className="m-btn m-btn-small m-btn-icon" onClick={redo} disabled={history.future.length === 0} aria-label="Rehacer" title="Rehacer (Ctrl+Y)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <button
+            className="m-btn m-btn-small m-btn-icon"
+            onClick={redo}
+            disabled={history.future.length === 0}
+            aria-label="Rehacer"
+            title="Rehacer (Ctrl+Y)"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="m15 14 5-5-5-5" />
               <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
             </svg>
           </button>
-          <button className="m-btn m-btn-small m-btn-icon" onClick={refresh} disabled={loading} aria-label="Volver a buscar dispositivos" title="Volver a buscar dispositivos">
+          <button
+            className="m-btn m-btn-small m-btn-icon"
+            onClick={refresh}
+            disabled={loading}
+            aria-label="Volver a buscar dispositivos"
+            title="Volver a buscar dispositivos"
+          >
             <IconReload size={16} />
           </button>
           <button className="m-panel-close" onClick={onClose} aria-label="Cerrar luces">
@@ -285,7 +353,16 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
       </div>
 
       <div className="lights-preview">
-        {devices && <LightsPreview devices={devices} scene={scene} frame={frame} selected={selectedZone} identifying={identifying} onSelect={selectZone} />}
+        {devices && (
+          <LightsPreview
+            devices={devices}
+            scene={scene}
+            frame={frame}
+            selected={selectedZone}
+            identifying={identifying}
+            onSelect={selectZone}
+          />
+        )}
         <div className="lights-preview-bar">
           <button
             className={`lights-switch ${global.on ? "on" : ""}`}
@@ -297,12 +374,28 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             <span className="lights-switch-knob" />
           </button>
           <span className="lights-global-label">BRILLO</span>
-          <input type="range" min={0} max={100} value={global.brightness} onChange={(e) => changeGlobal({ ...global, brightness: Number(e.target.value) })} aria-label="Brillo general" />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={global.brightness}
+            onChange={(e) => changeGlobal({ ...global, brightness: Number(e.target.value) })}
+            aria-label="Brillo general"
+          />
           <span className="lights-global-value">{global.brightness}%</span>
-          <button className={`m-btn m-btn-small ${global.paused ? "on" : ""}`} onClick={() => changeGlobal({ ...global, paused: !global.paused })} title="Dejar los efectos quietos en este cuadro">
+          <button
+            className={`m-btn m-btn-small ${global.paused ? "on" : ""}`}
+            onClick={() => changeGlobal({ ...global, paused: !global.paused })}
+            title="Dejar los efectos quietos en este cuadro"
+          >
             {global.paused ? "Seguir" : "Pausar"}
           </button>
-          <button className="m-btn m-btn-small" onClick={() => selectedZone && identify(selectedZone)} disabled={!selectedZone || identifying !== null} title={selectedZone ? "Hace parpadear la zona elegida" : "Elige una zona en la vista previa"}>
+          <button
+            className="m-btn m-btn-small"
+            onClick={() => selectedZone && identify(selectedZone)}
+            disabled={!selectedZone || identifying !== null}
+            title={selectedZone ? "Hace parpadear la zona elegida" : "Elige una zona en la vista previa"}
+          >
             Identificar
           </button>
         </div>
@@ -317,6 +410,25 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
       </div>
 
       <div className="m-panel-body">
+        {editing && (
+          <div className="lights-editing" role="status">
+            <span>
+              Editando el perfil <b>«{editing.name}»</b>: cambia lo que quieras (efectos, tiras, dispositivos) y guárdalo.
+            </span>
+            <button className="m-btn m-btn-small m-btn-primary" onClick={saveEditing}>
+              {savedNotice ? "Guardado ✓" : "Guardar en el perfil"}
+            </button>
+            <button
+              className="m-btn m-btn-small"
+              onClick={() => {
+                setEditing(null);
+                setTab("perfiles");
+              }}
+            >
+              Terminar
+            </button>
+          </div>
+        )}
         {error && (
           <div className="lights-error" role="alert">
             {error}
@@ -336,14 +448,20 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             selected={group}
             onSelect={setGroup}
             onChange={changeGroupEffect}
-            onLayersChange={(layers, final) => changeScene(withCategoryLayers(scene, group, layers), final)}
+            onLayersChange={(layers, final) => group !== "strips" && changeScene(withCategoryLayers(scene, group, layers), final)}
             recentColors={recent}
             zoneCounts={zoneCounts}
+            strips={scene.keyboardStrips ?? stripsNow}
+            onStrips={(next, final) => {
+              // Mientras se arrastra un deslizador solo cambia lo que se ve:
+              // al teclado se escribe al soltar (cada escritura parpadea).
+              if (final) changeScene({ ...scene, keyboardStrips: next }, true);
+              else setSceneState({ ...scene, keyboardStrips: next });
+            }}
             mikuEffects={mine?.effects ?? []}
             onDeleteMikuEffect={(id) => deleteMikuEffect(id).catch(fail)}
           />
         )}
-        {devices && scene && tab === "escena" && devices.some((d) => /aula/i.test(d.name)) && <LightsStripsCard scene={scene} onScene={changeScene} />}
         {devices && devices.length > 0 && scene && tab === "dispositivos" && (
           <LightsDevicesTab
             devices={devices}
@@ -358,9 +476,22 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             onError={fail}
           />
         )}
-        {devices && devices.length > 0 && scene && tab === "mapa" && <LightsMapTab devices={devices} scene={scene} frame={frame} onScene={changeScene} />}
+        {devices && devices.length > 0 && scene && tab === "mapa" && (
+          <LightsMapTab devices={devices} scene={scene} frame={frame} onScene={changeScene} />
+        )}
         {devices && devices.length > 0 && scene && tab === "perfiles" && (
-          <LightsProfilesTab scene={scene} global={global} onGlobal={changeGlobal} onApplied={refresh} onError={fail} />
+          <LightsProfilesTab
+            scene={scene}
+            global={global}
+            onGlobal={changeGlobal}
+            onApplied={refresh}
+            onEdit={(profile) => {
+              setEditing(profile);
+              setTab("escena");
+              refresh();
+            }}
+            onError={fail}
+          />
         )}
       </div>
     </div>

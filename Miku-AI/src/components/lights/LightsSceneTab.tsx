@@ -18,8 +18,11 @@ import {
   normalizeHex,
 } from "../../lib/lights";
 import type { MikuEffect } from "../../lib/mikuLights";
+import { KeyboardStrips, describeStrips } from "../../lib/lights";
+import { StripsEditor, drawStripsThumb } from "./LightsStripsCard";
 
-type Selection = CategoryId | "all";
+// "strips": las tiras del teclado AULA (su propio editor, ver LightsStripsCard).
+type Selection = CategoryId | "all" | "strips";
 
 type LightsSceneTabProps = {
   scene: Scene;
@@ -35,6 +38,9 @@ type LightsSceneTabProps = {
   // Los efectos que diseñó Miku (fase 6), en su propia sección de la galería.
   mikuEffects: MikuEffect[];
   onDeleteMikuEffect: (id: string) => void;
+  // Las tiras del teclado, o null si no hay teclado AULA.
+  strips: KeyboardStrips | null;
+  onStrips: (next: KeyboardStrips, final: boolean) => void;
 };
 
 const EFFECT_HINTS: Record<EffectKind, string> = {
@@ -91,9 +97,22 @@ const MAX_COLORS = 6;
 
 // Pestaña Escena del panel Luces (PLAN.md §3.2): los grupos a la
 // izquierda, y a la derecha el efecto del grupo elegido con sus ajustes.
-export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersChange, recentColors, zoneCounts, mikuEffects, onDeleteMikuEffect }: LightsSceneTabProps) {
-  const effect = categoryEffect(scene, selected);
-  const layers = categoryLayers(scene, selected);
+export function LightsSceneTab({
+  scene,
+  selected,
+  onSelect,
+  onChange,
+  onLayersChange,
+  recentColors,
+  zoneCounts,
+  mikuEffects,
+  onDeleteMikuEffect,
+  strips,
+  onStrips,
+}: LightsSceneTabProps) {
+  const group = selected === "strips" ? "all" : selected;
+  const effect = categoryEffect(scene, group);
+  const layers = categoryLayers(scene, group);
   const uses = USES[effect.kind];
   // Qué color del degradado se está editando.
   const [stop, setStop] = useState(0);
@@ -106,6 +125,8 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersCh
   selectedRef.current = selected;
   const mikuRef = useRef(mikuEffects);
   mikuRef.current = mikuEffects;
+  const stripsRef = useRef(strips);
+  stripsRef.current = strips;
 
   useEffect(() => setStop(0), [selected]);
 
@@ -117,10 +138,16 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersCh
       const t = (now - start) / 1000;
       for (const [id, canvas] of thumbs.current) {
         const [kind, value] = id.split(":");
-        if (kind === "group") drawRingThumb(canvas, categoryEffect(sceneRef.current, value as Selection), id, t);
+        if (kind === "group") drawRingThumb(canvas, categoryEffect(sceneRef.current, value as CategoryId | "all"), id, t);
         else if (kind === "layer") {
-          const layer = categoryLayers(sceneRef.current, selectedRef.current)[Number(value)];
+          const layer = categoryLayers(sceneRef.current, selectedRef.current === "strips" ? "all" : selectedRef.current)[Number(value)];
           if (layer) drawRingThumb(canvas, layer.effect, id, t);
+        } else if (kind === "strip" || kind === "stripgroup") {
+          const s = stripsRef.current;
+          if (s) {
+            const [, mode, which] = id.split(":");
+            drawStripsThumb(canvas, s, t, kind === "strip" ? { mode: Number(mode), which: which as "both" | "bottom" | "top" } : undefined);
+          }
         } else if (kind === "miku") {
           const own = mikuRef.current.find((e) => e.id === value);
           if (own) drawRingThumb(canvas, own.effect, id, t);
@@ -156,7 +183,7 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersCh
     update({ colors: next }, final);
   };
 
-  const groups: { id: Selection; name: string; count: number }[] = [
+  const groups: { id: CategoryId | "all"; name: string; count: number }[] = [
     {
       id: "all",
       name: "Todo",
@@ -193,221 +220,246 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersCh
             </button>
           );
         })}
+        {strips && (
+          <button
+            role="option"
+            aria-selected={selected === "strips"}
+            className={`lights-group ${selected === "strips" ? "sel" : ""}`}
+            onClick={() => onSelect("strips")}
+          >
+            <canvas ref={thumbRef("stripgroup:x")} width={60} height={60} aria-hidden="true" />
+            <span className="lights-group-text">
+              <span className="lights-group-name">Tiras</span>
+              <span className="lights-group-fx">
+                {strips.bottom.mode === 0 && strips.top.mode === 0 ? "Apagadas" : describeStrips(strips)}
+              </span>
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="lights-editor">
-        <section className="lights-module">
-          <div className="lights-editor-head">
-            <span className="lights-module-title">
-              <span className="lights-n">01</span>EFECTO · {groups.find((g) => g.id === selected)?.name.toUpperCase()}
-            </span>
-            <span className="lights-hint-small">{EFFECT_HINTS[effect.kind]}</span>
-          </div>
-          {[
-            {
-              label: "BÁSICOS",
-              kinds: EFFECT_KINDS.filter((k) => !REACTIVE_KINDS.includes(k)),
-            },
-            { label: "REACTIVOS", kinds: REACTIVE_KINDS },
-          ].map((section) => (
-            <div key={section.label}>
-              <span className="lights-colors-label">{section.label}</span>
-              <div className="lights-gallery" role="radiogroup" aria-label={`Efectos ${section.label.toLowerCase()}`}>
-                {section.kinds.map((kind) => (
-                  <button
-                    key={kind}
-                    role="radio"
-                    aria-checked={effect.kind === kind}
-                    className={`lights-fx ${effect.kind === kind ? "sel" : ""}`}
-                    onClick={() => update({ kind })}
-                  >
-                    <canvas ref={thumbRef(`fx:${kind}`)} width={144} height={88} aria-hidden="true" />
-                    <span>{EFFECT_NAMES[kind]}</span>
-                    {BADGES[kind] && <span className="lights-fx-badge">{BADGES[kind]}</span>}
-                  </button>
-                ))}
-              </div>
+        {selected === "strips" && strips ? (
+          <StripsEditor strips={strips} onChange={onStrips} thumbRef={thumbRef} />
+        ) : (
+          <section className="lights-module">
+            <div className="lights-editor-head">
+              <span className="lights-module-title">
+                <span className="lights-n">01</span>EFECTO · {groups.find((g) => g.id === selected)?.name.toUpperCase()}
+              </span>
+              <span className="lights-hint-small">{EFFECT_HINTS[effect.kind]}</span>
             </div>
-          ))}
-
-          {mikuEffects.length > 0 && (
-            <div>
-              <span className="lights-colors-label">SUYOS</span>
-              <div className="lights-gallery" role="radiogroup" aria-label="Efectos que diseñó Miku">
-                {mikuEffects.map((own) => {
-                  const on = JSON.stringify(own.effect) === JSON.stringify(effect);
-                  return (
-                    <div key={own.id} className="lights-fx-wrap">
-                      <button
-                        role="radio"
-                        aria-checked={on}
-                        className={`lights-fx ${on ? "sel" : ""}`}
-                        onClick={() => onChange(own.effect, true)}
-                        title={`${own.description || own.name} · lo diseñó el ${own.created}`}
-                      >
-                        <canvas ref={thumbRef(`miku:${own.id}`)} width={144} height={88} aria-hidden="true" />
-                        <span>{own.name}</span>
-                        <span className="lights-fx-badge">DISEÑADO POR ELLA</span>
-                      </button>
-                      <button className="lights-fx-delete" onClick={() => onDeleteMikuEffect(own.id)} aria-label={`Borrar el efecto ${own.name}`} title="Borrar este efecto suyo">
-                        ×
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="lights-section">
-            <span className="lights-module-title">
-              <span className="lights-n">02</span>AJUSTES
-            </span>
-            <div className="lights-params">
-              {uses.speed && (
-                <Slider label="Velocidad" value={effect.speed} min={1} max={100} onChange={(v, f) => update({ speed: v }, f)} />
-              )}
-              <Slider
-                label="Brillo del grupo"
-                value={effect.brightness}
-                min={0}
-                max={100}
-                suffix="%"
-                onChange={(v, f) => update({ brightness: v }, f)}
-              />
-              {uses.size && (
-                <Slider
-                  label={
-                    effect.kind === "sparkle"
-                      ? "Cantidad"
-                      : effect.kind === "comet"
-                        ? "Estela"
-                        : effect.kind === "music"
-                          ? "Duración del golpe"
-                          : "Ancho"
-                  }
-                  value={effect.size}
-                  min={1}
-                  max={100}
-                  onChange={(v, f) => update({ size: v }, f)}
-                />
-              )}
-              {uses.direction && (
-                <div className="lights-param">
-                  <span className="lights-param-label">Dirección</span>
-                  <div className="lights-dir">
-                    <button className={`m-btn m-btn-small ${effect.direction < 0 ? "on" : ""}`} onClick={() => update({ direction: -1 })}>
-                      ← Izquierda
+            {[
+              {
+                label: "BÁSICOS",
+                kinds: EFFECT_KINDS.filter((k) => !REACTIVE_KINDS.includes(k)),
+              },
+              { label: "REACTIVOS", kinds: REACTIVE_KINDS },
+            ].map((section) => (
+              <div key={section.label}>
+                <span className="lights-colors-label">{section.label}</span>
+                <div className="lights-gallery" role="radiogroup" aria-label={`Efectos ${section.label.toLowerCase()}`}>
+                  {section.kinds.map((kind) => (
+                    <button
+                      key={kind}
+                      role="radio"
+                      aria-checked={effect.kind === kind}
+                      className={`lights-fx ${effect.kind === kind ? "sel" : ""}`}
+                      onClick={() => update({ kind })}
+                    >
+                      <canvas ref={thumbRef(`fx:${kind}`)} width={144} height={88} aria-hidden="true" />
+                      <span>{EFFECT_NAMES[kind]}</span>
+                      {BADGES[kind] && <span className="lights-fx-badge">{BADGES[kind]}</span>}
                     </button>
-                    <button className={`m-btn m-btn-small ${effect.direction > 0 ? "on" : ""}`} onClick={() => update({ direction: 1 })}>
-                      Derecha →
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            ))}
 
-          {uses.colors && (
+            {mikuEffects.length > 0 && (
+              <div>
+                <span className="lights-colors-label">SUYOS</span>
+                <div className="lights-gallery" role="radiogroup" aria-label="Efectos que diseñó Miku">
+                  {mikuEffects.map((own) => {
+                    const on = JSON.stringify(own.effect) === JSON.stringify(effect);
+                    return (
+                      <div key={own.id} className="lights-fx-wrap">
+                        <button
+                          role="radio"
+                          aria-checked={on}
+                          className={`lights-fx ${on ? "sel" : ""}`}
+                          onClick={() => onChange(own.effect, true)}
+                          title={`${own.description || own.name} · lo diseñó el ${own.created}`}
+                        >
+                          <canvas ref={thumbRef(`miku:${own.id}`)} width={144} height={88} aria-hidden="true" />
+                          <span>{own.name}</span>
+                          <span className="lights-fx-badge">DISEÑADO POR ELLA</span>
+                        </button>
+                        <button
+                          className="lights-fx-delete"
+                          onClick={() => onDeleteMikuEffect(own.id)}
+                          aria-label={`Borrar el efecto ${own.name}`}
+                          title="Borrar este efecto suyo"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="lights-section">
               <span className="lights-module-title">
-                <span className="lights-n">03</span>COLORES
+                <span className="lights-n">02</span>AJUSTES
               </span>
-              <div className="lights-gradient-row">
-                <div
-                  className="lights-gradient"
-                  style={{
-                    background: colors.length > 1 ? `linear-gradient(90deg, ${colors.join(", ")})` : colors[0],
-                  }}
-                  title="Doble clic agrega un color"
-                  onDoubleClick={() => {
-                    if (colors.length >= MAX_COLORS) return;
-                    update({ colors: [...colors, colors[colors.length - 1]] });
-                    setStop(colors.length);
-                  }}
-                >
-                  {colors.map((c, i) => (
-                    <button
-                      key={i}
-                      className={`lights-stop ${i === current ? "sel" : ""}`}
-                      style={{
-                        left: `${colors.length > 1 ? (i / (colors.length - 1)) * 100 : 50}%`,
-                        ["--c" as string]: c,
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setStop(i);
-                      }}
-                      aria-label={`Color ${i + 1}: ${c}`}
-                      aria-pressed={i === current}
-                    />
-                  ))}
-                </div>
-                <button
-                  className="m-btn m-btn-small"
-                  onClick={() => {
-                    update({ colors: [...colors, colors[current]] });
-                    setStop(colors.length);
-                  }}
-                  disabled={colors.length >= MAX_COLORS}
-                  title="Agregar un color"
-                >
-                  + Color
-                </button>
-                <button
-                  className="m-btn m-btn-small"
-                  onClick={() => {
-                    update({ colors: colors.filter((_, i) => i !== current) });
-                    setStop(Math.max(0, current - 1));
-                  }}
-                  disabled={colors.length <= 1}
-                  title="Quitar el color elegido"
-                >
-                  Quitar
-                </button>
-              </div>
-              <div className="lights-colors">
-                <span className="lights-colors-label">COLOR {current + 1}</span>
-                {PALETTE.map((c) => (
-                  <button
-                    key={c.hex}
-                    className={`lights-chip ${colors[current] === c.hex ? "sel" : ""}`}
-                    style={{ background: c.hex }}
-                    onClick={() => setColor(c.hex)}
-                    aria-label={c.name}
-                    title={c.name}
+              <div className="lights-params">
+                {uses.speed && (
+                  <Slider label="Velocidad" value={effect.speed} min={1} max={100} onChange={(v, f) => update({ speed: v }, f)} />
+                )}
+                <Slider
+                  label="Brillo del grupo"
+                  value={effect.brightness}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                  onChange={(v, f) => update({ brightness: v }, f)}
+                />
+                {uses.size && (
+                  <Slider
+                    label={
+                      effect.kind === "sparkle"
+                        ? "Cantidad"
+                        : effect.kind === "comet"
+                          ? "Estela"
+                          : effect.kind === "music"
+                            ? "Duración del golpe"
+                            : "Ancho"
+                    }
+                    value={effect.size}
+                    min={1}
+                    max={100}
+                    onChange={(v, f) => update({ size: v }, f)}
                   />
-                ))}
-                <label className="lights-chip lights-chip-custom" title="Otro color">
-                  <input
-                    type="color"
-                    value={colors[current].toLowerCase()}
-                    onChange={(e) => setColor(e.target.value, false)}
-                    onBlur={(e) => setColor(e.target.value)}
-                    aria-label="Otro color"
-                  />
-                </label>
-                <HexInput value={colors[current]} onCommit={(hex) => setColor(hex)} />
+                )}
+                {uses.direction && (
+                  <div className="lights-param">
+                    <span className="lights-param-label">Dirección</span>
+                    <div className="lights-dir">
+                      <button className={`m-btn m-btn-small ${effect.direction < 0 ? "on" : ""}`} onClick={() => update({ direction: -1 })}>
+                        ← Izquierda
+                      </button>
+                      <button className={`m-btn m-btn-small ${effect.direction > 0 ? "on" : ""}`} onClick={() => update({ direction: 1 })}>
+                        Derecha →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              {recentColors.length > 0 && (
-                <div className="lights-colors">
-                  <span className="lights-colors-label">RECIENTES</span>
-                  {recentColors.map((c) => (
-                    <button
-                      key={c}
-                      className="lights-chip"
-                      style={{ background: c }}
-                      onClick={() => setColor(c)}
-                      aria-label={`Reciente ${c}`}
-                      title={c}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
-          )}
-          <LayersEditor layers={layers} onChange={onLayersChange} thumbRef={thumbRef} />
-        </section>
+
+            {uses.colors && (
+              <div className="lights-section">
+                <span className="lights-module-title">
+                  <span className="lights-n">03</span>COLORES
+                </span>
+                <div className="lights-gradient-row">
+                  <div
+                    className="lights-gradient"
+                    style={{
+                      background: colors.length > 1 ? `linear-gradient(90deg, ${colors.join(", ")})` : colors[0],
+                    }}
+                    title="Doble clic agrega un color"
+                    onDoubleClick={() => {
+                      if (colors.length >= MAX_COLORS) return;
+                      update({ colors: [...colors, colors[colors.length - 1]] });
+                      setStop(colors.length);
+                    }}
+                  >
+                    {colors.map((c, i) => (
+                      <button
+                        key={i}
+                        className={`lights-stop ${i === current ? "sel" : ""}`}
+                        style={{
+                          left: `${colors.length > 1 ? (i / (colors.length - 1)) * 100 : 50}%`,
+                          ["--c" as string]: c,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStop(i);
+                        }}
+                        aria-label={`Color ${i + 1}: ${c}`}
+                        aria-pressed={i === current}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    className="m-btn m-btn-small"
+                    onClick={() => {
+                      update({ colors: [...colors, colors[current]] });
+                      setStop(colors.length);
+                    }}
+                    disabled={colors.length >= MAX_COLORS}
+                    title="Agregar un color"
+                  >
+                    + Color
+                  </button>
+                  <button
+                    className="m-btn m-btn-small"
+                    onClick={() => {
+                      update({ colors: colors.filter((_, i) => i !== current) });
+                      setStop(Math.max(0, current - 1));
+                    }}
+                    disabled={colors.length <= 1}
+                    title="Quitar el color elegido"
+                  >
+                    Quitar
+                  </button>
+                </div>
+                <div className="lights-colors">
+                  <span className="lights-colors-label">COLOR {current + 1}</span>
+                  {PALETTE.map((c) => (
+                    <button
+                      key={c.hex}
+                      className={`lights-chip ${colors[current] === c.hex ? "sel" : ""}`}
+                      style={{ background: c.hex }}
+                      onClick={() => setColor(c.hex)}
+                      aria-label={c.name}
+                      title={c.name}
+                    />
+                  ))}
+                  <label className="lights-chip lights-chip-custom" title="Otro color">
+                    <input
+                      type="color"
+                      value={colors[current].toLowerCase()}
+                      onChange={(e) => setColor(e.target.value, false)}
+                      onBlur={(e) => setColor(e.target.value)}
+                      aria-label="Otro color"
+                    />
+                  </label>
+                  <HexInput value={colors[current]} onCommit={(hex) => setColor(hex)} />
+                </div>
+                {recentColors.length > 0 && (
+                  <div className="lights-colors">
+                    <span className="lights-colors-label">RECIENTES</span>
+                    {recentColors.map((c) => (
+                      <button
+                        key={c}
+                        className="lights-chip"
+                        style={{ background: c }}
+                        onClick={() => setColor(c)}
+                        aria-label={`Reciente ${c}`}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <LayersEditor layers={layers} onChange={onLayersChange} thumbRef={thumbRef} />
+          </section>
+        )}
       </div>
     </div>
   );

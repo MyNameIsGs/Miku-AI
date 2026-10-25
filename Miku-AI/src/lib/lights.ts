@@ -174,6 +174,22 @@ export function resolveStrips(scene: Scene): KeyboardStrips | null {
 
 export const readStrips = () => invoke<KeyboardStrips>("teclado_tiras_leer");
 
+// Para guardar un perfil: si la escena todavía no dice nada de las tiras,
+// se anota cómo están ahora en el teclado (si está conectado), así el
+// perfil también las pone.
+export async function withStripsSnapshot(scene: Scene): Promise<Scene> {
+  if (scene.keyboardStrips) return scene;
+  const strips = await readStrips().catch(() => null);
+  return strips ? { ...scene, keyboardStrips: strips } : scene;
+}
+
+export function describeStrips(s: KeyboardStrips): string {
+  const one = (mode: number, color: number) => (stripUsesColor(mode) ? `${STRIP_MODES[mode]} ${STRIP_COLORS[color]?.name.toLowerCase() ?? ""}` : STRIP_MODES[mode]);
+  const bottom = one(s.bottom.mode, s.bottom.color);
+  const top = one(s.top.mode, s.top.color);
+  return bottom === top ? bottom : `${bottom} · arriba ${top.toLowerCase()}`;
+}
+
 let lastStrips = "";
 let lastScene: Scene | null = null;
 let lightsOn = true;

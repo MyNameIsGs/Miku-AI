@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { effectColor, rgbCss } from "../../lib/lightEffects";
-import { LightsGlobal, Scene } from "../../lib/lights";
+import { LightsGlobal, Scene, STRIP_COLORS, describeStrips, resolveStrips, withStripsSnapshot } from "../../lib/lights";
 import {
   Profile,
   Rule,
@@ -27,6 +27,9 @@ type LightsProfilesTabProps = {
   onGlobal: (global: LightsGlobal) => void;
   // Se aplicó un perfil: el panel vuelve a leer la escena.
   onApplied: () => void;
+  // Editar: el perfil se aplica y el panel pasa a la pestaña Escena con
+  // un aviso para guardar los cambios en él.
+  onEdit: (profile: Profile) => void;
   onError: (err: unknown) => void;
 };
 
@@ -58,7 +61,7 @@ function defaultWhen(kind: RuleWhen["kind"]): RuleWhen {
 // nombre (los favoritos van a Ctrl+Alt+1…9 y a la bandeja), las reglas
 // automáticas en orden de prioridad, qué quedan las luces al cerrar Miku, e
 // importar/exportar.
-export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError }: LightsProfilesTabProps) {
+export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onEdit, onError }: LightsProfilesTabProps) {
   const [state, setState] = useState<State | null>(null);
   const [newName, setNewName] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
@@ -109,7 +112,12 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
   const slots = favoriteSlots(state.profiles);
 
   const saveCurrent = async (name: string) => {
-    const profile: Profile = { id: newId(), name: name.trim() || `Perfil ${state.profiles.length + 1}`, scene, favorite: false };
+    const profile: Profile = {
+      id: newId(),
+      name: name.trim() || `Perfil ${state.profiles.length + 1}`,
+      scene: await withStripsSnapshot(scene),
+      favorite: false,
+    };
     await update({ ...state, profiles: [...state.profiles, profile], activeProfileId: profile.id });
     setNewName(null);
   };
@@ -226,7 +234,10 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
                       value={renaming.name}
                       onChange={(e) => setRenaming({ id: p.id, name: e.target.value })}
                       onBlur={() => {
-                        update({ ...state, profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, name: renaming.name.trim() || x.name } : x)) });
+                        update({
+                          ...state,
+                          profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, name: renaming.name.trim() || x.name } : x)),
+                        });
                         setRenaming(null);
                       }}
                       onKeyDown={(e) => {
@@ -236,16 +247,23 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
                       aria-label="Nuevo nombre"
                     />
                   ) : (
-                    <span className="lights-profile-name" onDoubleClick={() => setRenaming({ id: p.id, name: p.name })} title="Doble clic para renombrar">
+                    <span
+                      className="lights-profile-name"
+                      onDoubleClick={() => setRenaming({ id: p.id, name: p.name })}
+                      title="Doble clic para renombrar"
+                    >
                       {p.name}
                     </span>
                   )}
                   <span className="lights-profile-meta">
                     {p.by === "miku" ? "DISEÑADO POR ELLA" : slot >= 0 ? `CTRL+ALT+${slot + 1}` : active ? "EN USO" : " "}
                   </span>
+                  <ProfileStrips scene={p.scene} />
                   <button
                     className={`lights-star ${p.favorite ? "on" : ""}`}
-                    onClick={() => update({ ...state, profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, favorite: !x.favorite } : x)) })}
+                    onClick={() =>
+                      update({ ...state, profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, favorite: !x.favorite } : x)) })
+                    }
                     aria-pressed={p.favorite}
                     aria-label={p.favorite ? "Quitar de favoritos" : "Marcar como favorito"}
                     title={p.favorite ? "Favorito (Ctrl+Alt y la bandeja)" : "Marcar como favorito"}
@@ -264,14 +282,47 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
                       {active ? "Volver a aplicar" : "Aplicar"}
                     </button>
                     <button
+                      className="m-btn m-btn-small"
+                      onClick={async () => {
+                        await applyProfile(p);
+                        setState(await loadProfiles());
+                        onEdit(p);
+                      }}
+                      title="Lo pone y te lleva a la pestaña Escena para cambiarlo"
+                    >
+                      Editar
+                    </button>
+                    <button
                       className="m-btn m-btn-small m-btn-icon"
-                      onClick={() => update({ ...state, profiles: [...state.profiles, { ...p, id: newId(), name: `${p.name} (copia)`, favorite: false, by: undefined }] })}
+                      onClick={async () => {
+                        const next = await withStripsSnapshot(scene);
+                        await update({ ...state, profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, scene: next } : x)) });
+                        setNotice(`«${p.name}» ahora tiene la escena actual.`);
+                      }}
+                      aria-label={`Reemplazar ${p.name} con la escena actual`}
+                      title="Reemplazarlo con la escena actual"
+                    >
+                      ⟳
+                    </button>
+                    <button
+                      className="m-btn m-btn-small m-btn-icon"
+                      onClick={() =>
+                        update({
+                          ...state,
+                          profiles: [...state.profiles, { ...p, id: newId(), name: `${p.name} (copia)`, favorite: false, by: undefined }],
+                        })
+                      }
                       aria-label={`Duplicar ${p.name}`}
                       title="Duplicar"
                     >
                       ⧉
                     </button>
-                    <button className="m-btn m-btn-small m-btn-icon" onClick={() => setConfirmDelete(p)} aria-label={`Borrar ${p.name}`} title="Borrar">
+                    <button
+                      className="m-btn m-btn-small m-btn-icon"
+                      onClick={() => setConfirmDelete(p)}
+                      aria-label={`Borrar ${p.name}`}
+                      title="Borrar"
+                    >
                       ✕
                     </button>
                   </div>
@@ -289,7 +340,12 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
           </span>
           <button
             className="m-btn m-btn-small"
-            onClick={() => setRules([...state.rules, { id: newId(), when: { kind: "game", match: "" }, then: { kind: "brightness", value: 100 }, enabled: true }])}
+            onClick={() =>
+              setRules([
+                ...state.rules,
+                { id: newId(), when: { kind: "game", match: "" }, then: { kind: "brightness", value: 100 }, enabled: true },
+              ])
+            }
           >
             + Regla
           </button>
@@ -314,10 +370,22 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
                 <span className="lights-rule-arrow">→</span>
                 <ThenEditor then={rule.then} profiles={state.profiles} onChange={(then) => setRule(rule.id, { then })} />
                 <div className="lights-layer-actions">
-                  <button className="m-btn m-btn-small m-btn-icon" onClick={() => moveRule(i, -1)} disabled={i === 0} aria-label="Subir la regla" title="Más prioridad">
+                  <button
+                    className="m-btn m-btn-small m-btn-icon"
+                    onClick={() => moveRule(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Subir la regla"
+                    title="Más prioridad"
+                  >
                     ↑
                   </button>
-                  <button className="m-btn m-btn-small m-btn-icon" onClick={() => moveRule(i, 1)} disabled={i === state.rules.length - 1} aria-label="Bajar la regla" title="Menos prioridad">
+                  <button
+                    className="m-btn m-btn-small m-btn-icon"
+                    onClick={() => moveRule(i, 1)}
+                    disabled={i === state.rules.length - 1}
+                    aria-label="Bajar la regla"
+                    title="Menos prioridad"
+                  >
                     ↓
                   </button>
                   <button
@@ -329,7 +397,12 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
                   >
                     <span className="lights-switch-knob" />
                   </button>
-                  <button className="m-btn m-btn-small m-btn-icon" onClick={() => setRules(state.rules.filter((r) => r.id !== rule.id))} aria-label="Quitar la regla" title="Quitar">
+                  <button
+                    className="m-btn m-btn-small m-btn-icon"
+                    onClick={() => setRules(state.rules.filter((r) => r.id !== rule.id))}
+                    aria-label="Quitar la regla"
+                    title="Quitar"
+                  >
                     ✕
                   </button>
                 </div>
@@ -384,10 +457,29 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onError 
   );
 }
 
+// Cómo quedan las tiras del teclado con ese perfil (si las toca).
+function ProfileStrips({ scene }: { scene: Scene }) {
+  const s = resolveStrips(scene);
+  if (!s) return null;
+  const off = s.bottom.mode === 0 && s.top.mode === 0;
+  const dot = s.bottom.mode === 3 || s.bottom.mode === 4 ? STRIP_COLORS[s.bottom.color]?.hex : null;
+  return (
+    <span className="lights-profile-strips" title="Tiras del teclado">
+      <span className={`lights-strip-dot ${dot ? "" : off ? "off" : "rainbow"}`} style={dot ? { background: dot } : undefined} />
+      {off ? "Tiras apagadas" : `Tiras: ${describeStrips(s).toLowerCase()}`}
+    </span>
+  );
+}
+
 function WhenEditor({ when, onChange }: { when: RuleWhen; onChange: (when: RuleWhen) => void }) {
   return (
     <div className="lights-rule-part">
-      <select className="lights-select" value={when.kind} onChange={(e) => onChange(defaultWhen(e.target.value as RuleWhen["kind"]))} aria-label="Cuándo">
+      <select
+        className="lights-select"
+        value={when.kind}
+        onChange={(e) => onChange(defaultWhen(e.target.value as RuleWhen["kind"]))}
+        aria-label="Cuándo"
+      >
         {WHEN_KINDS.map((k) => (
           <option key={k.kind} value={k.kind}>
             {k.label}
@@ -406,8 +498,20 @@ function WhenEditor({ when, onChange }: { when: RuleWhen; onChange: (when: RuleW
       )}
       {when.kind === "schedule" && (
         <>
-          <input className="lights-hex lights-time" type="time" value={when.from} onChange={(e) => onChange({ ...when, from: e.target.value })} aria-label="Desde" />
-          <input className="lights-hex lights-time" type="time" value={when.to} onChange={(e) => onChange({ ...when, to: e.target.value })} aria-label="Hasta" />
+          <input
+            className="lights-hex lights-time"
+            type="time"
+            value={when.from}
+            onChange={(e) => onChange({ ...when, from: e.target.value })}
+            aria-label="Desde"
+          />
+          <input
+            className="lights-hex lights-time"
+            type="time"
+            value={when.to}
+            onChange={(e) => onChange({ ...when, to: e.target.value })}
+            aria-label="Hasta"
+          />
         </>
       )}
       {when.kind === "away" && (

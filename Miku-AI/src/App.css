@@ -4064,3 +4064,45 @@ a:hover {
 .lights-led-levels .lights-gain-row {
   grid-template-columns: 60px 1fr 44px auto;
 }
+
+/* Editar un perfil (aviso arriba del panel) y las tiras en cada perfil. */
+.lights-editing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid rgba(240, 80, 143, 0.45);
+  border-radius: 12px;
+  background: rgba(240, 80, 143, 0.08);
+}
+.lights-editing > span {
+  flex: 1;
+}
+.lights-profile-strips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--m-dim);
+}
+.lights-strip-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+.lights-strip-dot.rainbow {
+  background: conic-gradient(#ff3b3b, #ffe14d, #3ddc84, #39c5bb, #2f6bff, #f0508f, #ff3b3b);
+}
+.lights-strip-dot.off {
+  background: transparent;
+  border-color: var(--m-dim);
+}
+
+.lights-strips-which {
+  align-self: flex-start;
+  margin-bottom: 8px;
+}
