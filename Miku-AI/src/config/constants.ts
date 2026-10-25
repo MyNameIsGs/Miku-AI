@@ -30,11 +30,12 @@ export const VOICE_RATE_MAX = 100;
 // la escuche.
 export const VOICE_VOLUME_MIN = 30;
 
-// Silencio mínimo antes de preguntarle si quiere moverse. Era 2,5 min;
-// 2026-10-25 se subió a 5 (los silencios eran ~90 % del gasto en
-// OpenRouter). Si decide no hacer nada, la próxima espera se duplica hasta
-// IDLE_QUIRK_MAX_INTERVAL_MS; cualquier interacción la devuelve a esto.
-export const IDLE_QUIRK_INTERVAL_MS = 300000; // 5 minutos
+// Silencio antes de preguntarle si quiere moverse. Era 2,5 min; el
+// 2026-10-25 (los silencios eran ~90 % del gasto en OpenRouter) Sebastián
+// pidió que sea algo raro: cada 20 min. La espera puede crecer hasta
+// IDLE_QUIRK_MAX_INTERVAL_MS si decide no hacer nada (con los dos iguales,
+// no crece); cualquier interacción la devuelve a esto.
+export const IDLE_QUIRK_INTERVAL_MS = 20 * 60 * 1000;
 export const IDLE_QUIRK_MAX_INTERVAL_MS = 20 * 60 * 1000;
 // Entre una revisión con fotos de un quirk en evaluación y la siguiente
 // (cada una manda varias imágenes: es la consulta más cara).
