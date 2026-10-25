@@ -834,6 +834,10 @@ async fn run() {
             if sent.get(key) == Some(colors) {
                 continue;
             }
+            if held(key) {
+                // Se manda en cuanto se suelte (no queda anotado como enviado).
+                continue;
+            }
             let zone = &resolved.zones[key];
             if let Err(e) = conn.send(zone.device, openrgb::UPDATEZONELEDS, &openrgb::zone_leds_payload(zone.zone, colors)).await {
                 eprintln!("[LUCES] Se cortó la conexión con OpenRGB: {e}");
@@ -991,6 +995,28 @@ pub fn devices_changed() {
 // lo sacó del modo directo. `name`: parte del nombre, en minúsculas.
 pub fn redo_direct(name: &str) {
     STATE.lock().unwrap().redo_direct.push(name.to_string());
+}
+
+// Mientras keyboard_strips lee o escribe la configuración del teclado, el
+// motor no le manda colores: con un efecto animado en las teclas (30 por
+// segundo), un envío de OpenRGB se colaba entre "pedir la configuración" y
+// leerla, y lo leído eran colores (medido 2026-10-25: las tiras de los
+// perfiles nunca cambiaban). `name`: parte del nombre, en minúsculas.
+static HOLD: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+
+pub fn hold_device(name: &str, for_how_long: Duration) {
+    *HOLD.lock().unwrap() = Some((name.to_string(), Instant::now() + for_how_long));
+}
+
+pub fn release_device() {
+    *HOLD.lock().unwrap() = None;
+}
+
+fn held(key: &str) -> bool {
+    match &*HOLD.lock().unwrap() {
+        Some((name, until)) => Instant::now() < *until && key.to_lowercase().contains(name.as_str()),
+        None => false,
+    }
 }
 
 // Al cerrar Miku (pedido de Sebastián): las luces quedan quietas en el

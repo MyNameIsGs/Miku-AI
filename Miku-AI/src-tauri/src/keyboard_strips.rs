@@ -227,27 +227,44 @@ fn write_report(config: &[u8; REPORT_LEN], s: &Strips) -> [u8; REPORT_LEN] {
     out
 }
 
+// El motor deja de mandarle colores al teclado un momento (ver
+// lights_engine::hold_device) y se espera a que OpenRGB termine lo que
+// tenía en camino.
+fn quiet_keyboard() {
+    crate::lights_engine::hold_device("aula", Duration::from_millis(2500));
+    std::thread::sleep(Duration::from_millis(150));
+}
+
 fn read_blocking() -> Result<Strips, String> {
     let _guard = BUSY.lock().unwrap();
-    let device = Device::open()?;
-    Ok(parse(&device.read_config()?))
+    quiet_keyboard();
+    let result = Device::open().and_then(|device| device.read_config()).map(|c| parse(&c));
+    crate::lights_engine::release_device();
+    result
 }
 
 // Devuelve si escribió (false: el teclado ya estaba así).
 fn apply_blocking(s: Strips) -> Result<bool, String> {
     validate(&s)?;
     let _guard = BUSY.lock().unwrap();
-    let device = Device::open()?;
-    let config = device.read_config()?;
-    if parse(&config) == s {
-        return Ok(false);
-    }
-    let mut request = [0u8; REPORT_LEN];
-    request[..READ_REQUEST.len()].copy_from_slice(&READ_REQUEST);
-    device.set(&request)?;
-    std::thread::sleep(Duration::from_millis(80));
-    device.set(&write_report(&config, &s))?;
-    Ok(true)
+    quiet_keyboard();
+    let result = (|| {
+        let device = Device::open()?;
+        let config = device.read_config()?;
+        if parse(&config) == s {
+            return Ok(false);
+        }
+        let mut request = [0u8; REPORT_LEN];
+        request[..READ_REQUEST.len()].copy_from_slice(&READ_REQUEST);
+        device.set(&request)?;
+        std::thread::sleep(Duration::from_millis(80));
+        device.set(&write_report(&config, &s))?;
+        Ok(true)
+    })();
+    // Si escribió, el teclado sale del directo: el motor lo vuelve a poner
+    // (teclado_tiras_poner) y recién ahí le manda colores.
+    crate::lights_engine::release_device();
+    result
 }
 
 #[tauri::command]
@@ -257,7 +274,11 @@ pub async fn teclado_tiras_leer() -> Result<Strips, String> {
 
 #[tauri::command]
 pub async fn teclado_tiras_poner(tiras: Strips) -> Result<bool, String> {
-    let wrote = tauri::async_runtime::spawn_blocking(move || apply_blocking(tiras)).await.map_err(|e| e.to_string())??;
+    let wrote = tauri::async_runtime::spawn_blocking(move || apply_blocking(tiras)).await.map_err(|e| e.to_string())?;
+    if let Err(e) = &wrote {
+        eprintln!("[LUCES] Tiras del teclado: {e}");
+    }
+    let wrote = wrote?;
     if wrote {
         // Que el teclado termine de reiniciar sus luces antes de volver a
         // ponerlo en directo.
