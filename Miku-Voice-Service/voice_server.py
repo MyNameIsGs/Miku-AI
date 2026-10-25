@@ -133,6 +133,11 @@ WAKE_WORD_LOG_DIR = os.path.join(
 )
 WAKE_WORD_LOG_PRE_FRAMES = 31  # ~2,5 s
 WAKE_WORD_LOG_POST_FRAMES = 8  # ~0,64 s
+# 2026-10-25: el registro había llegado a 1,4 GB en un mes (~15.000 de los
+# 18.000 eran "roces" de 1-2 cuadros). Ya se comprobó que los roces no
+# esconden "Hey Miku" reales (Whisper sobre 400: ninguno), así que no se
+# guardan más; y la carpeta se recorta borrando lo más viejo al pasar el tope.
+WAKE_WORD_LOG_MAX_BYTES = 300 * 1024 * 1024
 
 # Segunda revisión con Whisper (2026-09-29): con audífonos, en una llamada
 # de Discord, el micrófono captaba bajito las voces de sus amigos y el
@@ -144,7 +149,15 @@ WAKE_WORD_LOG_POST_FRAMES = 8  # ~0,64 s
 # transcribe cuando pasaron WAKE_WORD_VERIFY_POST_FRAMES cuadros más (que
 # "Miku" quede entero en el audio), y solo se avisa a la app si lo dice.
 WAKE_WORD_VERIFY_POST_FRAMES = 4  # ~0,32 s
-WAKE_WORD_VERIFY_PATTERN = re.compile(r"\bm\s*[iy]\s*[kcq]+\s*[uo]\b")  # "Miku", "Mi ku", "Miko"; no "económico" ni "mi cuenta"
+# 2026-10-25: antes alcanzaba con "Miku" en cualquier parte, y la mayoría de
+# las aceptadas eran charlas SOBRE Miku ("tengo la Miku clásica", "¿haces
+# roleplay como Miku?"). Ahora tiene que ser un llamado: un "hey" (o como lo
+# escriba Whisper: "Ey", "Ehi", "Eh", "Oye") justo antes de "Miku". Replay
+# con el registro: 3/3 "Hey Miku" reales aceptados, 0 de las ~2.200 frases
+# que no lo eran (con la regla vieja pasaban 11).
+WAKE_WORD_VERIFY_PATTERN = re.compile(
+    r"(?:^|[^a-z])(?:h?e+h?[iy]*|oye)\W*m\s*[iy]\s*[kcq]+\s*[uo]\b"
+)  # "Hey Miku", "¡Ey, Miko!", "Ehi Miku"; no "la Miku clásica" ni "de mi pequeña Mico"
 
 # El frontend hace polling de este contador (ver /wake-word/poll) -- se
 # incrementa cada vez que se detecta "Hey Miku", en vez de un evento push,
@@ -394,6 +407,21 @@ def _wake_word_loop():
         except Exception:
             print("[WAKE_WORD][WARN] No se pudo guardar el registro de la detección:")
             traceback.print_exc()
+        trim_detection_log()
+
+    def trim_detection_log():
+        try:
+            files = [os.path.join(WAKE_WORD_LOG_DIR, n) for n in os.listdir(WAKE_WORD_LOG_DIR)]
+            files = sorted((os.path.getmtime(p), os.path.getsize(p), p) for p in files if os.path.isfile(p))
+            total = sum(size for _mtime, size, _p in files)
+            for _mtime, size, path in files:
+                if total <= WAKE_WORD_LOG_MAX_BYTES:
+                    break
+                os.remove(path)
+                total -= size
+        except Exception:
+            print("[WAKE_WORD][WARN] No se pudo recortar el registro de detecciones:")
+            traceback.print_exc()
 
     # Segunda revisión (ver WAKE_WORD_VERIFY_PATTERN): Whisper transcribe el
     # audio de la detección y solo se avisa a la app si dice "Miku". Sin
@@ -489,16 +517,7 @@ def _wake_word_loop():
         recent_scores.append(round(score, 4))
 
         if score < WAKE_WORD_THRESHOLD:
-            # Un roce que no llegó a confirmarse: se registra igual, para
-            # comprobar con el tiempo que no se pierde ningún "Hey Miku" real.
-            if 0 < frames_above < WAKE_WORD_CONFIRM_FRAMES:
-                entry = {
-                    "stamp": time_module.strftime("%Y%m%d-%H%M%S") + "-rechazada",
-                    "frames": list(recent_frames),
-                    "scores": list(recent_scores),
-                    "detection_frame": len(recent_scores) - 2,
-                }
-                threading.Thread(target=save_detection_log, args=(entry,), daemon=True).start()
+            # Los roces (1-2 cuadros) ya no se registran, ver WAKE_WORD_LOG_MAX_BYTES.
             frames_above = 0
             return
 
