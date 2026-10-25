@@ -6,6 +6,8 @@ import { EFFECT_KINDS, EFFECT_NAMES, STRIP_COLORS, STRIP_MODES, loadLightsState 
 import { activeRuleId, RuleContext } from "./lightProfiles";
 import { applyChoice, describeScene, loadMikuLights, parseChoice, saveMikuLights } from "./mikuLights";
 import { buildLightsDecisionPrompt } from "../prompts/lightsDecisionPrompt";
+import { backgroundBudgetLeft } from "./tokenUsage";
+import { BACKGROUND_DAILY_BUDGET_USD } from "../config/constants";
 
 // "Que Miku lo decida": cuándo se le pregunta (lo llama useLightRules cada
 // vez que mira las reglas). Solo cuando cambia el momento -- no a cada
@@ -52,6 +54,7 @@ export async function maybeDecideLights(ctx: RuleContext) {
   const since = Date.now() - (mine.decides.lastAt ?? 0);
   const changed = key !== lastMoment;
   if (since < MIN_GAP_MS || (!changed && since < REASK_AFTER_MS)) return;
+  if (!(await backgroundBudgetLeft(BACKGROUND_DAILY_BUDGET_USD))) return;
 
   inFlight = true;
   lastMoment = key;

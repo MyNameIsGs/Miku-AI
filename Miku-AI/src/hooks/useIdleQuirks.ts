@@ -1,7 +1,10 @@
 import { useRef, RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
+  BACKGROUND_DAILY_BUDGET_USD,
   IDLE_QUIRK_INTERVAL_MS,
+  IDLE_QUIRK_MAX_INTERVAL_MS,
+  QUIRK_REVIEW_MIN_GAP_MS,
   OPENROUTER_MODEL,
   DIRECT_QUIRK_RUN_CHANCE,
   DEFAULT_HAND_GESTURE_DURATION_MS,
@@ -31,6 +34,7 @@ import {
 import { BoneTransition, MovementOrigin, ParsedMovement } from "../types";
 import { TOUCH_REACTION_LABELS, TouchReactionKey, processRedesignMarkers } from "../lib/touchReactionsStore";
 import { reviewTouchReaction } from "../lib/touchReview";
+import { backgroundBudgetLeft } from "../lib/tokenUsage";
 
 type UseIdleQuirksParams = {
   boneTransitionsRef: RefObject<Record<string, BoneTransition>>;
@@ -126,6 +130,11 @@ export function useIdleQuirks({
   // cuesta tokens. Se revisa cada tanto, no en cada cuadro.
   const awayRef = useRef(false);
   const lastAwayCheckRef = useRef(0);
+  // Ahorro (2026-10-25): cuánto esperar hasta la próxima consulta. Crece
+  // si decide no hacer nada; vuelve al mínimo con cualquier interacción.
+  const waitMsRef = useRef(IDLE_QUIRK_INTERVAL_MS);
+  const lastBackoffBaseRef = useRef(0);
+  const lastReviewRef = useRef(-Infinity);
 
   // Fase 7: corre un quirk propio ya guardado, sin pasar por el LLM. Si
   // todavía está "evaluando", dispara la foto + descripción numérica que se
@@ -245,6 +254,13 @@ export function useIdleQuirks({
         return;
       }
 
+      // Tope diario de las consultas de fondo: pasado, solo corre sus quirks
+      // guardados (gratis) hasta mañana.
+      if (!(await backgroundBudgetLeft(BACKGROUND_DAILY_BUDGET_USD))) {
+        if (chosenName) runStoredQuirk(chosenName, quirks[chosenName]);
+        return;
+      }
+
       const { personality, world } = await loadMemoryContext();
       const heldPoseSummary = getHeldPoseSummary(
         boneTransitionsRef.current,
@@ -253,10 +269,17 @@ export function useIdleQuirks({
       const allPendientes = await loadPendientes();
       const duePendientes = getDuePendientes(allPendientes);
 
-      const quirkFeedback = pendingQuirkDescriptionRef.current;
-      pendingQuirkDescriptionRef.current = null;
-      const quirkImages = quirkSelfImagesRef.current;
-      quirkSelfImagesRef.current = [];
+      // La revisión con fotos de un quirk en evaluación es la consulta más
+      // cara: como mucho una cada QUIRK_REVIEW_MIN_GAP_MS. Mientras tanto
+      // las fotos esperan (las de la próxima vez que corra lo reemplazan).
+      const reviewNow = performance.now() - lastReviewRef.current > QUIRK_REVIEW_MIN_GAP_MS;
+      const quirkFeedback = reviewNow ? pendingQuirkDescriptionRef.current : null;
+      const quirkImages = reviewNow ? quirkSelfImagesRef.current : [];
+      if (reviewNow) {
+        pendingQuirkDescriptionRef.current = null;
+        quirkSelfImagesRef.current = [];
+      }
+      if (quirkImages.length > 0 || quirkFeedback) lastReviewRef.current = performance.now();
 
       const ask = async (messages: object[], kind: "silencio (decidir)" | "silencio (diseñar)" = "silencio (diseñar)") => {
         const response = await fetchOpenRouterWithRetry({ model: OPENROUTER_MODEL, messages }, { kind });
@@ -334,6 +357,10 @@ export function useIdleQuirks({
 
       // El cuerpo sale de la respuesta final.
       const parsed = parseMarkers(reply, voicePitchRef.current, voiceRateRef.current);
+
+      // Si no quiso hacer nada, la próxima consulta espera el doble.
+      const didSomething = Boolean(parsed.movement || parsed.createQuirk || parsed.cleanText || /\[(CARA|EXPRESION|LLEVAR_MANO)/i.test(reply));
+      waitMsRef.current = didSomething ? IDLE_QUIRK_INTERVAL_MS : Math.min(waitMsRef.current * 2, IDLE_QUIRK_MAX_INTERVAL_MS);
 
       // Se resuelve antes de mover nada, sobre la pose final (ver App.tsx).
       const reachMovement = resolveReach(reply, parsed.movement);
@@ -413,13 +440,20 @@ export function useIdleQuirks({
   function checkIdleQuirk(now: number) {
     refreshAway(now);
     if (awayRef.current) return;
+    // Escondida (modo juego, minimizada en la bandeja): nadie la ve.
+    if (document.hidden) return;
+    // Una interacción nueva devuelve la espera al mínimo.
+    if (lastInteractionTimeRef.current !== lastBackoffBaseRef.current) {
+      lastBackoffBaseRef.current = lastInteractionTimeRef.current;
+      waitMsRef.current = IDLE_QUIRK_INTERVAL_MS;
+    }
     const silenceBase = Math.max(
       lastInteractionTimeRef.current,
       lastQuirkTimeRef.current,
     );
     if (
       !isQuirkPendingRef.current &&
-      now - silenceBase > IDLE_QUIRK_INTERVAL_MS
+      now - silenceBase > waitMsRef.current
     ) {
       askForIdleQuirk();
     }

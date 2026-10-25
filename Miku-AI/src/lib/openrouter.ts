@@ -17,6 +17,16 @@ function withUserTurn(body: object): object {
   return { ...body, messages: [...messages, NUDGE_USER_MESSAGE] };
 }
 
+// Tope de la respuesta si quien llama no puso otro. Sin tope, OpenRouter
+// reserva el máximo del modelo (131072) y con poco saldo rechaza el pedido
+// entero (402), aunque la respuesta real fuera de 500 tokens (medido
+// 2026-10-25). Las respuestas de Miku rondan los 300-1500.
+const DEFAULT_MAX_TOKENS = 4096;
+
+function withMaxTokens(body: object): object {
+  return "max_tokens" in body ? body : { ...body, max_tokens: DEFAULT_MAX_TOKENS };
+}
+
 export async function fetchOpenRouterWithRetry(
   body: object,
   // kind: para qué es la llamada, para medir cuánto gasta cada tipo (B2,
@@ -45,7 +55,7 @@ export async function fetchOpenRouterWithRetry(
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
         },
-        body: JSON.stringify(withUserTurn(body)),
+        body: JSON.stringify(withMaxTokens(withUserTurn(body))),
         signal,
       },
     );

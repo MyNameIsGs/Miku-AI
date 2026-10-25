@@ -7,7 +7,13 @@ export const HEIGHT = 680;
 // cambiar con scripts/tarea-6.0-test-tools.mjs (TEST_MODEL=...): sigue
 // emitiendo marcadores con tools presente, habla antes de ejecutar una
 // tool, registro neutro -- sin señales de degradación.
-export const OPENROUTER_MODEL = "deepseek/deepseek-v4.1-flash";
+// 2026-10-25, pedido de Sebastián: el alias que OpenRouter mueve solo al
+// DeepSeek Flash más nuevo (hoy apunta a v4.1-flash, mismo precio). Antes
+// se había preferido fijar la versión para que el personaje no cambiara sin
+// aviso; él prefirió que esté siempre al día. Ojo: ya existe
+// v4.1-flash-1017, 7,5 veces más cara de entrada; si el alias pasa a esa,
+// sube el costo (el tope diario de fondo lo contiene).
+export const OPENROUTER_MODEL = "~deepseek/deepseek-flash-latest";
 
 export const MAX_HISTORY_TURNS = 20;
 
@@ -24,7 +30,19 @@ export const VOICE_RATE_MAX = 100;
 // la escuche.
 export const VOICE_VOLUME_MIN = 30;
 
-export const IDLE_QUIRK_INTERVAL_MS = 150000; // 2.5 minutos
+// Silencio mínimo antes de preguntarle si quiere moverse. Era 2,5 min;
+// 2026-10-25 se subió a 5 (los silencios eran ~90 % del gasto en
+// OpenRouter). Si decide no hacer nada, la próxima espera se duplica hasta
+// IDLE_QUIRK_MAX_INTERVAL_MS; cualquier interacción la devuelve a esto.
+export const IDLE_QUIRK_INTERVAL_MS = 300000; // 5 minutos
+export const IDLE_QUIRK_MAX_INTERVAL_MS = 20 * 60 * 1000;
+// Entre una revisión con fotos de un quirk en evaluación y la siguiente
+// (cada una manda varias imágenes: es la consulta más cara).
+export const QUIRK_REVIEW_MIN_GAP_MS = 30 * 60 * 1000;
+// Tope diario de lo que gastan las consultas de fondo (silencios, diseños,
+// luces): pasado esto, hasta mañana solo usa lo que ya tiene (sus quirks
+// guardados) sin llamar al modelo. La charla no tiene tope.
+export const BACKGROUND_DAILY_BUDGET_USD = 0.1;
 
 // Cada cuánto revisar si llegó correo nuevo (ver lib/gmail/watcher.ts) --
 // mismo valor que usa la variante de Android, balance entre "se entera

@@ -143,6 +143,36 @@ async function todayTotals(): Promise<DayUsage> {
   return totals;
 }
 
+// Lo que es "de fondo": lo que Miku consulta por su cuenta, sin que
+// Sebastián le haya dicho nada. Tiene tope diario (ver
+// BACKGROUND_DAILY_BUDGET_USD); la charla, el tacto y lo que él pide, no.
+const BACKGROUND_KINDS: CallKind[] = [
+  "silencio (decidir)",
+  "silencio (diseñar)",
+  "revisión de tacto",
+  "diseñar sueño",
+  "diseñar música",
+  "diseñar cara de ánimo",
+  "luces (decidir)",
+];
+
+export async function backgroundCostToday(): Promise<number> {
+  const totals = await todayTotals();
+  return BACKGROUND_KINDS.reduce((sum, kind) => sum + (totals[kind]?.cost ?? 0), 0);
+}
+
+let budgetNoticeDay = "";
+// true = todavía hay presupuesto para una consulta de fondo hoy.
+export async function backgroundBudgetLeft(budgetUsd: number): Promise<boolean> {
+  const spent = await backgroundCostToday();
+  if (spent < budgetUsd) return true;
+  if (budgetNoticeDay !== localDay()) {
+    budgetNoticeDay = localDay();
+    console.log(`[Tokens] Tope diario de consultas de fondo alcanzado (${spent.toFixed(3)} USD): hasta mañana, sin consultas por su cuenta.`);
+  }
+  return false;
+}
+
 // Módulo "04 HOY" del panel de Configuración (diseño v1): costo y tokens
 // del día por separado, más el detalle por tipo de llamada.
 export type TodayUsage = {
