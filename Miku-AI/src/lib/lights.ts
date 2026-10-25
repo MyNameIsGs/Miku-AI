@@ -86,7 +86,9 @@ export const BLEND_NAMES: Record<LayerBlend, string> = { normal: "Normal", add: 
 // lights_engine.rs): ventiladores encadenados en un conector, dónde está
 // el LED 1 de cada uno, el sentido, y la corrección de color (0 a 1 por
 // canal).
-export type ZoneOptions = { fans: number; offset: number; reverse: boolean; gain: [number, number, number] };
+// ledLevels: fuerza de cada LED (0 a 1), para zonas chicas con LEDs que
+// se ven distinto (el micrófono: arriba y abajo).
+export type ZoneOptions = { fans: number; offset: number; reverse: boolean; gain: [number, number, number]; ledLevels?: number[] };
 export const DEFAULT_ZONE_OPTIONS: ZoneOptions = { fans: 1, offset: 0, reverse: false, gain: [1, 1, 1] };
 
 export type Scene = {

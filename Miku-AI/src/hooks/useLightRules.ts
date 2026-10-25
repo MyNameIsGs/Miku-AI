@@ -5,7 +5,7 @@ import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { isStreamModeActive } from "../lib/streamMode";
 import { gameNameFrom } from "../lib/gameSessions";
 import { loadLightsState, saveLightsState, sendGlobal } from "../lib/lights";
-import { RuleContext, applyProfile, evaluateRules, favoriteSlots, loadProfiles } from "../lib/lightProfiles";
+import { RuleContext, applyProfile, evaluateRules, favoriteSlots, loadProfiles, seedPlanProfiles } from "../lib/lightProfiles";
 import { maybeDecideLights } from "../lib/mikuLightsDecide";
 import { onMoodChange } from "../lib/mood";
 
@@ -94,6 +94,8 @@ export function useLightRules({ asleepRef }: UseLightRulesParams) {
 
     tick();
     const id = window.setInterval(tick, CHECK_EVERY_MS);
+    // Los perfiles de la maqueta, una sola vez (ver lightProfiles.ts).
+    seedPlanProfiles().catch((err) => console.warn("[Luces] Perfiles del plan:", err));
     // Que Miku lo decida: un cambio de ánimo es un momento nuevo.
     const offMood = onMoodChange(() => evaluate());
 

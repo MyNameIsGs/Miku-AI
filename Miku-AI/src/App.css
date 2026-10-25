@@ -4055,3 +4055,12 @@ a:hover {
 .m-panel .lights-fx-delete:focus-visible {
   opacity: 1;
 }
+.lights-led-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.lights-led-levels .lights-gain-row {
+  grid-template-columns: 60px 1fr 44px auto;
+}

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/plugin-store", () => ({ load: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-const { ruleMatches, describeWhen } = await import("./lightProfiles");
+const { ruleMatches, describeWhen, planScene, PLAN_PROFILES } = await import("./lightProfiles");
 import type { Rule, RuleContext } from "./lightProfiles";
 
 const ctx = (patch: Partial<RuleContext> = {}): RuleContext => ({
@@ -47,5 +47,21 @@ describe("reglas de las luces", () => {
   it("se describen en palabras", () => {
     expect(describeWhen({ kind: "game", match: "" })).toBe("Jugando cualquier juego");
     expect(describeWhen({ kind: "schedule", from: "00:00", to: "07:00" })).toBe("De 00:00 a 07:00");
+  });
+});
+
+describe("perfiles del plan", () => {
+  it("cambian el efecto de los grupos y las tiras, sin perder el resto de la escena", () => {
+    const base = {
+      groups: [{ category: "fans" as const, zones: ["a|ARGB"], effect: PLAN_PROFILES[0].effect }],
+      positions: { "a|ARGB": 0.3 },
+      keyboardStrips: { bottom: { mode: 0, color: 0, brightness: 3, speed: 1 }, top: { mode: 0, color: 0 }, follow: true },
+    };
+    const cebollin = PLAN_PROFILES.find((p) => p.name === "Cebollín")!;
+    expect(cebollin.by).toBe("miku");
+    const scene = planScene(base, cebollin);
+    expect(scene.groups[0].effect.kind).toBe("comet");
+    expect(scene.positions).toEqual({ "a|ARGB": 0.3 });
+    expect(scene.keyboardStrips).toEqual({ bottom: { mode: 4, color: 1, brightness: 3, speed: 1 }, top: { mode: 4, color: 1 }, follow: false });
   });
 });

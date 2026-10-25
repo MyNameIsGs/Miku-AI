@@ -1,5 +1,19 @@
 import { load } from "@tauri-apps/plugin-store";
-import { LightsGlobal, Scene, loadLightsState, saveLightsState, sendGlobal, sendScene } from "./lights";
+import {
+  Effect,
+  KeyboardStrips,
+  LightsGlobal,
+  Scene,
+  listDevices,
+  loadLightsState,
+  makeEffect,
+  normalizeScene,
+  readStrips,
+  saveLightsState,
+  sendGlobal,
+  sendScene,
+  withCategoryEffect,
+} from "./lights";
 
 // Perfiles y reglas automáticas de las luces (fase 5 de
 // docs/luces-argb/PLAN.md). Un perfil es una escena guardada con nombre;
@@ -200,4 +214,65 @@ export async function importJson(text: string): Promise<{ profiles: number; rule
   }));
   await saveProfiles({ ...state, profiles: [...state.profiles, ...profiles], rules: [...state.rules, ...rules] });
   return { profiles: profiles.length, rules: rules.length };
+}
+
+// --- Los perfiles del plan ---
+//
+// Los seis de la maqueta (docs/luces-argb/maqueta.html), pedidos por
+// Sebastián el 2026-10-25, "Cebollín" incluido como de Miku (en la maqueta
+// figuraba como diseñado por ella). Se agregan una sola vez; los que ya
+// existan con ese nombre no se tocan.
+
+const SEEDED_KEY = "lightProfilesPlanSeeded";
+
+type PlanProfile = { name: string; effect: Effect; strips: { mode: number; color: number }; favorite?: boolean; by?: "miku" };
+
+export const PLAN_PROFILES: PlanProfile[] = [
+  { name: "Miku turquesa", effect: makeEffect("wave", ["#39C5BB", "#F0508F"]), strips: { mode: 3, color: 5 }, favorite: true },
+  { name: "Noche", effect: makeEffect("breathe", ["#8A5CF6"], { speed: 20, brightness: 40 }), strips: { mode: 4, color: 4 }, favorite: true },
+  { name: "Juego", effect: makeEffect("screen", ["#FF3B3B"], { speed: 60 }), strips: { mode: 3, color: 0 }, favorite: true },
+  { name: "Fiesta", effect: makeEffect("music", ["#F0508F", "#39C5BB", "#FFD166"]), strips: { mode: 1, color: 4 } },
+  { name: "Stream", effect: makeEffect("rainbow", ["#FFFFFF"], { speed: 25 }), strips: { mode: 2, color: 6 } },
+  { name: "Cebollín", effect: makeEffect("comet", ["#3DDC84"], { speed: 45, size: 60 }), strips: { mode: 4, color: 1 }, by: "miku" },
+];
+
+// La escena de un perfil del plan, armada sobre la de ahora (para que
+// conserve el mapa, los ventiladores y la corrección de color).
+export function planScene(base: Scene, plan: PlanProfile): Scene {
+  const scene = withCategoryEffect(base, "all", plan.effect);
+  const current: KeyboardStrips | undefined = base.keyboardStrips;
+  if (!current) return { ...scene, keyboardStrips: undefined };
+  return {
+    ...scene,
+    keyboardStrips: { ...current, follow: false, bottom: { ...current.bottom, ...plan.strips }, top: { ...plan.strips } },
+  };
+}
+
+export async function seedPlanProfiles() {
+  const store = await load(".settings.dat", { autoSave: false });
+  if (await store.get<boolean>(SEEDED_KEY)) return;
+  const [devices, lights] = await Promise.all([listDevices(), loadLightsState()]);
+  // OpenRGB todavía detectando: se intenta la próxima vez.
+  if (devices.length === 0) return;
+  let base = normalizeScene(lights.scene, devices);
+  // Las tiras van en los perfiles si el teclado está (aunque la escena
+  // todavía no diga nada de ellas).
+  if (!base.keyboardStrips && devices.some((d) => /aula/i.test(d.name))) {
+    const strips = await readStrips().catch(() => null);
+    if (strips) base = { ...base, keyboardStrips: strips };
+  }
+  const state = await loadProfiles();
+  const taken = new Set(state.profiles.map((p) => p.name.toLowerCase()));
+  const noFavorites = !state.profiles.some((p) => p.favorite);
+  const added: Profile[] = PLAN_PROFILES.filter((p) => !taken.has(p.name.toLowerCase())).map((p) => ({
+    id: newId(),
+    name: p.name,
+    scene: planScene(base, p),
+    favorite: noFavorites && !!p.favorite,
+    by: p.by,
+  }));
+  await saveProfiles({ ...state, profiles: [...state.profiles, ...added] });
+  await store.set(SEEDED_KEY, true);
+  await store.save();
+  console.log(`[Luces] Perfiles del plan agregados: ${added.map((p) => p.name).join(", ") || "(ya estaban)"}.`);
 }

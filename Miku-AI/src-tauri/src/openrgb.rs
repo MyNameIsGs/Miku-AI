@@ -820,7 +820,7 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn leds_del_teclado() {
-        for d in rgb_listar().await.expect("lista").into_iter().filter(|d| d.kind == "teclado") {
+        for d in rgb_listar().await.expect("lista").into_iter().filter(|d| d.kind == "teclado" || d.kind == "micrófono") {
             println!("{}: {} LEDs, zonas {:?}", d.name, d.leds, d.zones.iter().map(|z| (&z.name, z.leds)).collect::<Vec<_>>());
             println!("{}", d.led_names.join(" | "));
         }

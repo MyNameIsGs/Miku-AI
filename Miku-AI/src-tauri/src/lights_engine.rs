@@ -120,6 +120,11 @@ pub struct ZoneOptions {
     // ventiladores se vean iguales.
     #[serde(default = "full_gain")]
     pub gain: [f32; 3],
+    // Fuerza de cada LED físico (0 a 1; los que faltan, 1): en el micrófono
+    // la luz de arriba y la de abajo son dos LEDs de la misma zona, y la de
+    // arriba domina (pedido de Sebastián).
+    #[serde(default)]
+    pub led_levels: Vec<f32>,
 }
 
 fn one() -> u32 {
@@ -131,7 +136,7 @@ fn full_gain() -> [f32; 3] {
 
 impl Default for ZoneOptions {
     fn default() -> Self {
-        ZoneOptions { fans: 1, offset: 0, reverse: false, gain: full_gain() }
+        ZoneOptions { fans: 1, offset: 0, reverse: false, gain: full_gain(), led_levels: Vec::new() }
     }
 }
 
@@ -603,7 +608,8 @@ fn render(
                         let top = top.map(|x| x * layer.effect.brightness / 100.0);
                         c = blend(c, top, a * layer.opacity / 100.0, &layer.blend);
                     }
-                    let c = scale(c, master);
+                    let level = options.led_levels.get(p).copied().unwrap_or(1.0).clamp(0.0, 1.0);
+                    let c = scale(c, master * level);
                     [0, 1, 2].map(|ch| (c[ch] as f32 * options.gain[ch].clamp(0.0, 1.0)).round() as u8)
                 })
                 .collect();
@@ -1107,6 +1113,24 @@ mod tests {
         assert_eq!(map_led(9, 24, &three), (1, 1, 8));
         // Si no divide justo, el último ventilador se queda con el resto.
         assert_eq!(map_led(9, 10, &ZoneOptions { fans: 3, ..ZoneOptions::default() }), (2, 3, 4));
+    }
+
+    #[test]
+    fn la_fuerza_por_led_baja_solo_ese_led() {
+        let resolved = Resolved {
+            zones: HashMap::from([("mic|Microphone".to_string(), ResolvedZone { device: 0, zone: 0, leds: 2 })]),
+            order: vec!["mic|Microphone".to_string()],
+        };
+        let mut options = ZoneOptions::default();
+        options.led_levels = vec![0.5];
+        let scene = Scene {
+            groups: vec![Group { zones: vec!["mic|Microphone".into()], effect: Effect { colors: vec![[200, 100, 50]], ..effect("static") }, layers: vec![] }],
+            zones: HashMap::from([("mic|Microphone".to_string(), options)]),
+            ..Scene::default()
+        };
+        let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
+        let frame = render(&mut r, &scene, &Global::default(), &BTreeMap::new(), &resolved, 0.0, &Signals::default());
+        assert_eq!(frame["mic|Microphone"], vec![[100, 50, 25], [200, 100, 50]]);
     }
 
     #[test]

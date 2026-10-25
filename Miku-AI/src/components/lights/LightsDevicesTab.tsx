@@ -44,6 +44,10 @@ const SETUP_BODY = "#39C5BB";
 const SETUP_LAST = "#F0508F";
 const TEST_STEP_MS = 220;
 
+// Hasta cuántos LEDs una zona muestra un control por LED (el micrófono
+// tiene 2; un teclado entero, no).
+const MAX_LEDS_EACH = 8;
+
 const KIND_ORDER = ["placa madre", "RAM", "tarjeta de video", "refrigeración", "tira LED", "gabinete", "teclado", "mouse", "micrófono"];
 
 type FanSetup = { deviceIndex: number; zoneIndex: number; key: string; count: number; original: number };
@@ -111,6 +115,20 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
       zones[key] = { ...current, gain };
     }
     onScene({ ...scene, zones }, final);
+  }
+
+  // Fuerza de un LED suelto (zonas chicas como el micrófono, que tiene la
+  // luz de arriba y la de abajo en la misma zona).
+  function setLedLevel(key: string, leds: number, led: number, value: number, final: boolean) {
+    const levels = Array.from({ length: leds }, (_, i) => zoneOptions(scene, key).ledLevels?.[i] ?? 1);
+    levels[led] = value / 100;
+    setOptions(key, { ledLevels: levels }, final);
+  }
+
+  // Prende solo ese LED en blanco un momento, para saber cuál es.
+  function showLed(key: string, leds: number, led: number) {
+    probeZone(key, Array.from({ length: leds }, (_, i) => (i === led ? "#FFFFFF" : "#000000"))).catch(onError);
+    window.setTimeout(() => probeZone(key, null).catch(onError), 1500);
   }
 
   function setManaged(device: RgbDevice, managed: boolean) {
@@ -484,6 +502,40 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
                       </label>
                     );
                   })}
+                  {lit
+                    .filter((z) => z.leds > 1 && z.leds <= MAX_LEDS_EACH && !isResizable(z))
+                    .map((z) => {
+                      const key = keyOf(device, z);
+                      const levels = zoneOptions(scene, key).ledLevels ?? [];
+                      return (
+                        <div key={key} className="lights-led-levels">
+                          <span className="lights-zone-detail">
+                            {lit.length > 1 ? `${zoneLabel(z)}: ` : ""}fuerza de cada LED («Ver» prende solo ese, para saber cuál es)
+                          </span>
+                          {Array.from({ length: z.leds }, (_, i) => {
+                            const value = Math.round((levels[i] ?? 1) * 100);
+                            return (
+                              <label key={i} className="lights-gain-row">
+                                <span>LED {i + 1}</span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  value={value}
+                                  onChange={(e) => setLedLevel(key, z.leds, i, Number(e.target.value), false)}
+                                  onPointerUp={(e) => setLedLevel(key, z.leds, i, Number((e.target as HTMLInputElement).value), true)}
+                                  onKeyUp={(e) => setLedLevel(key, z.leds, i, Number((e.target as HTMLInputElement).value), true)}
+                                />
+                                <span className="lights-param-value">{value}%</span>
+                                <button className="m-btn m-btn-small" onClick={() => showLed(key, z.leds, i)}>
+                                  Ver
+                                </button>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
                 </details>
               </>
             )}
