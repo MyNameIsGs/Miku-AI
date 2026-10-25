@@ -10,9 +10,9 @@ export const HEIGHT = 680;
 // 2026-10-25, pedido de Sebastián: el alias que OpenRouter mueve solo al
 // DeepSeek Flash más nuevo (hoy apunta a v4.1-flash, mismo precio). Antes
 // se había preferido fijar la versión para que el personaje no cambiara sin
-// aviso; él prefirió que esté siempre al día. Ojo: ya existe
-// v4.1-flash-1017, 7,5 veces más cara de entrada; si el alias pasa a esa,
-// sube el costo (el tope diario de fondo lo contiene).
+// aviso; él prefirió que esté siempre al día. Las versiones nuevas
+// (v4.1-flash-1017) cuestan lo mismo con el proveedor más barato
+// (0,02 / 1 USD por millón), que es al que OpenRouter manda por defecto.
 export const OPENROUTER_MODEL = "~deepseek/deepseek-flash-latest";
 
 export const MAX_HISTORY_TURNS = 20;
