@@ -69,6 +69,8 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
   const [openZone, setOpenZone] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [status, setStatus] = useState<ServiceStatus | null>(null);
+  // Qué zona corrige cada dispositivo ("all" = todas a la vez).
+  const [gainTarget, setGainTarget] = useState<Record<number, string>>({});
   const testTimer = useRef<number | null>(null);
   const keys = deviceKeys(devices);
   const keyOf = (device: RgbDevice, zone: RgbZone) => zoneKey(keys.get(device.index) ?? device.name, zone.name);
@@ -89,12 +91,23 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
     onScene({ ...scene, zones: { ...scene.zones, [key]: { ...zoneOptions(scene, key), ...patch } } }, final);
   }
 
-  function setGain(device: RgbDevice, channel: number, value: number, final: boolean) {
+  // La corrección de color va por zona: "all" cambia todas las del
+  // dispositivo, si no solo esa (pedido de Sebastián: los ventiladores de
+  // un conector ARGB no se ven igual que las luces de la placa, y en el
+  // micrófono la luz de arriba domina a la de abajo).
+  // `channel` 3 = intensidad: escala los tres canales juntos, sin cambiar el tono.
+  function setGain(device: RgbDevice, target: string, channel: number, value: number, final: boolean) {
     const zones = { ...scene.zones };
-    for (const key of deviceZoneKeys(device)) {
+    const targets = target === "all" ? deviceZoneKeys(device) : [target];
+    for (const key of targets) {
       const current = zoneOptions(scene, key);
-      const gain = [...current.gain] as [number, number, number];
-      gain[channel] = value / 100;
+      let gain = [...current.gain] as [number, number, number];
+      if (channel === 3) {
+        const top = Math.max(...gain);
+        gain = gain.map((g) => (top === 0 ? value / 100 : (g / top) * (value / 100))) as [number, number, number];
+      } else {
+        gain[channel] = value / 100;
+      }
       zones[key] = { ...current, gain };
     }
     onScene({ ...scene, zones }, final);
@@ -229,7 +242,10 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
 
       {sorted.map((device) => {
         const managed = !deviceZoneKeys(device).every((k) => excluded.has(k));
-        const gain = zoneOptions(scene, deviceZoneKeys(device)[0] ?? "").gain;
+        const lit = device.zones.filter((z) => z.leds > 0);
+        const target = lit.some((z) => keyOf(device, z) === gainTarget[device.index]) ? gainTarget[device.index] : "all";
+        const gain = zoneOptions(scene, target === "all" ? (deviceZoneKeys(device)[0] ?? "") : target).gain;
+        const differs = target === "all" && new Set(lit.map((z) => JSON.stringify(zoneOptions(scene, keyOf(device, z)).gain))).size > 1;
         return (
           <section key={device.index} className={`lights-module ${managed ? "" : "lights-excluded"}`} aria-label={deviceTitle(device, devices)}>
             <div className="lights-device-head">
@@ -433,22 +449,41 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
 
                 <details className="lights-gain">
                   <summary>Corrección de color</summary>
-                  <p className="lights-zone-detail">Para que el blanco de este dispositivo se vea igual que el de los demás.</p>
-                  {["Rojo", "Verde", "Azul"].map((name, ch) => (
-                    <label key={name} className="lights-gain-row">
-                      <span>{name}</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={Math.round(gain[ch] * 100)}
-                        onChange={(e) => setGain(device, ch, Number(e.target.value), false)}
-                        onPointerUp={(e) => setGain(device, ch, Number((e.target as HTMLInputElement).value), true)}
-                        onKeyUp={(e) => setGain(device, ch, Number((e.target as HTMLInputElement).value), true)}
-                      />
-                      <span className="lights-param-value">{Math.round(gain[ch] * 100)}%</span>
-                    </label>
-                  ))}
+                  <p className="lights-zone-detail">Para que el blanco se vea igual en todas las luces, o bajarle la fuerza a una que domina.</p>
+                  {lit.length > 1 && (
+                    <div className="lights-seg lights-gain-target" role="radiogroup" aria-label="Qué corregir">
+                      <button role="radio" aria-checked={target === "all"} className={target === "all" ? "on" : ""} onClick={() => setGainTarget({ ...gainTarget, [device.index]: "all" })}>
+                        Todo
+                      </button>
+                      {lit.map((z) => {
+                        const k = keyOf(device, z);
+                        return (
+                          <button key={k} role="radio" aria-checked={target === k} className={target === k ? "on" : ""} onClick={() => setGainTarget({ ...gainTarget, [device.index]: k })}>
+                            {zoneLabel(z)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {differs && <p className="lights-zone-detail">Las zonas tienen correcciones distintas: mover un control aquí las iguala.</p>}
+                  {["Rojo", "Verde", "Azul", "Intensidad"].map((name, ch) => {
+                    const value = Math.round((ch === 3 ? Math.max(...gain) : gain[ch]) * 100);
+                    return (
+                      <label key={name} className="lights-gain-row">
+                        <span>{name}</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={value}
+                          onChange={(e) => setGain(device, target, ch, Number(e.target.value), false)}
+                          onPointerUp={(e) => setGain(device, target, ch, Number((e.target as HTMLInputElement).value), true)}
+                          onKeyUp={(e) => setGain(device, target, ch, Number((e.target as HTMLInputElement).value), true)}
+                        />
+                        <span className="lights-param-value">{value}%</span>
+                      </label>
+                    );
+                  })}
                 </details>
               </>
             )}

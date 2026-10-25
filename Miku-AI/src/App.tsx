@@ -55,6 +55,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { LightsPanel } from "./components/LightsPanel";
 import { useLightRules } from "./hooks/useLightRules";
 import { restoreLights, sendMikuState, sendMood, sendVoiceLevel } from "./lib/lights";
+import { restoreMikuLights } from "./lib/mikuLights";
 import { getCurrentMood, getMoodLevel, onMoodChange } from "./lib/mood";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { TopBar, Presence } from "./components/TopBar";
@@ -122,6 +123,7 @@ function App() {
   // lib/lights.ts).
   useEffect(() => {
     restoreLights().catch((err) => console.error("[Luces]", err));
+    restoreMikuLights().catch((err) => console.error("[Luces]", err));
   }, []);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const [quirksState, setQuirksState] = useState<QuirksStore>({});

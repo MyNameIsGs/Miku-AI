@@ -4008,3 +4008,50 @@ a:hover {
   font-size: 13px;
   cursor: pointer;
 }
+.lights-gain-target {
+  flex-wrap: wrap;
+  margin: 4px 0 6px;
+}
+/* Que Miku lo decida (fase 6). */
+.lights-miku-bar {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.lights-miku-bar.on {
+  border-color: rgba(240, 80, 143, 0.45);
+}
+.lights-miku-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lights-fx-wrap {
+  position: relative;
+}
+.lights-fx-wrap .lights-fx {
+  width: 100%;
+}
+.m-panel .lights-fx-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--m-muted);
+  background: rgba(0, 0, 0, 0.45);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+}
+.lights-fx-wrap:hover .lights-fx-delete,
+.m-panel .lights-fx-delete:focus-visible {
+  opacity: 1;
+}

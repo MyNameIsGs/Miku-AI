@@ -1,6 +1,9 @@
 import { ToolDefinition } from "./types";
 import {
+  CategoryId,
   EFFECT_KINDS,
+  Effect,
+  MOOD_COLORS,
   EFFECT_NAMES,
   EffectKind,
   KeyboardStrips,
@@ -13,13 +16,33 @@ import {
   listDevices,
   loadLightsState,
   makeEffect,
+  normalizeScene,
   readStrips,
   setGlobal,
   setScene,
+  withCategoryEffect,
   zoneLabel,
 } from "../lights";
+import { Profile, applyProfile, loadProfiles, newId, saveProfiles } from "../lightProfiles";
+import { deleteMikuEffect, findMikuEffect, loadMikuLights, saveMikuEffect, setMikuMoodColor } from "../mikuLights";
 
-const ACCIONES = ["listar", "color", "efecto", "brillo", "apagar", "prender", "tiras"] as const;
+const ACCIONES = [
+  "listar",
+  "color",
+  "efecto",
+  "brillo",
+  "apagar",
+  "prender",
+  "tiras",
+  "perfil",
+  "guardar_perfil",
+  "crear_efecto",
+  "usar_efecto",
+  "borrar_efecto",
+  "color_animo",
+] as const;
+const GRUPOS: Record<string, CategoryId | "all"> = { todo: "all", ventiladores: "fans", ram: "ram", placa: "board", perifericos: "periph" };
+const ANIMOS = Object.keys(MOOD_COLORS);
 const TIRAS = ["abajo", "arriba", "ambas"] as const;
 const MODOS_TIRA = STRIP_MODES.map((m) => m.toLowerCase());
 const COLORES_TIRA = STRIP_COLORS.map((c) => c.name.toLowerCase());
@@ -47,7 +70,7 @@ export const controlarLuces: ToolDefinition = {
     function: {
       name: "controlar_luces",
       description:
-        "Controla las luces RGB de la PC de Sebastián (placa y ventilador, RAM, teclado, micrófono). Puede listar los dispositivos, ponerles un color fijo o un efecto animado, cambiar el brillo general, apagarlas o prenderlas. Las tiras de luz del teclado van aparte ('tiras'): solo tienen 5 modos y 7 colores propios, y cada cambio hace parpadear el teclado, así que no las cambies seguido.",
+        "Controla las luces RGB de la PC de Sebastián (placa y ventilador, RAM, teclado, micrófono). Puede listar los dispositivos, ponerles un color fijo o un efecto animado (a todo o a un grupo), cambiar el brillo general, apagarlas o prenderlas, poner o guardar perfiles, diseñar tus propios efectos con nombre (quedan en la galería del panel como tuyos) y elegir el color de cada ánimo tuyo para el efecto «Su ánimo». Las tiras de luz del teclado van aparte ('tiras'): solo tienen 5 modos y 7 colores propios, y cada cambio hace parpadear el teclado, así que no las cambies seguido.",
       parameters: {
         type: "object",
         properties: {
@@ -55,25 +78,56 @@ export const controlarLuces: ToolDefinition = {
             type: "string",
             enum: [...ACCIONES],
             description:
-              "'listar' dice qué dispositivos hay, con su número. 'color' pone un color fijo. 'efecto' pone un efecto animado. 'brillo' cambia el brillo general. 'apagar' apaga todo y 'prender' lo vuelve a prender como estaba. 'tiras' cambia las tiras del teclado (modo, color, brillo, velocidad).",
+              "'listar' dice qué dispositivos hay, con su número. 'color' pone un color fijo. 'efecto' pone un efecto animado. 'brillo' cambia el brillo general. 'apagar' apaga todo y 'prender' lo vuelve a prender como estaba. 'tiras' cambia las tiras del teclado (modo, color, brillo, velocidad). 'perfil' pone un perfil guardado por su nombre. 'guardar_perfil' guarda las luces de ahora como un perfil tuyo. 'crear_efecto' diseña un efecto tuyo (nombre, descripcion, efecto y sus parámetros), lo guarda y lo pone para que se vea. 'usar_efecto' pone uno tuyo por su nombre. 'borrar_efecto' borra uno tuyo. 'color_animo' elige el color de uno de tus ánimos.",
           },
           color: {
             type: "string",
-            description: "Para 'color': el color en hexadecimal, por ejemplo \"#39C5BB\".",
+            description: "Para 'color' y 'color_animo': el color en hexadecimal, por ejemplo \"#39C5BB\".",
           },
           efecto: {
             type: "string",
             enum: [...EFFECT_KINDS],
-            description: `Para 'efecto': ${EFFECT_KINDS.map((k) => `'${k}' (${EFFECT_NAMES[k]})`).join(", ")}.`,
+            description: `Para 'efecto' y 'crear_efecto': ${EFFECT_KINDS.map((k) => `'${k}' (${EFFECT_NAMES[k]})`).join(", ")}.`,
           },
           colores: {
             type: "array",
             items: { type: "string" },
-            description: "Para 'efecto': uno o más colores en hexadecimal. La ola, el degradado y los destellos usan varios.",
+            description: "Para 'efecto' y 'crear_efecto': uno o más colores en hexadecimal. La ola, el degradado y los destellos usan varios.",
           },
           velocidad: {
             type: "number",
-            description: "Para 'efecto': de 1 (muy lento) a 100 (muy rápido); 50 es normal.",
+            description: "Para 'efecto' y 'crear_efecto': de 1 (muy lento) a 100 (muy rápido); 50 es normal.",
+          },
+          grupo: {
+            type: "string",
+            enum: Object.keys(GRUPOS),
+            description: "Para 'color', 'efecto', 'crear_efecto' y 'usar_efecto': a qué grupo del panel. Si lo omites (y no das 'dispositivos'), va a todo.",
+          },
+          brillo_grupo: {
+            type: "number",
+            description: "Para 'efecto' y 'crear_efecto': brillo propio de ese efecto, de 0 a 100 (100 por defecto).",
+          },
+          tamano: {
+            type: "number",
+            description: "Para 'efecto' y 'crear_efecto': de 1 a 100; ancho de la ola, largo de la estela del cometa, cantidad de destellos.",
+          },
+          direccion: {
+            type: "string",
+            enum: ["izquierda", "derecha"],
+            description: "Para 'efecto' y 'crear_efecto': hacia dónde corre la ola, el cometa o el arcoíris.",
+          },
+          nombre: {
+            type: "string",
+            description: "Para 'perfil', 'guardar_perfil', 'crear_efecto', 'usar_efecto' y 'borrar_efecto': el nombre.",
+          },
+          descripcion: {
+            type: "string",
+            description: "Para 'crear_efecto': cómo es, en pocas palabras (se ve en el panel).",
+          },
+          animo: {
+            type: "string",
+            enum: ANIMOS,
+            description: "Para 'color_animo': cuál de tus ánimos (con 'color').",
           },
           nivel: {
             type: "number",
@@ -148,18 +202,35 @@ export const controlarLuces: ToolDefinition = {
         return accion === "apagar" ? "Luces apagadas." : "Luces prendidas.";
       }
 
-      let changed: string[];
+      if (accion === "perfil" || accion === "guardar_perfil") return await profileAction(accion, args);
+      if (accion === "crear_efecto" || accion === "usar_efecto" || accion === "borrar_efecto") return await ownEffectAction(accion, args);
+      if (accion === "color_animo") {
+        const animo = String(args.animo ?? "");
+        const colors = parseColors(args.color);
+        if (!ANIMOS.includes(animo)) return `Error: ánimo desconocido "${args.animo}". Opciones: ${ANIMOS.join(", ")}.`;
+        if (!colors || colors.length !== 1) return `Error: "${args.color}" no es un color hexadecimal como "#39C5BB".`;
+        await setMikuMoodColor(animo, colors[0]);
+        return `Listo: cuando estés ${animo}, el efecto "Su ánimo" usa ${colors[0]}.`;
+      }
+
+      let effect: Effect;
       if (accion === "color") {
         const colors = parseColors(args.color);
         if (!colors || colors.length !== 1) return `Error: "${args.color}" no es un color hexadecimal como "#39C5BB".`;
-        changed = await applyToDevices(makeEffect("static", colors), dispositivos);
+        effect = makeEffect("static", colors);
       } else {
-        const kind = String(args.efecto ?? "") as EffectKind;
-        if (!EFFECT_KINDS.includes(kind)) return `Error: efecto desconocido "${args.efecto}".`;
-        const colors = parseColors(args.colores);
-        if (!colors) return "Error: algún color de 'colores' no es hexadecimal como \"#39C5BB\".";
-        const speed = typeof args.velocidad === "number" ? Math.max(1, Math.min(100, args.velocidad)) : 50;
-        changed = await applyToDevices(makeEffect(kind, colors.length > 0 ? colors : ["#39C5BB", "#F0508F"], { speed }), dispositivos);
+        const built = effectFromArgs(args);
+        if (typeof built === "string") return built;
+        effect = built;
+      }
+      const grupo = args.grupo === undefined ? null : GRUPOS[String(args.grupo)];
+      if (args.grupo !== undefined && !grupo) return `Error: grupo desconocido "${args.grupo}".`;
+      let changed: string[];
+      if (grupo || dispositivos.length === 0) {
+        await applyToGroup(effect, grupo ?? "all");
+        changed = [String(args.grupo ?? "todo")];
+      } else {
+        changed = await applyToDevices(effect, dispositivos);
       }
       if (changed.length === 0) return "No había ningún dispositivo con esos números.";
       // Si estaban apagadas, un color o un efecto nuevo las prende.
@@ -200,4 +271,76 @@ async function changeStrips(args: Record<string, unknown>): Promise<string> {
   await setScene({ ...scene, keyboardStrips: next });
   const describe = (m: number, c: number) => `${STRIP_MODES[m]}${m >= 3 ? ` ${STRIP_COLORS[c].name.toLowerCase()}` : ""}`;
   return `Tiras: abajo ${describe(next.bottom.mode, next.bottom.color)}, arriba ${describe(next.top.mode, next.top.color)}.`;
+}
+
+// El efecto que piden los argumentos (para 'efecto' y 'crear_efecto'), o
+// el error.
+function effectFromArgs(args: Record<string, unknown>): Effect | string {
+  const kind = String(args.efecto ?? "") as EffectKind;
+  if (!EFFECT_KINDS.includes(kind)) return `Error: efecto desconocido "${args.efecto}".`;
+  const colors = parseColors(args.colores);
+  if (!colors) return "Error: algún color de 'colores' no es hexadecimal como \"#39C5BB\".";
+  const num = (v: unknown, min: number, max: number, fallback: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : fallback;
+  return makeEffect(kind, colors.length > 0 ? colors.slice(0, 6) : ["#39C5BB", "#F0508F"], {
+    speed: num(args.velocidad, 1, 100, 50),
+    brightness: num(args.brillo_grupo, 0, 100, 100),
+    size: num(args.tamano, 1, 100, 40),
+    direction: args.direccion === "izquierda" ? -1 : 1,
+  });
+}
+
+async function applyToGroup(effect: Effect, group: CategoryId | "all") {
+  const [devices, state] = await Promise.all([listDevices(), loadLightsState()]);
+  await setScene(withCategoryEffect(normalizeScene(state.scene, devices), group, effect));
+  if (!state.global.on) await setGlobal({ ...state.global, on: true });
+}
+
+async function profileAction(accion: "perfil" | "guardar_perfil", args: Record<string, unknown>): Promise<string> {
+  const name = String(args.nombre ?? "").trim();
+  const state = await loadProfiles();
+  if (accion === "perfil") {
+    const profile = state.profiles.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (!profile) {
+      const names = state.profiles.map((p) => p.name).join(", ");
+      return names ? `No hay un perfil "${name}". Los que hay: ${names}.` : "Todavía no hay perfiles guardados.";
+    }
+    await applyProfile(profile);
+    return `Perfil "${profile.name}" puesto.`;
+  }
+  if (!name) return "Error: falta 'nombre' para el perfil.";
+  const { scene } = await loadLightsState();
+  if (!scene) return "Todavía no hay una escena de luces para guardar.";
+  const existing = state.profiles.find((p) => p.name.toLowerCase() === name.toLowerCase());
+  // Uno de Sebastián con ese nombre no se pisa.
+  if (existing && existing.by !== "miku") return `Ya hay un perfil de Sebastián que se llama "${existing.name}": elige otro nombre.`;
+  const profile: Profile = { id: existing?.id ?? newId(), name, scene, favorite: existing?.favorite ?? false, by: "miku" };
+  await saveProfiles({ ...state, profiles: existing ? state.profiles.map((p) => (p.id === existing.id ? profile : p)) : [...state.profiles, profile] });
+  return `Guardado el perfil "${name}" (queda como tuyo en la pestaña Perfiles).`;
+}
+
+async function ownEffectAction(accion: "crear_efecto" | "usar_efecto" | "borrar_efecto", args: Record<string, unknown>): Promise<string> {
+  const name = String(args.nombre ?? "").trim();
+  if (!name) return "Error: falta 'nombre' del efecto.";
+  const grupo = args.grupo === undefined ? "all" : GRUPOS[String(args.grupo)];
+  if (!grupo) return `Error: grupo desconocido "${args.grupo}".`;
+  if (accion === "crear_efecto") {
+    const effect = effectFromArgs(args);
+    if (typeof effect === "string") return effect;
+    await saveMikuEffect(name, String(args.descripcion ?? ""), effect);
+    await applyToGroup(effect, grupo);
+    return `Efecto "${name}" guardado en la galería como tuyo, y puesto en ${args.grupo ?? "todo"} para que se vea.`;
+  }
+  const mine = await loadMikuLights();
+  const own = findMikuEffect(mine, name);
+  if (!own) {
+    const names = mine.effects.map((e) => e.name).join(", ");
+    return names ? `No tienes un efecto "${name}". Los tuyos: ${names}.` : "Todavía no diseñaste ningún efecto.";
+  }
+  if (accion === "borrar_efecto") {
+    await deleteMikuEffect(own.id);
+    return `Efecto "${own.name}" borrado.`;
+  }
+  await applyToGroup(own.effect, grupo);
+  return `Puse tu efecto "${own.name}" en ${args.grupo ?? "todo"}.`;
 }

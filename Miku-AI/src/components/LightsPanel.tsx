@@ -32,6 +32,8 @@ import { LightsDevicesTab } from "./lights/LightsDevicesTab";
 import { LightsMapTab } from "./lights/LightsMapTab";
 import { LightsProfilesTab } from "./lights/LightsProfilesTab";
 import { LightsStripsCard } from "./lights/LightsStripsCard";
+import { LightsMikuBar } from "./lights/LightsMikuBar";
+import { MikuLightsState, deleteMikuEffect, loadMikuLights, onMikuLightsChange } from "../lib/mikuLights";
 
 type LightsPanelProps = {
   onClose: () => void;
@@ -74,6 +76,7 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
   const [frame, setFrame] = useState<Record<string, Rgb[]>>({});
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [history, setHistory] = useState<{ past: Scene[]; future: Scene[] }>({ past: [], future: [] });
+  const [mine, setMine] = useState<MikuLightsState | null>(null);
   // La escena al empezar un arrastre (para deshacer el arrastre entero).
   const dragStart = useRef<Scene | null>(null);
   const timers = useRef<Record<string, number>>({});
@@ -95,6 +98,20 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
       setLoading(false);
     }
   }
+
+  // Lo de Miku: sus efectos y "Que Miku lo decida". Cuando ella cambia
+  // algo, la escena del panel se vuelve a leer.
+  useEffect(() => {
+    loadMikuLights().then(setMine).catch(console.error);
+    return onMikuLightsChange((state) => {
+      setMine(state);
+      loadLightsState()
+        .then((saved) => setSceneState((current) => (current && saved.scene && devicesRef.current ? normalizeScene(saved.scene, devicesRef.current) : current)))
+        .catch(console.error);
+    });
+  }, []);
+  const devicesRef = useRef<RgbDevice[] | null>(null);
+  devicesRef.current = devices;
 
   useEffect(() => {
     refresh();
@@ -312,6 +329,7 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             <p className="m-empty-text">Puede estar todavía detectando: prueba de nuevo en unos segundos.</p>
           </div>
         )}
+        {devices && devices.length > 0 && scene && tab === "escena" && mine && <LightsMikuBar mine={mine} onError={fail} />}
         {devices && devices.length > 0 && scene && tab === "escena" && (
           <LightsSceneTab
             scene={scene}
@@ -321,6 +339,8 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             onLayersChange={(layers, final) => changeScene(withCategoryLayers(scene, group, layers), final)}
             recentColors={recent}
             zoneCounts={zoneCounts}
+            mikuEffects={mine?.effects ?? []}
+            onDeleteMikuEffect={(id) => deleteMikuEffect(id).catch(fail)}
           />
         )}
         {devices && scene && tab === "escena" && devices.some((d) => /aula/i.test(d.name)) && <LightsStripsCard scene={scene} onScene={changeScene} />}

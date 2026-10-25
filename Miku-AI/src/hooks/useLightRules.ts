@@ -6,6 +6,8 @@ import { isStreamModeActive } from "../lib/streamMode";
 import { gameNameFrom } from "../lib/gameSessions";
 import { loadLightsState, saveLightsState, sendGlobal } from "../lib/lights";
 import { RuleContext, applyProfile, evaluateRules, favoriteSlots, loadProfiles } from "../lib/lightProfiles";
+import { maybeDecideLights } from "../lib/mikuLightsDecide";
+import { onMoodChange } from "../lib/mood";
 
 type UseLightRulesParams = {
   // Miku dormida (ver useSleep.ts).
@@ -25,7 +27,8 @@ type MusicBeat = { level: number };
 
 // Fase 5 de docs/luces-argb/PLAN.md: las reglas automáticas de las luces
 // (ver lib/lightProfiles.ts), los atajos Ctrl+Alt+1…9 para los perfiles
-// favoritos y los ítems de luces de la bandeja.
+// favoritos y los ítems de luces de la bandeja. Fase 6: con "Que Miku lo
+// decida" prendido, también le pregunta a ella (lib/mikuLightsDecide.ts).
 export function useLightRules({ asleepRef }: UseLightRulesParams) {
   useEffect(() => {
     let game: string | null = null;
@@ -42,7 +45,10 @@ export function useLightRules({ asleepRef }: UseLightRulesParams) {
         awayMinutes,
         now: new Date(),
       };
-      evaluateRules(ctx).catch((err) => console.error("[Luces] Reglas:", err));
+      evaluateRules(ctx)
+        // Después de las reglas: si una de Sebastián manda, ella no decide.
+        .then(() => maybeDecideLights(ctx))
+        .catch((err) => console.error("[Luces] Reglas:", err));
     };
 
     const refreshAway = () =>
@@ -88,6 +94,8 @@ export function useLightRules({ asleepRef }: UseLightRulesParams) {
 
     tick();
     const id = window.setInterval(tick, CHECK_EVERY_MS);
+    // Que Miku lo decida: un cambio de ánimo es un momento nuevo.
+    const offMood = onMoodChange(() => evaluate());
 
     // Ctrl+Alt+1…9: el favorito de ese lugar.
     const keys = Array.from({ length: 9 }, (_, i) => `CommandOrControl+Alt+${i + 1}`);
@@ -101,6 +109,7 @@ export function useLightRules({ asleepRef }: UseLightRulesParams) {
 
     return () => {
       clearInterval(id);
+      offMood();
       unlisteners.forEach((p) => p.then((u) => u()));
       keys.forEach((key) => unregister(key).catch(() => {}));
     };

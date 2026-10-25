@@ -17,6 +17,7 @@ import {
   makeEffect,
   normalizeHex,
 } from "../../lib/lights";
+import type { MikuEffect } from "../../lib/mikuLights";
 
 type Selection = CategoryId | "all";
 
@@ -31,6 +32,9 @@ type LightsSceneTabProps = {
   onLayersChange: (layers: Layer[], final: boolean) => void;
   recentColors: string[];
   zoneCounts: Record<CategoryId, number>;
+  // Los efectos que diseñó Miku (fase 6), en su propia sección de la galería.
+  mikuEffects: MikuEffect[];
+  onDeleteMikuEffect: (id: string) => void;
 };
 
 const EFFECT_HINTS: Record<EffectKind, string> = {
@@ -87,7 +91,7 @@ const MAX_COLORS = 6;
 
 // Pestaña Escena del panel Luces (PLAN.md §3.2): los grupos a la
 // izquierda, y a la derecha el efecto del grupo elegido con sus ajustes.
-export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersChange, recentColors, zoneCounts }: LightsSceneTabProps) {
+export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersChange, recentColors, zoneCounts, mikuEffects, onDeleteMikuEffect }: LightsSceneTabProps) {
   const effect = categoryEffect(scene, selected);
   const layers = categoryLayers(scene, selected);
   const uses = USES[effect.kind];
@@ -100,6 +104,8 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersCh
   sceneRef.current = scene;
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  const mikuRef = useRef(mikuEffects);
+  mikuRef.current = mikuEffects;
 
   useEffect(() => setStop(0), [selected]);
 
@@ -115,6 +121,9 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersCh
         else if (kind === "layer") {
           const layer = categoryLayers(sceneRef.current, selectedRef.current)[Number(value)];
           if (layer) drawRingThumb(canvas, layer.effect, id, t);
+        } else if (kind === "miku") {
+          const own = mikuRef.current.find((e) => e.id === value);
+          if (own) drawRingThumb(canvas, own.effect, id, t);
         } else
           drawRingThumb(
             canvas,
@@ -220,6 +229,35 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersCh
               </div>
             </div>
           ))}
+
+          {mikuEffects.length > 0 && (
+            <div>
+              <span className="lights-colors-label">SUYOS</span>
+              <div className="lights-gallery" role="radiogroup" aria-label="Efectos que diseñó Miku">
+                {mikuEffects.map((own) => {
+                  const on = JSON.stringify(own.effect) === JSON.stringify(effect);
+                  return (
+                    <div key={own.id} className="lights-fx-wrap">
+                      <button
+                        role="radio"
+                        aria-checked={on}
+                        className={`lights-fx ${on ? "sel" : ""}`}
+                        onClick={() => onChange(own.effect, true)}
+                        title={`${own.description || own.name} · lo diseñó el ${own.created}`}
+                      >
+                        <canvas ref={thumbRef(`miku:${own.id}`)} width={144} height={88} aria-hidden="true" />
+                        <span>{own.name}</span>
+                        <span className="lights-fx-badge">DISEÑADO POR ELLA</span>
+                      </button>
+                      <button className="lights-fx-delete" onClick={() => onDeleteMikuEffect(own.id)} aria-label={`Borrar el efecto ${own.name}`} title="Borrar este efecto suyo">
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="lights-section">
             <span className="lights-module-title">

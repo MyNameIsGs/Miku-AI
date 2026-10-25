@@ -394,8 +394,8 @@ export function withCategoryLayers(scene: Scene, category: CategoryId | "all", l
 
 // --- Señales para los efectos reactivos (ver lights_engine.rs) ---
 
-// El color de cada ánimo para el efecto "Su ánimo". Por ahora fijos;
-// la fase 6 deja que los elija ella.
+// El color de cada ánimo para el efecto "Su ánimo", si ella no eligió
+// otro.
 export const MOOD_COLORS: Record<string, string> = {
   happy: "#FFD166",
   angry: "#FF3B3B",
@@ -404,12 +404,22 @@ export const MOOD_COLORS: Record<string, string> = {
   neutral: "#39C5BB",
 };
 const MOOD_STRENGTH: Record<string, number> = { neutral: 0, un_poco: 0.35, normal: 0.7, muy: 1 };
+// Los que eligió ella (fase 6, ver mikuLights.ts) mandan sobre los de arriba.
+let moodOverrides: Record<string, string> = {};
+let lastMood: { mood: string; level: string } | null = null;
+export const moodColor = (mood: string) => moodOverrides[mood] ?? MOOD_COLORS[mood] ?? MOOD_COLORS.neutral;
+export function setMoodColorOverrides(colors: Record<string, string>) {
+  moodOverrides = colors;
+  if (lastMood) void sendMood(lastMood.mood, lastMood.level);
+}
 
 const quiet = (p: Promise<unknown>) => p.catch(() => {});
 export const sendVoiceLevel = (level: number) => quiet(invoke("luces_voz", { nivel: level }));
 export const sendMikuState = (state: string) => quiet(invoke("luces_estado_miku", { estado: state }));
-export const sendMood = (mood: string, level: string) =>
-  quiet(invoke("luces_animo", { color: hexToRgb(MOOD_COLORS[mood] ?? MOOD_COLORS.neutral), fuerza: MOOD_STRENGTH[level] ?? 0 }));
+export function sendMood(mood: string, level: string) {
+  lastMood = { mood, level };
+  return quiet(invoke("luces_animo", { color: hexToRgb(moodColor(mood)), fuerza: MOOD_STRENGTH[level] ?? 0 }));
+}
 // Destello en las capas "Avisos" (correo, recordatorio, evento).
 export const flashLights = (hex?: string) => quiet(invoke("luces_destello", { color: hex ? hexToRgb(hex) : null }));
 
