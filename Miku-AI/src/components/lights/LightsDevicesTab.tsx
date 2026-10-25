@@ -15,7 +15,9 @@ import {
   makeEffect,
   normalizeHex,
   probeZone,
+  redoDirect,
   resizeZone,
+  setHardwareMode,
   withZoneEffect,
   zoneKey,
   zoneLabel,
@@ -134,7 +136,24 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
   function setManaged(device: RgbDevice, managed: boolean) {
     const mine = deviceZoneKeys(device);
     const rest = (scene.excluded ?? []).filter((k) => !mine.includes(k));
-    onScene({ ...scene, excluded: managed ? rest : [...rest, ...mine] }, true);
+    const hardwareModes = { ...scene.hardwareModes };
+    if (managed) {
+      delete hardwareModes[keys.get(device.index) ?? device.name];
+      // Si estaba en un modo de hardware, vuelve al directo de Miku.
+      redoDirect(device).catch(onError);
+    }
+    onScene({ ...scene, excluded: managed ? rest : [...rest, ...mine], hardwareModes }, true);
+  }
+
+  // Con "su propio programa": uno de los modos del propio dispositivo, que
+  // sigue andando con Miku cerrada ("" = dejarlo como esté).
+  function chooseHardwareMode(device: RgbDevice, mode: string) {
+    const key = keys.get(device.index) ?? device.name;
+    const hardwareModes = { ...scene.hardwareModes };
+    if (mode) hardwareModes[key] = mode;
+    else delete hardwareModes[key];
+    onScene({ ...scene, hardwareModes }, true);
+    if (mode) setHardwareMode(device, mode).catch(onError);
   }
 
   // "Probar LEDs": recorre el ventilador de a un LED en el orden del
@@ -281,6 +300,27 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
                 <span className="lights-switch-knob" />
               </button>
             </div>
+
+            {!managed && device.modes.some((m) => !/^direct$/i.test(m)) && (
+              <div className="lights-fanopts-row lights-hwmode">
+                <span className="lights-zone-detail">Modo del propio dispositivo (sigue andando con Miku cerrada)</span>
+                <select
+                  className="lights-select"
+                  value={scene.hardwareModes?.[keys.get(device.index) ?? device.name] ?? ""}
+                  onChange={(e) => chooseHardwareMode(device, e.target.value)}
+                  aria-label={`Modo de hardware de ${deviceTitle(device, devices)}`}
+                >
+                  <option value="">Dejarlo como esté</option>
+                  {device.modes
+                    .filter((m) => !/^direct$/i.test(m))
+                    .map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
 
             {managed && (
               <>

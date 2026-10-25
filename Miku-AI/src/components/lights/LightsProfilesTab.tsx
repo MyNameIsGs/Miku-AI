@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { ConfirmDialog } from "../ConfirmDialog";
-import { effectColor, rgbCss } from "../../lib/lightEffects";
+import { effectColor, reduceMotion, rgbCss } from "../../lib/lightEffects";
 import { LightsGlobal, Scene, STRIP_COLORS, describeStrips, resolveStrips, withStripsSnapshot } from "../../lib/lights";
 import {
   Profile,
@@ -85,7 +85,8 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onEdit, 
     let raf = 0;
     const start = performance.now();
     const loop = (now: number) => {
-      const t = (now - start) / 1000;
+      // "Reducir movimiento" de Windows: las miniaturas quedan quietas.
+      const t = reduceMotion() ? 0 : (now - start) / 1000;
       for (const [id, canvas] of strips.current) {
         const profile = stateRef.current?.profiles.find((p) => p.id === id);
         const effect = profile?.scene.groups.find((g) => g.category === "fans")?.effect ?? profile?.scene.groups[0]?.effect;
@@ -227,49 +228,53 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onEdit, 
                     height={40}
                     aria-hidden="true"
                   />
-                  {renaming?.id === p.id ? (
-                    <input
-                      className="lights-hex lights-name-input"
-                      autoFocus
-                      value={renaming.name}
-                      onChange={(e) => setRenaming({ id: p.id, name: e.target.value })}
-                      onBlur={() => {
-                        update({
-                          ...state,
-                          profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, name: renaming.name.trim() || x.name } : x)),
-                        });
-                        setRenaming(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                        if (e.key === "Escape") setRenaming(null);
-                      }}
-                      aria-label="Nuevo nombre"
-                    />
-                  ) : (
-                    <span
-                      className="lights-profile-name"
-                      onDoubleClick={() => setRenaming({ id: p.id, name: p.name })}
-                      title="Doble clic para renombrar"
+                  <div className="lights-profile-head">
+                    {renaming?.id === p.id ? (
+                      <input
+                        className="lights-hex lights-name-input"
+                        autoFocus
+                        value={renaming.name}
+                        onChange={(e) => setRenaming({ id: p.id, name: e.target.value })}
+                        onBlur={() => {
+                          update({
+                            ...state,
+                            profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, name: renaming.name.trim() || x.name } : x)),
+                          });
+                          setRenaming(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          if (e.key === "Escape") setRenaming(null);
+                        }}
+                        aria-label="Nuevo nombre"
+                      />
+                    ) : (
+                      <span
+                        className="lights-profile-name"
+                        onDoubleClick={() => setRenaming({ id: p.id, name: p.name })}
+                        title="Doble clic para renombrar"
+                      >
+                        {p.name}
+                      </span>
+                    )}
+                    <button
+                      className={`lights-star ${p.favorite ? "on" : ""}`}
+                      onClick={() =>
+                        update({ ...state, profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, favorite: !x.favorite } : x)) })
+                      }
+                      aria-pressed={p.favorite}
+                      aria-label={p.favorite ? "Quitar de favoritos" : "Marcar como favorito"}
+                      title={p.favorite ? "Favorito (Ctrl+Alt y la bandeja)" : "Marcar como favorito"}
                     >
-                      {p.name}
+                      {p.favorite ? "★" : "☆"}
+                    </button>
+                  </div>
+                  <div className="lights-profile-info">
+                    <span className="lights-profile-meta">
+                      {p.by === "miku" ? "DISEÑADO POR ELLA" : slot >= 0 ? `CTRL+ALT+${slot + 1}` : active ? "EN USO" : "MANUAL"}
                     </span>
-                  )}
-                  <span className="lights-profile-meta">
-                    {p.by === "miku" ? "DISEÑADO POR ELLA" : slot >= 0 ? `CTRL+ALT+${slot + 1}` : active ? "EN USO" : " "}
-                  </span>
-                  <ProfileStrips scene={p.scene} />
-                  <button
-                    className={`lights-star ${p.favorite ? "on" : ""}`}
-                    onClick={() =>
-                      update({ ...state, profiles: state.profiles.map((x) => (x.id === p.id ? { ...x, favorite: !x.favorite } : x)) })
-                    }
-                    aria-pressed={p.favorite}
-                    aria-label={p.favorite ? "Quitar de favoritos" : "Marcar como favorito"}
-                    title={p.favorite ? "Favorito (Ctrl+Alt y la bandeja)" : "Marcar como favorito"}
-                  >
-                    {p.favorite ? "★" : "☆"}
-                  </button>
+                    <ProfileStrips scene={p.scene} />
+                  </div>
                   <div className="lights-profile-actions">
                     <button
                       className={`m-btn m-btn-small ${active ? "" : "m-btn-primary"}`}
@@ -279,7 +284,7 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onEdit, 
                         onApplied();
                       }}
                     >
-                      {active ? "Volver a aplicar" : "Aplicar"}
+                      {active ? "Reaplicar" : "Aplicar"}
                     </button>
                     <button
                       className="m-btn m-btn-small"
@@ -292,6 +297,7 @@ export function LightsProfilesTab({ scene, global, onGlobal, onApplied, onEdit, 
                     >
                       Editar
                     </button>
+                    <span className="lights-profile-spacer" />
                     <button
                       className="m-btn m-btn-small m-btn-icon"
                       onClick={async () => {

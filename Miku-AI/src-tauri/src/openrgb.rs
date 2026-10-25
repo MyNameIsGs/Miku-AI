@@ -29,9 +29,15 @@ use tokio::time::timeout;
 const SERVER: &str = "127.0.0.1:6742";
 const MAX_PROTOCOL: u32 = 5;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
-const REPLY_TIMEOUT: Duration = Duration::from_secs(4);
-// Un servidor de protocolo 0 no contesta la versión: se espera poco.
-const VERSION_REPLY_TIMEOUT: Duration = Duration::from_millis(800);
+// Medido: con el servidor tranquilo contesta en menos de 1 ms; pero
+// mientras el teclado AULA se reinicia (al escribirle las tiras, ver
+// keyboard_strips.rs) OpenRGB puede tardar varios segundos en contestar
+// cualquier cosa. Antes eran 4 s y a veces saltaba el aviso.
+const REPLY_TIMEOUT: Duration = Duration::from_secs(8);
+// Un servidor de protocolo 0 no contesta la versión: se espera poco. Pero
+// no tan poco: si el servidor está ocupado y la respuesta llega tarde, se
+// hablaría el protocolo 0 con un servidor que espera el 5.
+const VERSION_REPLY_TIMEOUT: Duration = Duration::from_millis(2500);
 
 // Cuánto se espera a que OpenRGB recién abierto prenda su servidor, y a
 // que termine de detectar los dispositivos.
@@ -478,14 +484,39 @@ pub(crate) async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>,
 pub(crate) async fn set_direct(conn: &mut Connection, device: &RgbDevice) -> Result<(), String> {
     conn.send(device.index, SETCUSTOMMODE, &[]).await?;
     if let Some(direct) = device.modes.iter().position(|m| m.eq_ignore_ascii_case("direct")) {
-        let mode = &device.raw_modes[direct];
-        let size = 4 + 4 + mode.len();
-        let mut payload = Vec::with_capacity(size);
-        payload.extend_from_slice(&(size as u32).to_le_bytes());
-        payload.extend_from_slice(&(direct as i32).to_le_bytes());
-        payload.extend_from_slice(mode);
-        conn.send(device.index, UPDATEMODE, &payload).await?;
+        send_mode(conn, device, direct).await?;
     }
+    Ok(())
+}
+
+// UPDATEMODE con el modo tal cual lo describió el servidor (sus colores y
+// velocidad de siempre).
+async fn send_mode(conn: &mut Connection, device: &RgbDevice, index: usize) -> Result<(), String> {
+    let mode = &device.raw_modes[index];
+    let size = 4 + 4 + mode.len();
+    let mut payload = Vec::with_capacity(size);
+    payload.extend_from_slice(&(size as u32).to_le_bytes());
+    payload.extend_from_slice(&(index as i32).to_le_bytes());
+    payload.extend_from_slice(mode);
+    conn.send(device.index, UPDATEMODE, &payload).await
+}
+
+// Un modo de hardware del dispositivo (Rainbow de la RAM, Wave de la
+// placa...), para los que Sebastián deja "con su propio programa": siguen
+// andando con Miku cerrada. Por nombre, porque el número puede cambiar.
+#[tauri::command]
+pub async fn rgb_modo_hardware(dispositivo: u32, modo: String) -> Result<(), String> {
+    let mut conn = connect().await?;
+    let devices = all_devices(&mut conn).await?;
+    let device = devices.iter().find(|d| d.index == dispositivo).ok_or("Ese dispositivo ya no está.")?;
+    let index = device
+        .modes
+        .iter()
+        .position(|m| m.eq_ignore_ascii_case(&modo))
+        .ok_or_else(|| format!("{} no tiene el modo {modo}.", device.name))?;
+    send_mode(&mut conn, device, index).await?;
+    use tokio::io::AsyncWriteExt;
+    let _ = conn.stream.flush().await;
     Ok(())
 }
 
@@ -578,8 +609,21 @@ pub async fn rgb_estado() -> RgbStatus {
 
 #[tauri::command]
 pub async fn rgb_listar() -> Result<Vec<RgbDevice>, String> {
-    let mut conn = connect().await?;
-    all_devices(&mut conn).await
+    // Un reintento: si OpenRGB estaba ocupado (el teclado reiniciándose),
+    // al segundo intento ya contesta.
+    let first = async {
+        let mut conn = connect().await?;
+        all_devices(&mut conn).await
+    }
+    .await;
+    match first {
+        Err(e) if e.contains("a tiempo") => {
+            tokio::time::sleep(Duration::from_millis(1500)).await;
+            let mut conn = connect().await?;
+            all_devices(&mut conn).await
+        }
+        other => other,
+    }
 }
 
 // Pone todos los LEDs de los dispositivos elegidos (por índice; vacío =
@@ -743,6 +787,25 @@ mod tests {
     // (manda el color que ya tienen: no cambia nada a la vista). La
     // respuesta a REQUEST_CONTROLLER_COUNT llega recién cuando el servidor
     // terminó lo anterior de esta conexión.
+    // Solo lee: cuánto tarda la lista de dispositivos (y cada uno) con el
+    // motor de Miku andando. Para el aviso "OpenRGB no respondió a tiempo".
+    #[tokio::test]
+    #[ignore]
+    async fn mide_cuanto_tarda_listar() {
+        for vuelta in 0..6 {
+            let mut conn = Connection::open().await.expect("OpenRGB abierto");
+            let start = std::time::Instant::now();
+            let n = conn.controller_count().await.unwrap();
+            let mut partes = Vec::new();
+            for i in 0..n {
+                let t = std::time::Instant::now();
+                let d = conn.controller(i).await;
+                partes.push(format!("{} {:.0} ms", d.map(|d| d.name).unwrap_or_else(|e| e), t.elapsed().as_secs_f64() * 1000.0));
+            }
+            println!("vuelta {vuelta}: {:.0} ms en total | {}", start.elapsed().as_secs_f64() * 1000.0, partes.join(" | "));
+        }
+    }
+
     #[tokio::test]
     #[ignore]
     async fn mide_cuanto_tarda_cada_zona() {

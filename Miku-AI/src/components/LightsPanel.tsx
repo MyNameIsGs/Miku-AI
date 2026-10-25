@@ -112,6 +112,19 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
     }
   }
 
+  // Después de aplicar un perfil: solo se vuelve a leer la escena guardada,
+  // sin pedirle la lista a OpenRGB (justo ahí el teclado se está
+  // reiniciando por las tiras y OpenRGB tarda en contestar).
+  async function reloadScene() {
+    try {
+      const state = await loadLightsState();
+      if (devices) setSceneState(normalizeScene(state.scene, devices));
+      setGlobalState(state.global);
+    } catch (err) {
+      fail(err);
+    }
+  }
+
   // Lo de Miku: sus efectos y "Que Miku lo decida". Cuando ella cambia
   // algo, la escena del panel se vuelve a leer.
   useEffect(() => {
@@ -484,11 +497,11 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             scene={scene}
             global={global}
             onGlobal={changeGlobal}
-            onApplied={refresh}
+            onApplied={reloadScene}
             onEdit={(profile) => {
               setEditing(profile);
               setTab("escena");
-              refresh();
+              reloadScene();
             }}
             onError={fail}
           />

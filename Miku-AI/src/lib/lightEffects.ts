@@ -44,8 +44,18 @@ export function effectColor(effect: Effect, id: string, pos: number, i: number, 
       const which = Math.floor((t * sp) / Math.PI) / Math.max(1, colors.length);
       return gradientAt(colors, which).map((x) => x * (0.12 + 0.88 * k)) as Rgb;
     }
+    case "heartbeat": {
+      const p = (((t * sp * 0.8) % 1) + 1) % 1;
+      const pulse = (c: number) => Math.exp(-(((p - c) / 0.06) ** 2));
+      const k = Math.min(1, pulse(0.1) + 0.65 * pulse(0.32));
+      return gradientAt(colors, 0).map((x) => x * (0.08 + 0.92 * k)) as Rgb;
+    }
     case "rainbow":
       return hue(t * sp * 0.15 + along * dir);
+    case "flow": {
+      const stretch = 0.3 + effect.size / 60;
+      return gradientAt(colors, along / stretch - t * sp * 0.2 * dir);
+    }
     case "wave": {
       const width = 0.15 + effect.size / 120;
       return gradientAt(colors, (pos + along * 0.12) / width - t * sp * 0.35 * dir);
@@ -123,4 +133,13 @@ export function drawRingThumb(canvas: HTMLCanvasElement, effect: Effect, id: str
     g.fill();
   }
   g.shadowBlur = 0;
+}
+
+// "Reducir movimiento" de Windows (Configuración > Accesibilidad > Efectos
+// visuales > Efectos de animación): las miniaturas del panel quedan
+// quietas. La vista previa de arriba sigue, porque es información.
+let reduceQuery: MediaQueryList | null = null;
+export function reduceMotion(): boolean {
+  reduceQuery ??= typeof window !== "undefined" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  return reduceQuery?.matches ?? false;
 }

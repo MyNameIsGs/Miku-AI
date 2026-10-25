@@ -22,7 +22,7 @@ use crate::openrgb::{self, Connection, RgbDevice};
 #[derive(Deserialize, Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Effect {
-    // static | breathe | rainbow | wave | comet | sparkle | fire
+    // static | breathe | heartbeat | rainbow | wave | flow | comet | sparkle | fire
     pub kind: String,
     #[serde(default)]
     pub colors: Vec<[u8; 3]>,
@@ -480,7 +480,20 @@ impl Renderer {
                 let c = gradient_at(colors, which);
                 c.map(|x| x * (0.12 + 0.88 * k))
             }
+            // Latido: dos golpes seguidos (el segundo más suave) y una pausa.
+            "heartbeat" => {
+                let p = (t * sp * 0.8).rem_euclid(1.0);
+                let pulse = |c: f32| (-((p - c) / 0.06).powi(2)).exp();
+                let k = (pulse(0.1) + 0.65 * pulse(0.32)).min(1.0);
+                gradient_at(colors, 0.0).map(|x| x * (0.08 + 0.92 * k))
+            }
             "rainbow" => hue(t * sp * 0.15 + along * dir),
+            // Degradado animado: los colores se mezclan y corren a lo largo
+            // de cada zona (la ola, en cambio, cruza el gabinete entero).
+            "flow" => {
+                let stretch = 0.3 + effect.size / 60.0;
+                gradient_at(colors, along / stretch - t * sp * 0.2 * dir)
+            }
             "wave" => {
                 let width = 0.15 + effect.size / 120.0;
                 gradient_at(colors, (pos + along * 0.12) / width - t * sp * 0.35 * dir)
@@ -623,6 +636,15 @@ fn render(
         }
     }
     frame
+}
+
+const STILL_FRAME: Duration = Duration::from_millis(150);
+
+fn is_still(scene: &Scene) -> bool {
+    scene
+        .groups
+        .iter()
+        .all(|g| g.effect.kind == "static" && g.layers.iter().all(|l| !l.visible || l.effect.kind == "static"))
 }
 
 fn uses_kind(scene: &Scene, kind: &str) -> bool {
@@ -790,6 +812,9 @@ async fn run() {
         }
 
         let spent = now.elapsed();
+        // Escena quieta (todo estático, sin nada pintado a mano): no hace
+        // falta dibujar 30 veces por segundo; el reenvío cada 2 s sigue.
+        let frame_time = if overrides.is_empty() && is_still(&scene) { STILL_FRAME } else { frame_time };
         tokio::time::sleep(frame_time.saturating_sub(spent)).await;
     }
 }
@@ -982,6 +1007,13 @@ pub fn on_exit() {
     }
 }
 
+// Un dispositivo vuelve a "Miku lo maneja" después de estar en un modo de
+// hardware: hay que volver a ponerlo en directo.
+#[tauri::command]
+pub fn luces_rehacer_directo(nombre: String) {
+    redo_direct(&nombre.to_lowercase());
+}
+
 #[tauri::command]
 pub fn luces_escena(escena: Scene) {
     STATE.lock().unwrap().scene = Some(escena);
@@ -1131,6 +1163,17 @@ mod tests {
         let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
         let frame = render(&mut r, &scene, &Global::default(), &BTreeMap::new(), &resolved, 0.0, &Signals::default());
         assert_eq!(frame["mic|Microphone"], vec![[100, 50, 25], [200, 100, 50]]);
+    }
+
+    #[test]
+    fn el_latido_tiene_dos_golpes_y_una_pausa() {
+        let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
+        let fx = Effect { colors: vec![[255, 0, 0]], speed: 50.0, ..effect("heartbeat") };
+        // speed 50 -> un ciclo cada 1.25 s: golpes en 0.125 s y 0.4 s.
+        let at = |r: &mut Renderer, t: f32| r.color(&fx, "z", 0.0, 0, 1, t, &Signals::default()).0[0];
+        assert!(at(&mut r, 0.125) > 240.0);
+        assert!(at(&mut r, 0.4) > 150.0);
+        assert!(at(&mut r, 0.9) < 40.0);
     }
 
     #[test]

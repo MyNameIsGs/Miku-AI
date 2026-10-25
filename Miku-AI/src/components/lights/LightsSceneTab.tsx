@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { drawRingThumb } from "../../lib/lightEffects";
+import { drawRingThumb, reduceMotion } from "../../lib/lightEffects";
 import {
   BLEND_NAMES,
   CATEGORIES,
@@ -46,6 +46,8 @@ type LightsSceneTabProps = {
 const EFFECT_HINTS: Record<EffectKind, string> = {
   static: "Un color o un degradado quieto.",
   breathe: "Sube y baja suave; con varios colores, uno por respiración.",
+  heartbeat: "Dos golpes seguidos y una pausa, como un corazón.",
+  flow: "Los colores se mezclan y corren a lo largo de cada zona.",
   rainbow: "Recorre todo el espectro.",
   wave: "Una banda de colores que cruza el gabinete.",
   comet: "Un punto con estela; en los ventiladores gira.",
@@ -62,6 +64,8 @@ const EFFECT_HINTS: Record<EffectKind, string> = {
 const USES: Record<EffectKind, { speed: boolean; size: boolean; direction: boolean; colors: boolean }> = {
   static: { speed: false, size: false, direction: false, colors: true },
   breathe: { speed: true, size: false, direction: false, colors: true },
+  heartbeat: { speed: true, size: false, direction: false, colors: true },
+  flow: { speed: true, size: true, direction: true, colors: true },
   rainbow: { speed: true, size: false, direction: true, colors: false },
   wave: { speed: true, size: true, direction: true, colors: true },
   comet: { speed: true, size: true, direction: true, colors: true },
@@ -135,7 +139,8 @@ export function LightsSceneTab({
     let raf = 0;
     const start = performance.now();
     const loop = (now: number) => {
-      const t = (now - start) / 1000;
+      // "Reducir movimiento" de Windows: las miniaturas quedan quietas.
+      const t = reduceMotion() ? 0 : (now - start) / 1000;
       for (const [id, canvas] of thumbs.current) {
         const [kind, value] = id.split(":");
         if (kind === "group") drawRingThumb(canvas, categoryEffect(sceneRef.current, value as CategoryId | "all"), id, t);
@@ -335,7 +340,9 @@ export function LightsSceneTab({
                           ? "Estela"
                           : effect.kind === "music"
                             ? "Duración del golpe"
-                            : "Ancho"
+                            : effect.kind === "flow"
+                              ? "Largo del degradado"
+                              : "Ancho"
                     }
                     value={effect.size}
                     min={1}

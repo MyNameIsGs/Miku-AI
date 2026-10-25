@@ -33,8 +33,10 @@ export type RgbDevice = {
 export const EFFECT_KINDS = [
   "static",
   "breathe",
+  "heartbeat",
   "rainbow",
   "wave",
+  "flow",
   "comet",
   "sparkle",
   "fire",
@@ -52,8 +54,10 @@ export type EffectKind = (typeof EFFECT_KINDS)[number];
 export const EFFECT_NAMES: Record<EffectKind, string> = {
   static: "Estático",
   breathe: "Respirar",
+  heartbeat: "Latido",
   rainbow: "Arcoíris",
   wave: "Ola",
+  flow: "Degradado",
   comet: "Cometa",
   sparkle: "Destellos",
   fire: "Fuego",
@@ -103,7 +107,13 @@ export type Scene = {
   // Las tiras del teclado AULA (no pasan por OpenRGB, ver
   // keyboard_strips.rs). Sin esto, quedan como estén.
   keyboardStrips?: KeyboardStrips;
+  // Dispositivos que Miku no maneja y quedan en un modo de su propio
+  // hardware (clave del dispositivo -> nombre del modo, ej. "Rainbow").
+  hardwareModes?: Record<string, string>;
 };
+
+export const setHardwareMode = (device: RgbDevice, mode: string) => invoke("rgb_modo_hardware", { dispositivo: device.index, modo: mode });
+export const redoDirect = (device: RgbDevice) => invoke("luces_rehacer_directo", { nombre: device.name });
 
 // --- Tiras del teclado AULA F87 Pro ---
 //
@@ -543,6 +553,20 @@ export async function restoreLights() {
   if (state.scene) {
     await sendGlobal(state.global);
     await sendScene(state.scene);
+  }
+  // Los modos de hardware elegidos (la RAM, por ejemplo, vuelve a su efecto
+  // de fábrica al reiniciar la PC).
+  const modes = Object.entries(state.scene?.hardwareModes ?? {});
+  if (modes.length > 0) {
+    listDevices()
+      .then((devices) => {
+        const keys = deviceKeys(devices);
+        for (const device of devices) {
+          const mode = state.scene?.hardwareModes?.[keys.get(device.index) ?? ""];
+          if (mode) setHardwareMode(device, mode).catch((err) => console.warn("[Luces] Modo de hardware:", err));
+        }
+      })
+      .catch((err) => console.warn("[Luces] Modos de hardware:", err));
   }
   if (Object.keys(state.sizes).length === 0) return;
   for (const waitMs of [0, 20000, 60000]) {
