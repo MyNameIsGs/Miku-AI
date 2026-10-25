@@ -77,6 +77,10 @@ pub struct RgbDevice {
     // Cada modo tal cual vino del servidor, para devolvérselo en UPDATEMODE.
     #[serde(skip)]
     pub(crate) raw_modes: Vec<Vec<u8>>,
+    // Nombre de cada LED (por ejemplo "Key: Escape"), en el orden del
+    // dispositivo.
+    #[serde(skip)]
+    pub(crate) led_names: Vec<String>,
 }
 
 // Orden de device_type en RGBController.h de OpenRGB.
@@ -444,7 +448,14 @@ fn parse_controller(index: u32, data: &[u8], protocol: u32) -> Result<RgbDevice,
     }
 
     let leds = r.u16()?;
-    Ok(RgbDevice { index, name, kind: kind_name(device_type).into(), zones, leds, modes, active_mode, raw_modes })
+    let mut led_names = Vec::with_capacity(leds as usize);
+    for _ in 0..leds {
+        led_names.push(r.string()?);
+        if protocol < 6 {
+            r.u32()?; // led_value
+        }
+    }
+    Ok(RgbDevice { index, name, kind: kind_name(device_type).into(), zones, leds, modes, active_mode, raw_modes, led_names })
 }
 
 pub(crate) async fn all_devices(conn: &mut Connection) -> Result<Vec<RgbDevice>, String> {
@@ -802,6 +813,40 @@ mod tests {
             conn.send(board.index, UPDATEMODE, &p).await.unwrap();
         }
         wait().await;
+        println!("listo");
+    }
+
+    // Los nombres de los LEDs del teclado: ¿está la tira de luz?
+    #[tokio::test]
+    #[ignore]
+    async fn leds_del_teclado() {
+        for d in rgb_listar().await.expect("lista").into_iter().filter(|d| d.kind == "teclado") {
+            println!("{}: {} LEDs, zonas {:?}", d.name, d.leds, d.zones.iter().map(|z| (&z.name, z.leds)).collect::<Vec<_>>());
+            println!("{}", d.led_names.join(" | "));
+        }
+    }
+
+    // ¿Alguno de los LEDs sin nombre del teclado es la tira de luz? 10 s
+    // solo esos en blanco (el resto apagado), después 5 s al revés. Con
+    // Miku cerrada, para que el motor no los pise.
+    #[tokio::test]
+    #[ignore]
+    async fn prueba_tira_del_teclado() {
+        let mut conn = Connection::open().await.expect("OpenRGB abierto");
+        let kbd = all_devices(&mut conn).await.unwrap().into_iter().find(|d| d.kind == "teclado").expect("teclado");
+        set_direct(&mut conn, &kbd).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        let unnamed: Vec<usize> = kbd.led_names.iter().enumerate().filter(|(_, n)| n.is_empty()).map(|(i, _)| i).collect();
+        println!("LEDs sin nombre: {unnamed:?}");
+        let paint = |only_unnamed: bool| -> Vec<[u8; 3]> {
+            (0..kbd.leds as usize).map(|i| if unnamed.contains(&i) == only_unnamed { [255, 255, 255] } else { [0, 0, 0] }).collect()
+        };
+        println!("1/2 solo los sin nombre en blanco (10 s)");
+        conn.send(kbd.index, UPDATEZONELEDS, &zone_leds_payload(0, &paint(true))).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        println!("2/2 al revés: las teclas en blanco (5 s)");
+        conn.send(kbd.index, UPDATEZONELEDS, &zone_leds_payload(0, &paint(false))).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(5)).await;
         println!("listo");
     }
 }

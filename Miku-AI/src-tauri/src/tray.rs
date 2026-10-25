@@ -20,8 +20,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, "toggle", "Mostrar / esconder a Miku", true, None::<&str>)?;
     // Con Miku bloqueada la barra no aparece: esto (o Ctrl+Shift+M) la destraba.
     let lock = MenuItem::with_id(app, "click-through", "Bloquear / desbloquear (Ctrl+Shift+M)", true, None::<&str>)?;
+    // Luces (fase 5 de docs/luces-argb/PLAN.md).
+    let lights = MenuItem::with_id(app, "lights-toggle", "Luces: prender / apagar", true, None::<&str>)?;
+    let next = MenuItem::with_id(app, "lights-next", "Luces: siguiente favorito (Ctrl+Alt+1…9)", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Salir", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&toggle, &lock, &quit])?;
+    let menu = Menu::with_items(app, &[&toggle, &lock, &lights, &next, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("miku")
         .tooltip("Miku")
@@ -33,6 +36,12 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             }
             "click-through" => {
                 let _ = app.emit("tray-click-through", ());
+            }
+            "lights-toggle" => {
+                let _ = app.emit("tray-lights-toggle", ());
+            }
+            "lights-next" => {
+                let _ = app.emit("tray-lights-next", ());
             }
             "quit" => {
                 let _ = app.emit("tray-quit", ());

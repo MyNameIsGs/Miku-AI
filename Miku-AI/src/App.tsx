@@ -53,6 +53,7 @@ import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { LightsPanel } from "./components/LightsPanel";
+import { useLightRules } from "./hooks/useLightRules";
 import { restoreLights, sendMikuState, sendMood, sendVoiceLevel } from "./lib/lights";
 import { getCurrentMood, getMoodLevel, onMoodChange } from "./lib/mood";
 import { ConfigPanel } from "./components/ConfigPanel";
@@ -1045,6 +1046,10 @@ function App() {
     lastInteractionTimeRef: idleQuirks.lastInteractionTimeRef,
     processMemoryMarkers: memoryFiles.processMemoryMarkers,
   });
+
+  // Luces: perfiles automáticos, Ctrl+Alt+1…9 y la bandeja (ver
+  // hooks/useLightRules.ts).
+  useLightRules({ asleepRef: sleep.asleepRef });
 
   // B6: la respuesta de Miku a un mensaje (ver chat/askMiku.ts). Se crea en
   // cada render, como antes la función, así que siempre ve el estado actual.

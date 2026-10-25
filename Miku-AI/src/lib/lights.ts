@@ -98,10 +98,108 @@ export type Scene = {
   zones?: Record<string, ZoneOptions>;
   // Zonas que Miku no toca.
   excluded?: string[];
+  // Las tiras del teclado AULA (no pasan por OpenRGB, ver
+  // keyboard_strips.rs). Sin esto, quedan como estén.
+  keyboardStrips?: KeyboardStrips;
 };
 
+// --- Tiras del teclado AULA F87 Pro ---
+//
+// Modos y colores propios del teclado: no aceptan cualquier color ni
+// efectos cuadro a cuadro, y cada cambio hace parpadear el teclado entero
+// (por eso solo se escriben cuando cambian).
+
+export type KeyboardStrips = {
+  // Las dos de abajo, a izquierda y derecha.
+  bottom: { mode: number; color: number; brightness: number; speed: number };
+  // La de arriba, debajo del bloque DEL/END/PgDn.
+  top: { mode: number; color: number };
+  // El color sigue al grupo Periféricos de la escena (el más parecido de
+  // los 7).
+  follow?: boolean;
+};
+
+export const STRIP_MODES = ["Apagadas", "Arcoíris", "Arcoíris 2", "Sólido", "Respirar"];
+// Mismo orden que los números del teclado.
+export const STRIP_COLORS = [
+  { name: "Rojo", hex: "#FF2A2A" },
+  { name: "Verde", hex: "#2AE05A" },
+  { name: "Azul", hex: "#2F6BFF" },
+  { name: "Amarillo", hex: "#FFE14D" },
+  { name: "Rosa", hex: "#F0508F" },
+  { name: "Azul claro", hex: "#4DE3F0" },
+  { name: "Blanco", hex: "#FFFFFF" },
+];
+// Brillo (5 niveles) y velocidad (lento, medio, rápido) de las de abajo,
+// desde 0; más = más. Un valor más alto reinicia el teclado a fábrica.
+export const STRIP_BRIGHTNESS_MAX = 4;
+export const STRIP_SPEED_MAX = 2;
+// Los modos que usan el color (los arcoíris lo ignoran).
+export const stripUsesColor = (mode: number) => mode === 3 || mode === 4;
+
+// El color de las tiras más parecido a uno cualquiera: blanco si es casi
+// gris; si no, el más cercano de los otros 6 (comparando a pleno brillo,
+// para que un rojo oscuro siga siendo rojo).
+export function nearestStripColor(hex: string): number {
+  const rgb = hexToRgb(hex);
+  const max = Math.max(...rgb);
+  const min = Math.min(...rgb);
+  if (max === 0 || (max - min) / max < 0.25) return 6;
+  const full = rgb.map((x) => (x * 255) / max);
+  let best = 0;
+  let bestDistance = Infinity;
+  STRIP_COLORS.slice(0, 6).forEach((c, i) => {
+    const distance = hexToRgb(c.hex).reduce((sum, x, k) => sum + (x - full[k]) ** 2, 0);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = i;
+    }
+  });
+  return best;
+}
+
+// Las tiras que tocan con esta escena (con "seguir a la escena" ya
+// resuelto), o null si la escena no dice nada de ellas.
+export function resolveStrips(scene: Scene): KeyboardStrips | null {
+  const s = scene.keyboardStrips;
+  if (!s) return null;
+  if (!s.follow) return s;
+  const first = scene.groups.find((g) => g.category === "periph")?.effect.colors[0];
+  if (!first) return s;
+  const color = nearestStripColor(first);
+  return { ...s, bottom: { ...s.bottom, color }, top: { ...s.top, color } };
+}
+
+export const readStrips = () => invoke<KeyboardStrips>("teclado_tiras_leer");
+
+let lastStrips = "";
+let lastScene: Scene | null = null;
+let lightsOn = true;
+// Escribe las tiras solo si cambiaron desde la última vez (y el teclado
+// mismo no escribe si ya estaba así). Con las luces apagadas desde el
+// interruptor general, se apagan también.
+async function syncStrips(scene: Scene) {
+  lastScene = scene;
+  const strips = resolveStrips(scene);
+  if (!strips) return;
+  const payload = lightsOn
+    ? { bottom: strips.bottom, top: strips.top }
+    : { bottom: { ...strips.bottom, mode: 0 }, top: { ...strips.top, mode: 0 } };
+  const key = JSON.stringify(payload);
+  if (key === lastStrips) return;
+  lastStrips = key;
+  try {
+    await invoke("teclado_tiras_poner", { tiras: payload });
+  } catch (err) {
+    lastStrips = "";
+    console.warn("[Luces] No se pudieron cambiar las tiras del teclado:", err);
+  }
+}
+
 export const zoneOptions = (scene: Scene | null, key: string): ZoneOptions => ({ ...DEFAULT_ZONE_OPTIONS, ...scene?.zones?.[key] });
-export type LightsGlobal = { on: boolean; brightness: number; paused: boolean; fps: number };
+// exitMode: qué quedan las luces al cerrar Miku (ver on_exit en
+// lights_engine.rs): el color fijo de la escena, o apagadas.
+export type LightsGlobal = { on: boolean; brightness: number; paused: boolean; fps: number; exitMode?: "static" | "off" };
 
 type LightsState = {
   sizes: Record<string, number>;
@@ -161,8 +259,17 @@ function toEngine(scene: Scene) {
   };
 }
 
-export const sendScene = (scene: Scene) => invoke("luces_escena", { escena: toEngine(scene) });
-export const sendGlobal = (global: LightsGlobal) => invoke("luces_global", { global });
+export async function sendScene(scene: Scene) {
+  await invoke("luces_escena", { escena: toEngine(scene) });
+  void syncStrips(scene);
+}
+export async function sendGlobal(global: LightsGlobal) {
+  await invoke("luces_global", { global });
+  if (global.on !== lightsOn) {
+    lightsOn = global.on;
+    if (lastScene) void syncStrips(lastScene);
+  }
+}
 // El asistente de ventiladores: pinta la zona a mano (null la devuelve al efecto).
 export const probeZone = (zoneKey: string, colors: string[] | null) =>
   invoke("luces_probar_zona", { zona: zoneKey, colores: colors ? colors.map(hexToRgb) : null });

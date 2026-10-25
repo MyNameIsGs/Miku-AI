@@ -162,6 +162,10 @@ pub struct Global {
     pub paused: bool,
     #[serde(default = "default_fps")]
     pub fps: u32,
+    // Qué quedan las luces al cerrar Miku: "static" (el color fijo de la
+    // escena) u "off".
+    #[serde(default)]
+    pub exit_mode: String,
 }
 
 fn default_fps() -> u32 {
@@ -170,7 +174,7 @@ fn default_fps() -> u32 {
 
 impl Default for Global {
     fn default() -> Self {
-        Global { on: true, brightness: 100.0, paused: false, fps: 30 }
+        Global { on: true, brightness: 100.0, paused: false, fps: 30, exit_mode: String::new() }
     }
 }
 
@@ -182,15 +186,20 @@ struct EngineState {
     // BTreeMap: HashMap::new no se puede usar en un static.
     overrides: BTreeMap<String, Vec<[u8; 3]>>,
     reload_devices: bool,
+    // Dispositivos (parte del nombre, en minúsculas) que hay que volver a
+    // poner en modo directo: escribir la configuración del teclado AULA
+    // (keyboard_strips.rs) lo saca del directo.
+    redo_direct: Vec<String>,
     preview: bool,
     app: Option<AppHandle>,
 }
 
 static STATE: Mutex<EngineState> = Mutex::new(EngineState {
     scene: None,
-    global: Global { on: true, brightness: 100.0, paused: false, fps: 30 },
+    global: Global { on: true, brightness: 100.0, paused: false, fps: 30, exit_mode: String::new() },
     overrides: BTreeMap::new(),
     reload_devices: false,
+    redo_direct: Vec::new(),
     preview: false,
     app: None,
 });
@@ -673,7 +682,11 @@ async fn run() {
         let (scene, global, overrides, reload, preview, app) = {
             let mut state = STATE.lock().unwrap();
             let reload = std::mem::take(&mut state.reload_devices);
-            (state.scene.clone(), state.global.clone(), state.overrides.clone(), reload, state.preview, state.app.clone())
+            let redo = std::mem::take(&mut state.redo_direct);
+            if !redo.is_empty() {
+                direct_done.retain(|key| !redo.iter().any(|name| key.to_lowercase().contains(name)));
+            }
+            (state.scene.clone(), state.global.clone(), state.overrides.clone(), reload || !redo.is_empty(), state.preview, state.app.clone())
         };
         let frame_time = Duration::from_millis(1000 / global.fps.clamp(5, 60) as u64);
         let now = Instant::now();
@@ -898,6 +911,12 @@ pub fn devices_changed() {
     STATE.lock().unwrap().reload_devices = true;
 }
 
+// Lo llama keyboard_strips: se escribió la configuración del teclado, que
+// lo sacó del modo directo. `name`: parte del nombre, en minúsculas.
+pub fn redo_direct(name: &str) {
+    STATE.lock().unwrap().redo_direct.push(name.to_string());
+}
+
 // Al cerrar Miku (pedido de Sebastián): las luces quedan quietas en el
 // color de la escena actual -- el primer color de cada grupo -- en vez de
 // congeladas en el último cuadro de un efecto.
@@ -908,7 +927,8 @@ pub fn on_exit() {
     // quedan en el color fijo de la escena.
     let windows_closing = SHUTTING_DOWN.load(Ordering::SeqCst)
         || unsafe { windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_SHUTTINGDOWN) } != 0;
-    if windows_closing {
+    let exit_off = STATE.lock().unwrap().global.exit_mode == "off";
+    if windows_closing || exit_off {
         lights_off_now();
         return;
     }
@@ -986,6 +1006,19 @@ pub fn luces_probar_zona(zona: String, colores: Option<Vec<[u8; 3]>>) {
 #[tauri::command]
 pub fn luces_vista_previa(activa: bool) {
     STATE.lock().unwrap().preview = activa;
+}
+
+// Respaldo de perfiles (pestaña Perfiles): el frontend elige dónde con el
+// diálogo de archivos y acá se escribe o se lee, sin depender de los
+// permisos de carpetas del frontend.
+#[tauri::command]
+pub fn luces_exportar(ruta: String, contenido: String) -> Result<(), String> {
+    std::fs::write(&ruta, contenido).map_err(|e| format!("No se pudo guardar el archivo: {e}"))
+}
+
+#[tauri::command]
+pub fn luces_importar(ruta: String) -> Result<String, String> {
+    std::fs::read_to_string(&ruta).map_err(|e| format!("No se pudo leer el archivo: {e}"))
 }
 
 // --- Señales que manda el frontend (ver lib/lights.ts) ---

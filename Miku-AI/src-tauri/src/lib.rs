@@ -21,6 +21,7 @@ mod location;
 mod tray;
 mod openrgb;
 mod lights_engine;
+mod keyboard_strips;
 
 // Tamaño de toda la app (Miku, barra y paneles), pedido de Sebastián: que
 // ocupe menos pantalla. Es el zoom del webview -- el diseño sigue midiendo
@@ -340,6 +341,10 @@ pub fn run() {
             lights_engine::luces_estado_miku,
             lights_engine::luces_animo,
             lights_engine::luces_destello,
+            lights_engine::luces_exportar,
+            lights_engine::luces_importar,
+            keyboard_strips::teclado_tiras_leer,
+            keyboard_strips::teclado_tiras_poner,
             text_input::escribir_texto,
             window_control::minimizar_ventana,
             window_control::mover_ventana,

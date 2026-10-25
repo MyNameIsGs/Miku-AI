@@ -30,6 +30,8 @@ import { LightsPreview } from "./lights/LightsPreview";
 import { LightsSceneTab } from "./lights/LightsSceneTab";
 import { LightsDevicesTab } from "./lights/LightsDevicesTab";
 import { LightsMapTab } from "./lights/LightsMapTab";
+import { LightsProfilesTab } from "./lights/LightsProfilesTab";
+import { LightsStripsCard } from "./lights/LightsStripsCard";
 
 type LightsPanelProps = {
   onClose: () => void;
@@ -38,8 +40,8 @@ type LightsPanelProps = {
 
 type Rgb = [number, number, number];
 type PreviewZone = { key: string; colors: Rgb[] };
-type Tab = "escena" | "dispositivos" | "mapa";
-const TAB_NAMES: Record<Tab, string> = { escena: "Escena", dispositivos: "Dispositivos", mapa: "Mapa" };
+type Tab = "escena" | "dispositivos" | "mapa" | "perfiles";
+const TAB_NAMES: Record<Tab, string> = { escena: "Escena", dispositivos: "Dispositivos", mapa: "Mapa", perfiles: "Perfiles" };
 type Selection = CategoryId | "all";
 
 const UNDO_LIMIT = 50;
@@ -56,8 +58,7 @@ function loadRecent(): string[] {
 
 // Panel de luces RGB, fase 2 de docs/luces-argb/PLAN.md (maqueta en
 // docs/luces-argb/maqueta.html): vista previa en vivo arriba con el brillo
-// general, y pestañas Escena, Dispositivos y Mapa. Perfiles llega en la
-// fase 5. Los efectos los dibuja el motor en Rust (lights_engine.rs);
+// general, y pestañas Escena, Dispositivos, Mapa y Perfiles. Los efectos los dibuja el motor en Rust (lights_engine.rs);
 // el panel solo arma la escena y se la manda.
 export function LightsPanel({ onClose, motion }: LightsPanelProps) {
   const [devices, setDevices] = useState<RgbDevice[] | null>(null);
@@ -322,6 +323,7 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
             zoneCounts={zoneCounts}
           />
         )}
+        {devices && scene && tab === "escena" && devices.some((d) => /aula/i.test(d.name)) && <LightsStripsCard scene={scene} onScene={changeScene} />}
         {devices && devices.length > 0 && scene && tab === "dispositivos" && (
           <LightsDevicesTab
             devices={devices}
@@ -337,6 +339,9 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
           />
         )}
         {devices && devices.length > 0 && scene && tab === "mapa" && <LightsMapTab devices={devices} scene={scene} frame={frame} onScene={changeScene} />}
+        {devices && devices.length > 0 && scene && tab === "perfiles" && (
+          <LightsProfilesTab scene={scene} global={global} onGlobal={changeGlobal} onApplied={refresh} onError={fail} />
+        )}
       </div>
     </div>
   );

@@ -3,16 +3,26 @@ import {
   EFFECT_KINDS,
   EFFECT_NAMES,
   EffectKind,
+  KeyboardStrips,
+  STRIP_BRIGHTNESS_MAX,
+  STRIP_COLORS,
+  STRIP_SPEED_MAX,
+  STRIP_MODES,
   applyToDevices,
   deviceTitle,
   listDevices,
   loadLightsState,
   makeEffect,
+  readStrips,
   setGlobal,
+  setScene,
   zoneLabel,
 } from "../lights";
 
-const ACCIONES = ["listar", "color", "efecto", "brillo", "apagar", "prender"] as const;
+const ACCIONES = ["listar", "color", "efecto", "brillo", "apagar", "prender", "tiras"] as const;
+const TIRAS = ["abajo", "arriba", "ambas"] as const;
+const MODOS_TIRA = STRIP_MODES.map((m) => m.toLowerCase());
+const COLORES_TIRA = STRIP_COLORS.map((c) => c.name.toLowerCase());
 
 const HEX = /^#?([0-9a-f]{6})$/i;
 
@@ -37,7 +47,7 @@ export const controlarLuces: ToolDefinition = {
     function: {
       name: "controlar_luces",
       description:
-        "Controla las luces RGB de la PC de Sebastián (placa y ventilador, RAM, teclado, micrófono). Puede listar los dispositivos, ponerles un color fijo o un efecto animado, cambiar el brillo general, apagarlas o prenderlas.",
+        "Controla las luces RGB de la PC de Sebastián (placa y ventilador, RAM, teclado, micrófono). Puede listar los dispositivos, ponerles un color fijo o un efecto animado, cambiar el brillo general, apagarlas o prenderlas. Las tiras de luz del teclado van aparte ('tiras'): solo tienen 5 modos y 7 colores propios, y cada cambio hace parpadear el teclado, así que no las cambies seguido.",
       parameters: {
         type: "object",
         properties: {
@@ -45,7 +55,7 @@ export const controlarLuces: ToolDefinition = {
             type: "string",
             enum: [...ACCIONES],
             description:
-              "'listar' dice qué dispositivos hay, con su número. 'color' pone un color fijo. 'efecto' pone un efecto animado. 'brillo' cambia el brillo general. 'apagar' apaga todo y 'prender' lo vuelve a prender como estaba.",
+              "'listar' dice qué dispositivos hay, con su número. 'color' pone un color fijo. 'efecto' pone un efecto animado. 'brillo' cambia el brillo general. 'apagar' apaga todo y 'prender' lo vuelve a prender como estaba. 'tiras' cambia las tiras del teclado (modo, color, brillo, velocidad).",
           },
           color: {
             type: "string",
@@ -68,6 +78,29 @@ export const controlarLuces: ToolDefinition = {
           nivel: {
             type: "number",
             description: "Para 'brillo': de 0 a 100.",
+          },
+          tira: {
+            type: "string",
+            enum: [...TIRAS],
+            description: "Para 'tiras': 'abajo' (las dos de abajo del teclado), 'arriba' (la de debajo de DEL/END) o 'ambas' (por defecto).",
+          },
+          modo_tira: {
+            type: "string",
+            enum: MODOS_TIRA,
+            description: "Para 'tiras': el modo. 'sólido' y 'respirar' usan color_tira; los arcoíris no.",
+          },
+          color_tira: {
+            type: "string",
+            enum: COLORES_TIRA,
+            description: "Para 'tiras': uno de los 7 colores que tienen.",
+          },
+          brillo_tira: {
+            type: "number",
+            description: `Para 'tiras' (solo las de abajo): de 0 (tenue) a ${STRIP_BRIGHTNESS_MAX} (máximo).`,
+          },
+          velocidad_tira: {
+            type: "number",
+            description: `Para 'tiras' (solo las de abajo): de 0 (lenta) a ${STRIP_SPEED_MAX} (rápida).`,
           },
           dispositivos: {
             type: "array",
@@ -100,6 +133,8 @@ export const controlarLuces: ToolDefinition = {
           })
           .join("\n");
       }
+
+      if (accion === "tiras") return await changeStrips(args);
 
       if (accion === "brillo" || accion === "apagar" || accion === "prender") {
         const { global } = await loadLightsState();
@@ -136,3 +171,33 @@ export const controlarLuces: ToolDefinition = {
     }
   },
 };
+
+async function changeStrips(args: Record<string, unknown>): Promise<string> {
+  const tira = TIRAS.includes(args.tira as (typeof TIRAS)[number]) ? (args.tira as (typeof TIRAS)[number]) : "ambas";
+  const mode = args.modo_tira === undefined ? null : MODOS_TIRA.indexOf(String(args.modo_tira).toLowerCase());
+  const color = args.color_tira === undefined ? null : COLORES_TIRA.indexOf(String(args.color_tira).toLowerCase());
+  if (mode === -1) return `Error: modo de tira desconocido "${args.modo_tira}". Opciones: ${MODOS_TIRA.join(", ")}.`;
+  if (color === -1) return `Error: color de tira desconocido "${args.color_tira}". Opciones: ${COLORES_TIRA.join(", ")}.`;
+  const level = (v: unknown, max: number) => (typeof v === "number" ? Math.max(0, Math.min(max, Math.round(v))) : null);
+  const brightness = level(args.brillo_tira, STRIP_BRIGHTNESS_MAX);
+  const speed = level(args.velocidad_tira, STRIP_SPEED_MAX);
+  if (mode === null && color === null && brightness === null && speed === null) return "Error: dime qué cambiar (modo_tira, color_tira, brillo_tira o velocidad_tira).";
+
+  const state = await loadLightsState();
+  const scene = state.scene ?? { groups: [], positions: {} };
+  const current: KeyboardStrips = scene.keyboardStrips ?? (await readStrips());
+  // Un color elegido por ella manda sobre "seguir a la escena".
+  const next: KeyboardStrips = { ...current, follow: color === null ? current.follow : false };
+  if (tira !== "arriba") {
+    next.bottom = {
+      mode: mode ?? current.bottom.mode,
+      color: color ?? current.bottom.color,
+      brightness: brightness ?? current.bottom.brightness,
+      speed: speed ?? current.bottom.speed,
+    };
+  }
+  if (tira !== "abajo") next.top = { mode: mode ?? current.top.mode, color: color ?? current.top.color };
+  await setScene({ ...scene, keyboardStrips: next });
+  const describe = (m: number, c: number) => `${STRIP_MODES[m]}${m >= 3 ? ` ${STRIP_COLORS[c].name.toLowerCase()}` : ""}`;
+  return `Tiras: abajo ${describe(next.bottom.mode, next.bottom.color)}, arriba ${describe(next.top.mode, next.top.color)}.`;
+}
