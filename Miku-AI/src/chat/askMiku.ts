@@ -416,7 +416,9 @@ export function createAskMiku(deps: AskMikuDeps) {
       failedMessageRef.current = { message: userMessage, image: imageDataUrl ?? null };
       if (userMessage !== IMAGE_ONLY_MESSAGE) setTranscript((current) => (current.trim() ? current : userMessage));
       if (imageDataUrl) setAttachedImage((current) => current ?? imageDataUrl);
-      setReplyError("El modelo no contestó. Tu mensaje sigue ahí: puedes volver a enviarlo.");
+      // El motivo va a la vista: en la app instalada no hay consola.
+      const reason = (err instanceof Error ? err.message : String(err)).slice(0, 160);
+      setReplyError(`No pude responder (${reason}). Tu mensaje sigue ahí: puedes volver a enviarlo.`);
     } finally {
       // Si se canceló (o ya empezó otra charla), el estado lo maneja quien
       // canceló o la charla nueva.

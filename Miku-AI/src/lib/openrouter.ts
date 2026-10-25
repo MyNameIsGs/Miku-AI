@@ -84,7 +84,20 @@ export async function fetchOpenRouterWithRetry(
   return lastResponse!;
 }
 
-const MAX_TOOL_CALL_ROUNDS = 3;
+// Con 3 se cortaban turnos normales (2026-10-25): las luces se cambian de a
+// una acción por llamada (un color por ánimo, un grupo tras otro) y el
+// error salía como "El modelo no contestó".
+const MAX_TOOL_CALL_ROUNDS = 8;
+
+// Al pasar el tope no se tira error: una vuelta más sin herramientas, con
+// este aviso, para que conteste con lo que hizo. Con tool_choice "none" solo,
+// DeepSeek devolvía vacío; con el aviso, 3 de 3 contaron lo hecho y lo que
+// faltó (medido 2026-10-25).
+const OUT_OF_TOOL_ROUNDS_NOTE = {
+  role: "system",
+  content:
+    "Ya usaste todas las herramientas que se pueden en este turno. No pidas más: contesta ahora con lo que hiciste y, si quedó algo sin hacer, dilo.",
+};
 
 // Aviso de cada tool que empieza y termina, para el rastro de la caja de
 // subtítulo mientras piensa (diseño v1). Solo informa, no cambia el ciclo.
@@ -108,8 +121,8 @@ export type ToolCallingResult = {
 // ya viene armado como [system, ...historial, user]. Manda `tools` y
 // `tool_choice: "auto"` en cada vuelta; si finish_reason === "tool_calls",
 // ejecuta cada tool localmente contra la lista blanca de lib/tools y vuelve
-// a preguntar con el resultado. Corta con error si se excede
-// MAX_TOOL_CALL_ROUNDS, para no encadenarse indefinidamente.
+// a preguntar con el resultado. Pasado MAX_TOOL_CALL_ROUNDS se le pide la
+// respuesta final sin herramientas, para no encadenarse indefinidamente.
 export async function runToolCallingCycle(
   model: string,
   initialMessages: object[],
@@ -120,13 +133,14 @@ export async function runToolCallingCycle(
   const messages = [...initialMessages];
   const appendedMessages: ChatMessage[] = [];
 
-  for (let round = 1; round <= MAX_TOOL_CALL_ROUNDS; round++) {
+  for (let round = 1; round <= MAX_TOOL_CALL_ROUNDS + 1; round++) {
+    const lastRound = round > MAX_TOOL_CALL_ROUNDS;
     const response = await fetchOpenRouterWithRetry(
       {
         model,
-        messages,
+        messages: lastRound ? [...messages, OUT_OF_TOOL_ROUNDS_NOTE] : messages,
         tools: getToolSchemas(),
-        tool_choice: "auto",
+        tool_choice: lastRound ? "none" : "auto",
       },
       { kind: "charla", onRetry, signal },
     );
@@ -143,7 +157,9 @@ export async function runToolCallingCycle(
     // El array puede traer más de una llamada en la misma vuelta -- nunca
     // asumir que es una sola (verificado en la Tarea 6.0).
     const toolCalls: ToolCall[] | undefined = message.tool_calls;
+    // En la última vuelta se ignoran (por si el proveedor no respeta "none").
     const hasToolCalls =
+      !lastRound &&
       choice.finish_reason === "tool_calls" &&
       Array.isArray(toolCalls) &&
       toolCalls.length > 0;
@@ -187,7 +203,6 @@ export async function runToolCallingCycle(
     }
   }
 
-  throw new Error(
-    `Se alcanzó el límite de ${MAX_TOOL_CALL_ROUNDS} vueltas de tool calling sin llegar a una respuesta final.`,
-  );
+  // No se llega: la última vuelta siempre devuelve.
+  throw new Error("Ciclo de tool calling terminado sin respuesta final.");
 }
