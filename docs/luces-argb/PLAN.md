@@ -145,3 +145,12 @@ Antes de la fase 2 se puede hacer una **maqueta navegable** del panel para aprob
 2. **Maqueta primero:** sí. `docs/luces-argb/maqueta.html`, antes de la fase 2.
 3. **Teclado AULA:** lo maneja Miku, como el resto.
 4. **Al cerrar Miku:** las luces quedan en el **color fijo de la escena** actual.
+
+---
+
+## 7. Estado (2026-10-25)
+
+- Fases 1 a 4 confirmadas en vivo. Fase 5 (perfiles y reglas) commiteada; las tiras del teclado, confirmadas.
+- **Tiras del teclado AULA** (`keyboard_strips.rs`): configuración del teclado por HID (reporte feature 0x06, MI_01 COL06). Bytes del bloque: [18] modo de abajo, [19] color, [20] brillo (0–4), [21] velocidad (0–2), [28] modo de arriba, [29] color. Modos 0–4 (apagadas, arcoíris, arcoíris 2, sólido, respirar); colores 0–6 (rojo, verde, azul, amarillo, rosa, azul claro, blanco). Un valor fuera de rango reinicia el teclado a fábrica. Cada escritura hace parpadear el teclado; las teclas vuelven al directo de OpenRGB solas.
+- **Fase 6** hecha sin probar en vivo: «Que Miku lo decida» (`mikuLights.ts`, `mikuLightsDecide.ts`), sus efectos en la galería, sus colores de ánimo, tool ampliada (grupos, perfiles, efectos suyos). Corrección de color por zona con «Intensidad».
+- Pendiente: efectos «Latido» y «Degradado animado» (necesitan cambios en el motor en Rust), modos de hardware como alternativa, reducir movimiento.
