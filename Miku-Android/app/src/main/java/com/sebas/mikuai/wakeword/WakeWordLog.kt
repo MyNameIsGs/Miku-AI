@@ -51,11 +51,40 @@ class WakeWordLog(context: Context, private val sampleRate: Int) {
         scores.clear()
     }
 
-    /** Guarda lo acumulado. `accepted` = disparó; si no, fue un roce descartado. */
-    fun save(accepted: Boolean, threshold: Float, confirmFrames: Int, source: String) {
-        val audio = frames.toList()
-        val trace = scores.toList()
-        val name = stamp() + if (accepted) "" else "-rechazada"
+    /** Copia de lo acumulado, tomada desde el hilo de captura (el único que toca los buffers). */
+    class Captured(val frames: List<ShortArray>, val scores: List<Float>) {
+        /** El audio entero, para la segunda revisión (WakeWordVerifier). */
+        fun pcm(): ShortArray {
+            val out = ShortArray(frames.sumOf { it.size })
+            var i = 0
+            frames.forEach { chunk -> chunk.copyInto(out, i); i += chunk.size }
+            return out
+        }
+    }
+
+    fun capture() = Captured(frames.map { it.copyOf() }, scores.toList())
+
+    /**
+     * Guarda lo acumulado. `accepted` = disparó; si no, fue un roce descartado.
+     * `heard` = lo que escribió la segunda revisión; si la rechazó (`verified`
+     * = false) el archivo lleva "-sin-miku", igual que en desktop.
+     */
+    fun save(
+        accepted: Boolean,
+        threshold: Float,
+        confirmFrames: Int,
+        source: String,
+        heard: String? = null,
+        verified: Boolean? = null,
+        captured: Captured = capture(),
+    ) {
+        val audio = captured.frames
+        val trace = captured.scores
+        val name = stamp() + when {
+            !accepted -> "-rechazada"
+            verified == false -> "-sin-miku"
+            else -> ""
+        }
         thread(name = "miku-wakeword-log") {
             try {
                 dir.mkdirs()
@@ -66,6 +95,8 @@ class WakeWordLog(context: Context, private val sampleRate: Int) {
                     put("confirm_frames", confirmFrames)
                     put("source", source)
                     put("scores", JSONArray(trace.map { Math.round(it * 10000) / 10000.0 }))
+                    if (verified != null) put("verified", verified)
+                    if (heard != null) put("heard", heard)
                 }
                 File(dir, "$name.json").writeText(json.toString())
                 prune()

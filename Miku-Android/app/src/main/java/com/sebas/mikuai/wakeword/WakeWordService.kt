@@ -117,6 +117,13 @@ class WakeWordService : Service() {
 
     private var lastDetectionAt = 0L
 
+    // Segunda revisión en curso (ver onWakeCandidate): el pedido ya se está
+    // escuchando, pero sin pantalla ni vibración hasta que se confirme.
+    private var verifying = false
+    private var verifyToken = 0
+    private var heldOutcome: (() -> Unit)? = null
+    private var lastPartial: String? = null
+
     /** Ventana rodante de los últimos `CONFIRMATION_FRAMES` resultados (score>=THRESHOLD sí/no) -- ver `startCapture()`. */
     private val recentScores = ArrayDeque<Boolean>(CONFIRMATION_FRAMES)
 
@@ -235,6 +242,9 @@ class WakeWordService : Service() {
      */
     private fun cancelCurrentCommand() {
         commandGen++
+        verifyToken++
+        verifying = false
+        heldOutcome = null
         commandJob?.cancel()
         commandJob = null
         try {
@@ -319,6 +329,7 @@ class WakeWordService : Service() {
         recentScores.clear()
         wakeLog.clear()
         var framesAbove = 0
+        var verifyFramesLeft = 0
         captureThread = thread(name = "miku-wakeword-capture") {
             val chunk = ShortArray(WakeWordEngine.FRAME_SAMPLES)
             while (capturing) {
@@ -347,6 +358,18 @@ class WakeWordService : Service() {
                     while (recentScores.size > CONFIRMATION_FRAMES) recentScores.removeFirst()
                     wakeLog.add(chunk, score)
 
+                    // Detección confirmada esperando sus cuadros posteriores
+                    // (que "Miku" quede entero en el audio): recién ahí pasa
+                    // a la segunda revisión, ver onWakeCandidate().
+                    if (verifyFramesLeft > 0) {
+                        verifyFramesLeft--
+                        if (verifyFramesLeft == 0) {
+                            val captured = wakeLog.capture()
+                            mainHandler.post { onWakeCandidate(captured) }
+                        }
+                        continue
+                    }
+
                     // Un roce que no llegó a confirmarse: se registra igual
                     // (ver WakeWordLog), para comprobar que no se pierde
                     // ningún "Hey Miku" real.
@@ -366,9 +389,8 @@ class WakeWordService : Service() {
                             lastDetectionAt = now
                             recentScores.clear()
                             framesAbove = 0
-                            wakeLog.save(true, THRESHOLD, CONFIRMATION_FRAMES, AUDIO_SOURCE_NAME)
                             engine.reset()
-                            mainHandler.post { onWakeWordDetected() }
+                            verifyFramesLeft = VERIFY_POST_FRAMES
                         }
                     }
                 }
@@ -401,11 +423,61 @@ class WakeWordService : Service() {
 
     private fun onWakeWordDetected() {
         stopCapture() // soltamos el micrófono del wake-word antes de que lo tome el reconocedor de voz
+        verifyToken++ // el widget entra sin revisión: anula una que estuviera en curso
+        verifying = false
+        heldOutcome = null
+        lastPartial = null
+        showListeningUi()
+        startSpeechRecognition()
+    }
+
+    private fun showListeningUi() {
         vibrateConfirm()
         updateNotification(statusText(R.string.wakeword_status_command))
-        MikuOverlayState.update(MikuOverlayPhase.Listening())
+        MikuOverlayState.update(MikuOverlayPhase.Listening(lastPartial.orEmpty()))
         showOverlay()
+    }
+
+    /**
+     * El detector se disparó: antes de despertar a Miku, segunda revisión en
+     * la nube (WakeWordVerifier, ~1,2 s). Para que esa espera no se note, el
+     * pedido se empieza a escuchar YA, en silencio -- sin vibrar ni pantalla
+     * flotante: si se confirma "Hey Miku" aparece todo de golpe y no se
+     * perdió nada de lo dicho mientras tanto; si era un video o una frase
+     * cualquiera, se corta sin que se note.
+     */
+    private fun onWakeCandidate(captured: WakeWordLog.Captured) {
+        if (!capturing) return // mientras tanto se abrió por el widget
+        val key = SecurePrefs(applicationContext).getOpenRouterKey()
+        if (key == null) {
+            wakeLog.save(true, THRESHOLD, CONFIRMATION_FRAMES, AUDIO_SOURCE_NAME, captured = captured)
+            onWakeWordDetected()
+            return
+        }
+        stopCapture()
+        val token = ++verifyToken
+        verifying = true
+        heldOutcome = null
+        lastPartial = null
         startSpeechRecognition()
+        serviceScope.launch {
+            val r = WakeWordVerifier(key).verify(captured.pcm(), SAMPLE_RATE)
+            wakeLog.save(
+                true, THRESHOLD, CONFIRMATION_FRAMES, AUDIO_SOURCE_NAME,
+                heard = r.heard, verified = if (r.checked) r.accepted else null, captured = captured,
+            )
+            if (token != verifyToken) return@launch // se canceló mientras tanto
+            verifying = false
+            val outcome = heldOutcome
+            heldOutcome = null
+            if (r.accepted) {
+                showListeningUi()
+                outcome?.invoke()
+            } else {
+                try { speechRecognizer?.cancel() } catch (e: Exception) {}
+                resumeWakeWordListening()
+            }
+        }
     }
 
     /** Confirmación háptica corta al detectar "Hey Miku" -- mismo gesto que usan la mayoría de los asistentes de voz. */
@@ -438,21 +510,31 @@ class WakeWordService : Service() {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
 
+        // Durante la segunda revisión (ver onWakeCandidate) el final del
+        // pedido se guarda hasta saber si de verdad era "Hey Miku".
+        fun deliver(outcome: () -> Unit) {
+            if (verifying) heldOutcome = outcome else outcome()
+        }
+
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle) {
                 val text = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!text.isNullOrBlank()) {
-                    MikuOverlayState.update(MikuOverlayPhase.Thinking(heard = text))
-                    handleVoiceCommand(text)
-                } else {
-                    MikuOverlayState.update(MikuOverlayPhase.Idle)
-                    resumeWakeWordListening()
+                deliver {
+                    if (!text.isNullOrBlank()) {
+                        MikuOverlayState.update(MikuOverlayPhase.Thinking(heard = text))
+                        handleVoiceCommand(text)
+                    } else {
+                        MikuOverlayState.update(MikuOverlayPhase.Idle)
+                        resumeWakeWordListening()
+                    }
                 }
             }
 
             override fun onError(error: Int) {
-                MikuOverlayState.update(MikuOverlayPhase.Idle)
-                resumeWakeWordListening()
+                deliver {
+                    MikuOverlayState.update(MikuOverlayPhase.Idle)
+                    resumeWakeWordListening()
+                }
             }
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
@@ -461,7 +543,8 @@ class WakeWordService : Service() {
             override fun onEndOfSpeech() {}
             override fun onPartialResults(partialResults: Bundle?) {
                 val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!partial.isNullOrBlank() && MikuOverlayState.phase.value is MikuOverlayPhase.Listening) {
+                if (!partial.isNullOrBlank()) lastPartial = partial
+                if (!partial.isNullOrBlank() && !verifying && MikuOverlayState.phase.value is MikuOverlayPhase.Listening) {
                     MikuOverlayState.update(MikuOverlayPhase.Listening(partial))
                 }
             }
@@ -952,6 +1035,9 @@ class WakeWordService : Service() {
         // problema. Ver el comentario largo en `startCapture()`.
         private const val CONFIRMATION_FRAMES = 3
         private const val COOLDOWN_MS = 3000L
+        // Cuadros (80 ms) que se esperan tras confirmar antes de la segunda
+        // revisión, para que "Miku" quede entero -- mismo valor que desktop.
+        private const val VERIFY_POST_FRAMES = 4
         // Fuente del micrófono (ver el comentario en `startCapture()`).
         private const val AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_COMMUNICATION
         private const val AUDIO_SOURCE_NAME = "VOICE_COMMUNICATION"
