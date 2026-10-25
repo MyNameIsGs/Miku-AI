@@ -405,6 +405,8 @@ struct ResolvedZone {
     device: u32,
     zone: u32,
     leds: usize,
+    // Cada cuánto se le puede mandar un cuadro como mucho (ver SLOW_EVERY).
+    min_gap: Duration,
 }
 
 struct Resolved {
@@ -422,7 +424,8 @@ fn resolve(devices: &[RgbDevice]) -> Resolved {
         for zone in &device.zones {
             let key = format!("{device_key}|{}", zone.name);
             order.push(key.clone());
-            zones.insert(key, ResolvedZone { device: device.index, zone: zone.index, leds: zone.leds as usize });
+            let min_gap = if device.kind == "RAM" { SLOW_EVERY } else { Duration::ZERO };
+            zones.insert(key, ResolvedZone { device: device.index, zone: zone.index, leds: zone.leds as usize, min_gap });
         }
     }
     Resolved { zones, order }
@@ -678,6 +681,12 @@ fn render(
 
 const STILL_FRAME: Duration = Duration::from_millis(150);
 
+// La RAM va por SMBus, que es lento: a 30 cuadros por segundo OpenRGB no
+// alcanzaba a escribirlos, se le formaba una cola y cualquier pedido sobre
+// la RAM tardaba más de 8 s ("OpenRGB no respondió a tiempo", medido
+// 2026-10-25 con una ola animada). Como mucho ~8 cuadros por segundo.
+const SLOW_EVERY: Duration = Duration::from_millis(125);
+
 fn is_still(scene: &Scene) -> bool {
     scene
         .groups
@@ -737,6 +746,7 @@ async fn ensure_direct(conn: &mut Connection, devices: &[RgbDevice], done: &mut 
 async fn run() {
     let mut renderer = Renderer { rng: 0x9E37_79B9_7F4A_7C15, sparkles: HashMap::new() };
     let mut sent: HashMap<String, Vec<[u8; 3]>> = HashMap::new();
+    let mut sent_at: HashMap<String, Instant> = HashMap::new();
     let mut link: Option<(Connection, Resolved)> = None;
     let mut direct_done: HashSet<String> = HashSet::new();
     let mut t = 0.0f32;
@@ -839,12 +849,17 @@ async fn run() {
                 continue;
             }
             let zone = &resolved.zones[key];
+            if sent_at.get(key).is_some_and(|at| at.elapsed() < zone.min_gap) {
+                // Dispositivo lento: este cuadro se salta, va el siguiente.
+                continue;
+            }
             if let Err(e) = conn.send(zone.device, openrgb::UPDATEZONELEDS, &openrgb::zone_leds_payload(zone.zone, colors)).await {
                 eprintln!("[LUCES] Se cortó la conexión con OpenRGB: {e}");
                 failed = true;
                 break;
             }
             sent.insert(key.clone(), colors.clone());
+            sent_at.insert(key.clone(), Instant::now());
         }
         if failed {
             link = None;
@@ -1229,7 +1244,7 @@ mod tests {
     #[test]
     fn la_fuerza_por_led_baja_solo_ese_led() {
         let resolved = Resolved {
-            zones: HashMap::from([("mic|Microphone".to_string(), ResolvedZone { device: 0, zone: 0, leds: 2 })]),
+            zones: HashMap::from([("mic|Microphone".to_string(), ResolvedZone { device: 0, zone: 0, leds: 2, min_gap: Duration::ZERO })]),
             order: vec!["mic|Microphone".to_string()],
         };
         let mut options = ZoneOptions::default();

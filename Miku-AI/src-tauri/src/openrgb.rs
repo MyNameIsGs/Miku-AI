@@ -162,7 +162,15 @@ impl Connection {
 
     // Lee paquetes hasta el que se espera: el servidor también puede mandar
     // avisos por su cuenta (por ejemplo, "cambió la lista de dispositivos").
+    // `device`: de qué dispositivo tiene que ser la respuesta. Si un pedido
+    // anterior se dio por perdido y su respuesta llega tarde, no se la
+    // confunde con la de este (antes pasaba: la lista quedaba con los datos
+    // de un dispositivo en el lugar de otro).
     async fn receive(&mut self, packet: u32) -> Result<Vec<u8>, String> {
+        self.receive_from(None, packet).await
+    }
+
+    async fn receive_from(&mut self, device: Option<u32>, packet: u32) -> Result<Vec<u8>, String> {
         loop {
             let mut head = [0u8; 16];
             self.stream
@@ -172,6 +180,7 @@ impl Connection {
             if &head[0..4] != b"ORGB" {
                 return Err("OpenRGB respondió algo que no es su protocolo.".into());
             }
+            let from = u32::from_le_bytes([head[4], head[5], head[6], head[7]]);
             let id = u32::from_le_bytes([head[8], head[9], head[10], head[11]]);
             let size = u32::from_le_bytes([head[12], head[13], head[14], head[15]]) as usize;
             let mut data = vec![0u8; size];
@@ -179,7 +188,7 @@ impl Connection {
                 .read_exact(&mut data)
                 .await
                 .map_err(|e| format!("OpenRGB cortó la conexión: {e}"))?;
-            if id == packet {
+            if id == packet && device.is_none_or(|d| d == from) {
                 return Ok(data);
             }
         }
@@ -187,7 +196,7 @@ impl Connection {
 
     async fn request(&mut self, device: u32, packet: u32, data: &[u8]) -> Result<Vec<u8>, String> {
         self.send(device, packet, data).await?;
-        timeout(REPLY_TIMEOUT, self.receive(packet))
+        timeout(REPLY_TIMEOUT, self.receive_from(Some(device), packet))
             .await
             .map_err(|_| "OpenRGB no respondió a tiempo.".to_string())?
     }
