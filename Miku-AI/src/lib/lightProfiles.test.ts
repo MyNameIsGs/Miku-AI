@@ -65,3 +65,17 @@ describe("perfiles del plan", () => {
     expect(scene.keyboardStrips).toEqual({ bottom: { mode: 4, color: 1, brightness: 3, speed: 1 }, top: { mode: 4, color: 1 }, follow: false });
   });
 });
+
+describe("poner un perfil no pisa la configuración del equipo", () => {
+  it("toma los efectos del perfil y deja la corrección, el mapa y los excluidos de ahora", async () => {
+    const { withSetupOf, makeEffect } = await import("./lights");
+    const zones = (r: number) => ({ "a|ARGB": { fans: 3, offset: 0, reverse: false, gain: [r, 1, 1] as [number, number, number] } });
+    const look = { groups: [{ category: "fans" as const, zones: ["a|ARGB"], effect: makeEffect("fire", []) }], positions: { "a|ARGB": 0.1 }, zones: zones(1), excluded: [] };
+    const now = { groups: [{ category: "fans" as const, zones: ["a|ARGB"], effect: makeEffect("static", ["#39C5BB"]) }], positions: { "a|ARGB": 0.8 }, zones: zones(0.35), excluded: ["b|X"] };
+    const out = withSetupOf(look, now);
+    expect(out.groups[0].effect.kind).toBe("fire");
+    expect(out.zones!["a|ARGB"].gain[0]).toBe(0.35);
+    expect(out.positions["a|ARGB"]).toBe(0.8);
+    expect(out.excluded).toEqual(["b|X"]);
+  });
+});

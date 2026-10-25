@@ -3431,6 +3431,17 @@ a:hover {
   align-items: center;
   gap: 6px;
 }
+.lights-palette {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lights-palette-swatch {
+  width: 28px;
+  height: 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
 .lights-colors-label {
   width: 78px;
   font-family: var(--m-font-label);
@@ -3637,6 +3648,16 @@ a:hover {
   gap: 8px;
   align-items: center;
   font-size: 12px;
+}
+.lights-gain-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.lights-gain-actions .lights-zone-detail {
+  margin-right: auto;
 }
 
 /* Luces, fase 3: Mapa. */

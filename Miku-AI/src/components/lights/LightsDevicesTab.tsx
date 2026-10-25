@@ -6,17 +6,20 @@ import {
   RgbDevice,
   RgbZone,
   Scene,
+  ZoneCorrection,
   ZoneOptions,
   categoryOf,
   deviceKeys,
   deviceTitle,
   effectOfZone,
   isResizable,
+  loadLightsState,
   makeEffect,
   normalizeHex,
   probeZone,
   redoDirect,
   resizeZone,
+  saveLightsState,
   setHardwareMode,
   withZoneEffect,
   zoneKey,
@@ -66,6 +69,12 @@ function physicalOf(k: number, leds: number, options: ZoneOptions): number[] {
   });
 }
 
+// La corrección de una zona, comparable (los LEDs sin tocar no cuentan).
+function correctionOf(scene: Scene, key: string): ZoneCorrection {
+  const { gain, ledLevels } = zoneOptions(scene, key);
+  return ledLevels && ledLevels.some((l) => l !== 1) ? { gain, ledLevels } : { gain };
+}
+
 // Pestaña Dispositivos del panel Luces (PLAN.md §3.3): el estado de
 // OpenRGB, cada dispositivo con "Miku lo maneja" y su corrección de color,
 // y cada zona con su color propio, Identificar, y en los conectores ARGB el
@@ -83,6 +92,24 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
   const deviceZoneKeys = (device: RgbDevice) => device.zones.map((z) => keyOf(device, z));
   const ownGroup = (key: string) => scene.groups.find((g) => !g.category && g.zones.includes(key));
   const excluded = new Set(scene.excluded ?? []);
+
+  // La corrección guardada con «Guardar». La primera vez que se abre (antes
+  // no existía el botón) se toma la de ahora como punto de partida.
+  const [savedCorrection, setSavedCorrection] = useState<Record<string, ZoneCorrection> | null>(null);
+  const sceneRef = useRef(scene);
+  sceneRef.current = scene;
+
+  useEffect(() => {
+    loadLightsState()
+      .then(async (state) => {
+        if (state.savedCorrection) return setSavedCorrection(state.savedCorrection);
+        const first: Record<string, ZoneCorrection> = {};
+        for (const key of Object.keys(sceneRef.current.zones ?? {})) first[key] = correctionOf(sceneRef.current, key);
+        await saveLightsState({ ...state, savedCorrection: first });
+        setSavedCorrection(first);
+      })
+      .catch(onError);
+  }, []);
 
   useEffect(() => {
     invoke<ServiceStatus>("rgb_estado").then(setStatus).catch(onError);
@@ -117,6 +144,31 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
       zones[key] = { ...current, gain };
     }
     onScene({ ...scene, zones }, final);
+  }
+
+  // «Guardar», «Volver a lo guardado» y «Restablecer» de la corrección de
+  // un dispositivo (todas sus zonas).
+  const savedOf = (key: string): ZoneCorrection => savedCorrection?.[key] ?? { gain: [1, 1, 1] };
+  const correctionDirty = (device: RgbDevice) =>
+    deviceZoneKeys(device).some((k) => JSON.stringify(correctionOf(scene, k)) !== JSON.stringify(savedOf(k)));
+  const correctionIsDefault = (device: RgbDevice) =>
+    deviceZoneKeys(device).every((k) => JSON.stringify(correctionOf(scene, k)) === JSON.stringify({ gain: [1, 1, 1] }));
+
+  async function saveCorrection(device: RgbDevice) {
+    const next = { ...savedCorrection };
+    for (const key of deviceZoneKeys(device)) next[key] = correctionOf(scene, key);
+    const state = await loadLightsState();
+    await saveLightsState({ ...state, savedCorrection: next });
+    setSavedCorrection(next);
+  }
+
+  function setCorrection(device: RgbDevice, pick: (key: string) => ZoneCorrection) {
+    const zones = { ...scene.zones };
+    for (const key of deviceZoneKeys(device)) {
+      const { gain, ledLevels } = pick(key);
+      zones[key] = { ...zoneOptions(scene, key), gain, ledLevels };
+    }
+    onScene({ ...scene, zones }, true);
   }
 
   // Fuerza de un LED suelto (zonas chicas como el micrófono, que tiene la
@@ -576,6 +628,28 @@ export function LightsDevicesTab({ devices, scene, sizes, live, onScene, onDevic
                         </div>
                       );
                     })}
+                  <div className="lights-gain-actions">
+                    <span className="lights-zone-detail">{correctionDirty(device) ? "Cambios sin guardar" : "Guardada"}</span>
+                    <button className="m-btn m-btn-small" onClick={() => saveCorrection(device).catch(onError)} disabled={!savedCorrection || !correctionDirty(device)}>
+                      Guardar
+                    </button>
+                    <button
+                      className="m-btn m-btn-small"
+                      onClick={() => setCorrection(device, savedOf)}
+                      disabled={!savedCorrection || !correctionDirty(device)}
+                      title="Vuelve a la última corrección guardada"
+                    >
+                      Volver a lo guardado
+                    </button>
+                    <button
+                      className="m-btn m-btn-small"
+                      onClick={() => setCorrection(device, () => ({ gain: [1, 1, 1] }))}
+                      disabled={correctionIsDefault(device)}
+                      title="Todo al 100%, sin corrección"
+                    >
+                      Restablecer
+                    </button>
+                  </div>
                 </details>
               </>
             )}

@@ -1,6 +1,7 @@
 import { load } from "@tauri-apps/plugin-store";
 import {
   Effect,
+  DEFAULT_EFFECT_COLORS,
   KeyboardStrips,
   LightsGlobal,
   Scene,
@@ -13,6 +14,7 @@ import {
   sendGlobal,
   sendScene,
   withCategoryEffect,
+  withSetupOf,
 } from "./lights";
 
 // Perfiles y reglas automáticas de las luces (fase 5 de
@@ -81,8 +83,9 @@ export const favoriteSlots = (profiles: Profile[]) => profiles.filter((p) => p.f
 // Aplicar un perfil a mano: pasa a ser la escena de base.
 export async function applyProfile(profile: Profile) {
   const state = await loadLightsState();
-  await sendScene(profile.scene);
-  await saveLightsState({ ...state, scene: profile.scene });
+  const scene = withSetupOf(profile.scene, state.scene);
+  await sendScene(scene);
+  await saveLightsState({ ...state, scene });
   const profiles = await loadProfiles();
   await saveProfiles({ ...profiles, activeProfileId: profile.id });
   // Lo automático vuelve a mirar desde cero.
@@ -177,7 +180,8 @@ export async function evaluateRules(ctx: RuleContext) {
   let global: LightsGlobal = base.global;
   if (rule?.then.kind === "profile") {
     const ruleProfile = rule.then.profileId;
-    scene = profiles.find((p) => p.id === ruleProfile)?.scene ?? scene;
+    const look = profiles.find((p) => p.id === ruleProfile)?.scene;
+    if (look) scene = withSetupOf(look, base.scene);
   } else if (rule?.then.kind === "brightness") {
     global = { ...global, brightness: Math.min(global.brightness, rule.then.value) };
   } else if (rule?.then.kind === "off") {
@@ -232,7 +236,7 @@ export const PLAN_PROFILES: PlanProfile[] = [
   { name: "Noche", effect: makeEffect("breathe", ["#8A5CF6"], { speed: 20, brightness: 40 }), strips: { mode: 4, color: 4 }, favorite: true },
   { name: "Juego", effect: makeEffect("screen", ["#FF3B3B"], { speed: 60 }), strips: { mode: 3, color: 0 }, favorite: true },
   { name: "Fiesta", effect: makeEffect("music", ["#F0508F", "#39C5BB", "#FFD166"]), strips: { mode: 1, color: 4 } },
-  { name: "Stream", effect: makeEffect("rainbow", ["#FFFFFF"], { speed: 25 }), strips: { mode: 2, color: 6 } },
+  { name: "Stream", effect: makeEffect("rainbow", DEFAULT_EFFECT_COLORS.rainbow!, { speed: 25 }), strips: { mode: 2, color: 6 } },
   { name: "Cebollín", effect: makeEffect("comet", ["#3DDC84"], { speed: 45, size: 60 }), strips: { mode: 4, color: 1 }, by: "miku" },
 ];
 

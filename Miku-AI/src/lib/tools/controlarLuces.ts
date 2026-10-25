@@ -1,8 +1,14 @@
 import { ToolDefinition } from "./types";
 import {
+  CATEGORIES,
+  COLOR_PALETTES,
   CategoryId,
+  DEFAULT_EFFECT_COLORS,
+  EFFECT_COLOR_USE,
+  EFFECT_HINTS,
   EFFECT_KINDS,
   Effect,
+  MAX_EFFECT_COLORS,
   MOOD_COLORS,
   EFFECT_NAMES,
   EffectKind,
@@ -12,21 +18,26 @@ import {
   STRIP_SPEED_MAX,
   STRIP_MODES,
   applyToDevices,
+  categoryOf,
+  describeStrips,
   deviceTitle,
   listDevices,
   loadLightsState,
   makeEffect,
+  moodColor,
   normalizeScene,
+  paletteColors,
   readStrips,
   setGlobal,
   setScene,
   withCategoryEffect,
   zoneLabel,
 } from "../lights";
-import { Profile, applyProfile, loadProfiles, newId, saveProfiles } from "../lightProfiles";
-import { deleteMikuEffect, findMikuEffect, loadMikuLights, saveMikuEffect, setMikuMoodColor } from "../mikuLights";
+import { Profile, activeRuleId, applyProfile, describeWhen, loadProfiles, newId, saveProfiles } from "../lightProfiles";
+import { MikuLightsState, deleteMikuEffect, findMikuEffect, loadMikuLights, saveMikuEffect, setMikuMoodColor } from "../mikuLights";
 
 const ACCIONES = [
+  "estado",
   "listar",
   "color",
   "efecto",
@@ -42,6 +53,8 @@ const ACCIONES = [
   "color_animo",
 ] as const;
 const GRUPOS: Record<string, CategoryId | "all"> = { todo: "all", ventiladores: "fans", ram: "ram", placa: "board", perifericos: "periph" };
+const GROUP_OF: Record<CategoryId, string> = { fans: "ventiladores", ram: "ram", board: "placa", periph: "perifericos" };
+const PALETAS = COLOR_PALETTES.map((p) => p.id);
 const ANIMOS = Object.keys(MOOD_COLORS);
 const TIRAS = ["abajo", "arriba", "ambas"] as const;
 const MODOS_TIRA = STRIP_MODES.map((m) => m.toLowerCase());
@@ -70,7 +83,7 @@ export const controlarLuces: ToolDefinition = {
     function: {
       name: "controlar_luces",
       description:
-        "Controla las luces RGB de la PC de Sebastián (placa y ventilador, RAM, teclado, micrófono). Puede listar los dispositivos, ponerles un color fijo o un efecto animado (a todo o a un grupo), cambiar el brillo general, apagarlas o prenderlas, poner o guardar perfiles, diseñar tus propios efectos con nombre (quedan en la galería del panel como tuyos) y elegir el color de cada ánimo tuyo para el efecto «Su ánimo». Las tiras de luz del teclado van aparte ('tiras'): solo tienen 5 modos y 7 colores propios, y cada cambio hace parpadear el teclado, así que no las cambies seguido.",
+        `Controla las luces RGB de la PC de Sebastián: cuatro grupos (ventiladores, ram, placa, perifericos = teclado y micrófono) y las tiras del teclado. Puedes ver cómo están ahora ('estado'), listar los dispositivos, ponerle a todo o a un grupo un color fijo o un efecto animado (ola, respirar, latido, arcoíris, fuego, cometa, destellos...), combinar hasta ${MAX_EFFECT_COLORS} colores en un mismo efecto o usar una paleta lista, cambiar el brillo, apagarlas o prenderlas, poner perfiles o guardar las luces de ahora como un perfil tuyo, diseñar tus propios efectos con nombre (quedan en la galería del panel como tuyos) y elegir el color de cada ánimo tuyo para el efecto «Su ánimo». Cada llamada hace una sola acción: si quieres cambiar varias cosas, pide todas las llamadas juntas en la misma respuesta. Los efectos reactivos siguen algo en vivo: 'music' lo que suena en la PC, 'voice' tu voz, 'mood' tu ánimo, 'screen' los colores de la pantalla, 'notify' destella con cada aviso. Sebastián puede tener reglas automáticas que ponen un perfil solas (al jugar, con música, en un horario...), y si prende «Que Miku lo decida» en el panel eres tú quien elige las luces en segundo plano cuando cambia el momento; 'estado' te dice ambas cosas. Las tiras de luz del teclado van aparte ('tiras'): solo tienen 5 modos y 7 colores propios, y cada cambio hace parpadear el teclado, así que no las cambies seguido.`,
       parameters: {
         type: "object",
         properties: {
@@ -78,7 +91,7 @@ export const controlarLuces: ToolDefinition = {
             type: "string",
             enum: [...ACCIONES],
             description:
-              "'listar' dice qué dispositivos hay, con su número. 'color' pone un color fijo. 'efecto' pone un efecto animado. 'brillo' cambia el brillo general. 'apagar' apaga todo y 'prender' lo vuelve a prender como estaba. 'tiras' cambia las tiras del teclado (modo, color, brillo, velocidad). 'perfil' pone un perfil guardado por su nombre. 'guardar_perfil' guarda las luces de ahora como un perfil tuyo. 'crear_efecto' diseña un efecto tuyo (nombre, descripcion, efecto y sus parámetros), lo guarda y lo pone para que se vea. 'usar_efecto' pone uno tuyo por su nombre. 'borrar_efecto' borra uno tuyo. 'color_animo' elige el color de uno de tus ánimos.",
+              "'estado' dice cómo están las luces ahora (cada grupo con su efecto y colores, brillo, tiras, perfiles, reglas, tus efectos y tus colores de ánimo). 'listar' dice qué dispositivos hay, con su número y su grupo. 'color' pone un color fijo. 'efecto' pone un efecto animado. 'brillo' cambia el brillo general. 'apagar' apaga todo y 'prender' lo vuelve a prender como estaba. 'tiras' cambia las tiras del teclado (modo, color, brillo, velocidad). 'perfil' pone un perfil guardado por su nombre. 'guardar_perfil' guarda las luces de ahora como un perfil tuyo. 'crear_efecto' diseña un efecto tuyo (nombre, descripcion, efecto y sus parámetros), lo guarda y lo pone para que se vea. 'usar_efecto' pone uno tuyo por su nombre. 'borrar_efecto' borra uno tuyo. 'color_animo' elige el color de uno de tus ánimos.",
           },
           color: {
             type: "string",
@@ -87,13 +100,19 @@ export const controlarLuces: ToolDefinition = {
           efecto: {
             type: "string",
             enum: [...EFFECT_KINDS],
-            description: `Para 'efecto' y 'crear_efecto': ${EFFECT_KINDS.map((k) => `'${k}' (${EFFECT_NAMES[k]})`).join(", ")}.`,
+            description: `Para 'efecto' y 'crear_efecto'. ${EFFECT_KINDS.map(
+              (k) => `'${k}' (${EFFECT_NAMES[k]}): ${EFFECT_HINTS[k]} Colores: ${EFFECT_COLOR_USE[k]}.`,
+            ).join(" ")}`,
           },
           colores: {
             type: "array",
             items: { type: "string" },
-            description:
-              "Para 'efecto' y 'crear_efecto': uno o más colores en hexadecimal. La ola, el degradado y los destellos usan varios.",
+            description: `Para 'efecto' y 'crear_efecto': de 1 a ${MAX_EFFECT_COLORS} colores en hexadecimal, en el orden en que se mezclan (ver en 'efecto' cuántos usa cada uno). Si no das ni colores ni paleta, fuego y arcoíris usan los suyos de siempre.`,
+          },
+          paleta: {
+            type: "string",
+            enum: PALETAS,
+            description: `Para 'efecto' y 'crear_efecto', en vez de 'colores': ${COLOR_PALETTES.map((p) => `'${p.id}' (${p.colors.join(" ")})`).join(", ")}. Sirven con cualquier efecto (una ola con colores de fuego, por ejemplo).`,
           },
           velocidad: {
             type: "number",
@@ -184,12 +203,13 @@ export const controlarLuces: ToolDefinition = {
     const dispositivos = Array.isArray(args.dispositivos) ? args.dispositivos.filter((n): n is number => typeof n === "number") : [];
 
     try {
+      if (accion === "estado") return await describeState();
       if (accion === "listar") {
         const devices = await listDevices();
         if (devices.length === 0) return "OpenRGB está abierto pero no detectó ningún dispositivo con luces.";
         return devices
           .map((d) => {
-            const zones = d.zones.map((z) => `${zoneLabel(z)} (${z.leds})`).join(", ");
+            const zones = d.zones.map((z) => `${zoneLabel(z)} (${z.leds}, grupo ${GROUP_OF[categoryOf(d, z)]})`).join(", ");
             return `${d.index}: ${deviceTitle(d, devices)} (${d.kind}, ${d.leds} LEDs: ${zones})`;
           })
           .join("\n");
@@ -286,11 +306,14 @@ async function changeStrips(args: Record<string, unknown>): Promise<string> {
 function effectFromArgs(args: Record<string, unknown>): Effect | string {
   const kind = String(args.efecto ?? "") as EffectKind;
   if (!EFFECT_KINDS.includes(kind)) return `Error: efecto desconocido "${args.efecto}".`;
-  const colors = parseColors(args.colores);
+  const palette = args.paleta === undefined ? null : paletteColors(String(args.paleta));
+  if (args.paleta !== undefined && !palette) return `Error: paleta desconocida "${args.paleta}". Opciones: ${PALETAS.join(", ")}.`;
+  const colors = palette ?? parseColors(args.colores);
   if (!colors) return "Error: algún color de 'colores' no es hexadecimal como \"#39C5BB\".";
+  if (colors.length > MAX_EFFECT_COLORS) return `Error: un efecto lleva como mucho ${MAX_EFFECT_COLORS} colores (diste ${colors.length}).`;
   const num = (v: unknown, min: number, max: number, fallback: number) =>
     typeof v === "number" && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : fallback;
-  return makeEffect(kind, colors.length > 0 ? colors.slice(0, 6) : ["#39C5BB", "#F0508F"], {
+  return makeEffect(kind, colors.length > 0 ? colors : (DEFAULT_EFFECT_COLORS[kind] ?? ["#39C5BB", "#F0508F"]), {
     speed: num(args.velocidad, 1, 100, 50),
     brightness: num(args.brillo_grupo, 0, 100, 100),
     size: num(args.tamano, 1, 100, 40),
@@ -355,4 +378,70 @@ async function ownEffectAction(accion: "crear_efecto" | "usar_efecto" | "borrar_
   }
   await applyToGroup(own.effect, grupo);
   return `Puse tu efecto "${own.name}" en ${args.grupo ?? "todo"}.`;
+}
+
+// Un efecto en palabras, con lo que hace falta para repetirlo o cambiarlo.
+function describeEffect(fx: Effect, mine: MikuLightsState): string {
+  const own = mine.effects.find((e) => JSON.stringify(e.effect) === JSON.stringify(fx));
+  const base = `${EFFECT_NAMES[fx.kind]} ('${fx.kind}'${fx.mode ? `, ${fx.mode}` : ""}), colores ${fx.colors.join(" ") || "(ninguno)"}, velocidad ${fx.speed}, brillo ${fx.brightness}%`;
+  return own ? `tu efecto "${own.name}": ${base}` : base;
+}
+
+// 'estado': cómo están las luces ahora, todo junto.
+async function describeState(): Promise<string> {
+  const [state, profiles, mine] = await Promise.all([loadLightsState(), loadProfiles(), loadMikuLights()]);
+  const devices = await listDevices().catch(() => null);
+  const scene = devices ? normalizeScene(state.scene, devices) : state.scene;
+  const lines: string[] = [];
+  lines.push(`Luces ${state.global.on ? "prendidas" : "apagadas"}, brillo general ${state.global.brightness}%.`);
+  if (!devices) lines.push("(OpenRGB no responde ahora: lo de abajo es lo guardado.)");
+  if (!scene) {
+    lines.push("Todavía no hay una escena de luces.");
+  } else {
+    for (const c of CATEGORIES) {
+      const group = scene.groups.find((g) => g.category === c.id);
+      if (!group || (devices && group.zones.length === 0)) continue;
+      const layers = (group.layers ?? []).filter((l) => l.visible);
+      const extra = layers.length > 0 ? `; capas encima: ${layers.map((l) => EFFECT_NAMES[l.effect.kind]).join(", ")}` : "";
+      lines.push(`- ${GROUP_OF[c.id]}: ${describeEffect(group.effect, mine)}${extra}`);
+    }
+    const own = scene.groups.filter((g) => !g.category).length;
+    if (own > 0) lines.push(`- Además, ${own} zona(s) sueltas con un efecto propio (puesto desde el panel).`);
+    if (scene.keyboardStrips) lines.push(`- Tiras del teclado: ${describeStrips(scene.keyboardStrips)}.`);
+  }
+
+  const active = profiles.profiles.find((p) => p.id === profiles.activeProfileId);
+  if (profiles.profiles.length > 0) {
+    const names = profiles.profiles.map((p) => `"${p.name}"${p.by === "miku" ? " (tuyo)" : ""}`).join(", ");
+    lines.push(`Perfiles: ${names}.${active ? ` Puesto ahora: "${active.name}".` : ""}`);
+  } else lines.push("Perfiles: ninguno todavía.");
+
+  const rules = profiles.rules.filter((r) => r.enabled);
+  if (rules.length > 0) {
+    const ruling = activeRuleId();
+    const then = (r: (typeof rules)[number]) =>
+      r.then.kind === "profile"
+        ? `perfil "${profiles.profiles.find((p) => p.id === (r.then as { profileId: string }).profileId)?.name ?? "?"}"`
+        : r.then.kind === "brightness"
+          ? `brillo ${r.then.value}%`
+          : "apagar";
+    lines.push(
+      `Reglas automáticas de Sebastián: ${rules.map((r) => `${describeWhen(r.when)} → ${then(r)}${r.id === ruling ? " (mandando ahora)" : ""}`).join("; ")}.`,
+    );
+  } else lines.push("Reglas automáticas: ninguna prendida.");
+
+  lines.push(
+    mine.effects.length > 0
+      ? `Tus efectos: ${mine.effects.map((e) => `"${e.name}"${e.description ? ` (${e.description})` : ""}`).join(", ")}.`
+      : "Tus efectos: todavía no diseñaste ninguno.",
+  );
+  lines.push(
+    `Tus colores de ánimo (efecto «Su ánimo»): ${Object.keys(MOOD_COLORS)
+      .map((m) => `${m} ${moodColor(m)}${mine.moodColors[m] ? "" : " (por defecto)"}`)
+      .join(", ")}.`,
+  );
+  lines.push(
+    `«Que Miku lo decida»: ${mine.decides.on ? `prendido${mine.decides.lastNote ? ` (lo último que elegiste: ${mine.decides.lastNote})` : ""}` : "apagado"}.`,
+  );
+  return lines.join("\n");
 }

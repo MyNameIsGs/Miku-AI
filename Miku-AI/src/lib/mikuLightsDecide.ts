@@ -2,7 +2,7 @@ import { OPENROUTER_MODEL } from "../config/constants";
 import { loadMemoryContext } from "./memory";
 import { fetchOpenRouterWithRetry } from "./openrouter";
 import { getCurrentMood, getMoodLevel } from "./mood";
-import { EFFECT_KINDS, EFFECT_NAMES, STRIP_COLORS, STRIP_MODES, loadLightsState } from "./lights";
+import { COLOR_PALETTES, EFFECT_COLOR_USE, EFFECT_HINTS, EFFECT_KINDS, EFFECT_NAMES, STRIP_COLORS, STRIP_MODES, loadLightsState } from "./lights";
 import { activeRuleId, RuleContext } from "./lightProfiles";
 import { applyChoice, describeScene, loadMikuLights, parseChoice, saveMikuLights } from "./mikuLights";
 import { buildLightsDecisionPrompt } from "../prompts/lightsDecisionPrompt";
@@ -67,7 +67,8 @@ export async function maybeDecideLights(ctx: RuleContext) {
       timeLabel: ctx.now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
       mood,
       currentScene: describeScene(scene, mine),
-      effectKinds: EFFECT_KINDS.map((k) => `${k} (${EFFECT_NAMES[k]})`).join(", "),
+      effectKinds: EFFECT_KINDS.map((k) => `- ${k} (${EFFECT_NAMES[k]}): ${EFFECT_HINTS[k]} Colores: ${EFFECT_COLOR_USE[k]}.`).join("\n"),
+      palettes: COLOR_PALETTES.map((p) => `"${p.id}" (${p.colors.join(" ")})`).join(", "),
       ownEffects: mine.effects.map((e) => `"${e.name}" (${e.description})`).join(", "),
       stripModes: STRIP_MODES.join(", "),
       stripColors: STRIP_COLORS.map((c) => c.name).join(", "),

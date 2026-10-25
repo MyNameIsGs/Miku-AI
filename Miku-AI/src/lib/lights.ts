@@ -68,6 +68,60 @@ export const EFFECT_NAMES: Record<EffectKind, string> = {
   notify: "Avisos",
 };
 
+// Qué hace cada efecto, en una línea (el panel y Miku leen lo mismo).
+export const EFFECT_HINTS: Record<EffectKind, string> = {
+  static: "Un color o un degradado quieto.",
+  breathe: "Sube y baja suave; con varios colores, uno por respiración.",
+  heartbeat: "Dos golpes seguidos y una pausa, como un corazón.",
+  flow: "Los colores se mezclan y corren a lo largo de cada zona.",
+  rainbow: "Recorre sus colores como un arcoíris (con la paleta Arcoíris, todo el espectro).",
+  wave: "Una banda de colores que cruza el gabinete.",
+  comet: "Un punto con estela; en los ventiladores gira.",
+  sparkle: "LEDs al azar que se prenden y apagan.",
+  fire: "Parpadeo como una llama, entre sus colores (del más oscuro al más claro).",
+  music: "Pulsa con cada golpe de lo que suena en la PC y cambia de color.",
+  voice: "Respira con la voz de Miku; rosa cuando escucha, barrido cuando piensa.",
+  mood: "El color de su ánimo, más fuerte cuanto más lo siente.",
+  screen: "El color promedio de la pantalla (ambilight).",
+  notify: "Apagado, salvo un destello con cada aviso. Mejor como capa.",
+};
+
+// Cuántos de sus colores usa cada efecto (para que Miku no elija de más).
+export const EFFECT_COLOR_USE: Record<EffectKind, string> = {
+  static: "1 o más (varios = degradado)",
+  breathe: "1 o más (uno por respiración)",
+  heartbeat: "solo el primero",
+  flow: "2 o más",
+  rainbow: "2 o más (con menos, el espectro entero)",
+  wave: "1 o más",
+  comet: "solo el primero",
+  sparkle: "1 o más (cada destello elige uno)",
+  fire: "1 o más (sin colores, la llama naranja de siempre)",
+  music: "1 o más (cambia con cada golpe)",
+  voice: "solo el primero (su color en reposo)",
+  mood: "ninguno (usa el color de cada ánimo)",
+  screen: "los de fuera de un juego, con 'juegos'",
+  notify: "el primero (si no, el color de cada aviso)",
+};
+
+export const MAX_EFFECT_COLORS = 6;
+
+// Paletas listas: un clic las pone enteras en cualquier efecto. Fuego y
+// Arcoíris son además lo que usan esos efectos si no traen colores propios
+// (antes los tenían fijos en el motor; con estos colores se ven igual).
+export const COLOR_PALETTES: { id: string; name: string; colors: string[] }[] = [
+  { id: "fuego", name: "Fuego", colors: ["#FF3C00", "#FFBE28"] },
+  { id: "arcoiris", name: "Arcoíris", colors: ["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF"] },
+  { id: "miku", name: "Miku", colors: ["#39C5BB", "#F0508F"] },
+];
+export const paletteColors = (id: string) => COLOR_PALETTES.find((p) => p.id === id)?.colors ?? null;
+
+// Los colores con que arranca un efecto cuando se lo elige sin colores.
+export const DEFAULT_EFFECT_COLORS: Partial<Record<EffectKind, string[]>> = {
+  fire: paletteColors("fuego")!,
+  rainbow: paletteColors("arcoiris")!,
+};
+
 export type Effect = {
   kind: EffectKind;
   colors: string[]; // "#39C5BB"
@@ -238,10 +292,15 @@ export const zoneOptions = (scene: Scene | null, key: string): ZoneOptions => ({
 // lights_engine.rs): el color fijo de la escena, o apagadas.
 export type LightsGlobal = { on: boolean; brightness: number; paused: boolean; fps: number; exitMode?: "static" | "off" };
 
+// La corrección de color de una zona, tal como se guardó con «Guardar» en
+// el panel (Dispositivos): «Volver a lo guardado» la trae de vuelta.
+export type ZoneCorrection = { gain: [number, number, number]; ledLevels?: number[] };
+
 type LightsState = {
   sizes: Record<string, number>;
   scene: Scene | null;
   global: LightsGlobal;
+  savedCorrection?: Record<string, ZoneCorrection>;
 };
 
 const STORE_KEY = "lights";
@@ -264,7 +323,7 @@ export async function loadLightsState(): Promise<LightsState> {
         positions: {},
       };
     }
-    return { sizes: saved?.sizes ?? {}, scene, global: { ...DEFAULT_GLOBAL, ...saved?.global } };
+    return { sizes: saved?.sizes ?? {}, scene, global: { ...DEFAULT_GLOBAL, ...saved?.global }, savedCorrection: saved?.savedCorrection };
   } catch (err) {
     console.error("[Luces] No se pudo cargar lo guardado:", err);
     return { sizes: {}, scene: null, global: DEFAULT_GLOBAL };
@@ -325,6 +384,23 @@ export async function setGlobal(global: LightsGlobal) {
 }
 
 // --- Escenas ---
+
+// Un perfil (o la escena de antes de «Que Miku lo decida») trae su aspecto:
+// efectos, capas, tiras. Lo que es del equipo -- corrección de color,
+// ventiladores, el mapa, qué dispositivos maneja Miku -- queda como está
+// ahora; si no, poner un perfil devolvía la corrección vieja que tenía
+// guardada adentro.
+export function withSetupOf(look: Scene, current: Scene | null): Scene {
+  if (!current) return look;
+  return {
+    ...look,
+    positions: current.positions,
+    layout: current.layout,
+    zones: current.zones,
+    excluded: current.excluded,
+    hardwareModes: current.hardwareModes,
+  };
+}
 
 // La zona pasa a tener su propio efecto: sale del grupo donde estaba.
 export function withZoneEffect(scene: Scene | null, zoneKey: string, effect: Effect): Scene {
@@ -553,11 +629,44 @@ export async function applyToDevices(effect: Effect, indices: number[]): Promise
   return targets.map((d) => deviceTitle(d, devices));
 }
 
+// Fuego y Arcoíris tenían los colores fijos en el motor y los que traían
+// guardados (casi siempre el turquesa y rosa por defecto) no se veían. Ahora
+// los usan: una sola vez, a todo fuego y arcoíris guardado (escena, capas,
+// perfiles, los efectos de Miku) se le ponen los de su paleta, para que se
+// vean igual que antes.
+const PALETTES_MIGRATED_KEY = "lightsFireRainbowColors";
+
+function withPaletteColors(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withPaletteColors);
+  if (!value || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) out[k] = withPaletteColors(v);
+  const kind = out.kind as EffectKind;
+  if ((kind === "fire" || kind === "rainbow") && Array.isArray(out.colors)) out.colors = DEFAULT_EFFECT_COLORS[kind];
+  return out;
+}
+
+async function migrateFireRainbowColors() {
+  try {
+    const store = await load(".settings.dat", { autoSave: false });
+    if (await store.get<boolean>(PALETTES_MIGRATED_KEY)) return;
+    for (const key of [STORE_KEY, "lightProfiles", "lightsMiku"]) {
+      const saved = await store.get(key);
+      if (saved !== undefined) await store.set(key, withPaletteColors(saved));
+    }
+    await store.set(PALETTES_MIGRATED_KEY, true);
+    await store.save();
+  } catch (err) {
+    console.error("[Luces] No se pudieron pasar los colores de fuego y arcoíris:", err);
+  }
+}
+
 // Al arrancar: vuelve a poner los tamaños de los conectores y le manda al
 // motor la escena guardada. El servicio de OpenRGB puede estar todavía
 // detectando si la PC recién prendió, así que se reintenta un par de veces
 // (el motor solo, por su lado, se reconecta cuando OpenRGB vuelve).
 export async function restoreLights() {
+  await migrateFireRainbowColors();
   const state = await loadLightsState();
   if (state.scene) {
     await sendGlobal(state.global);

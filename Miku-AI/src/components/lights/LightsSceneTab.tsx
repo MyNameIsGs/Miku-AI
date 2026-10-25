@@ -3,9 +3,13 @@ import { drawRingThumb, reduceMotion } from "../../lib/lightEffects";
 import {
   BLEND_NAMES,
   CATEGORIES,
+  COLOR_PALETTES,
   CategoryId,
+  DEFAULT_EFFECT_COLORS,
+  EFFECT_HINTS,
   EFFECT_KINDS,
   EFFECT_NAMES,
+  MAX_EFFECT_COLORS,
   MUSIC_MODES,
   Effect,
   EffectKind,
@@ -44,34 +48,17 @@ type LightsSceneTabProps = {
   onStrips: (next: KeyboardStrips, final: boolean) => void;
 };
 
-const EFFECT_HINTS: Record<EffectKind, string> = {
-  static: "Un color o un degradado quieto.",
-  breathe: "Sube y baja suave; con varios colores, uno por respiración.",
-  heartbeat: "Dos golpes seguidos y una pausa, como un corazón.",
-  flow: "Los colores se mezclan y corren a lo largo de cada zona.",
-  rainbow: "Recorre todo el espectro.",
-  wave: "Una banda de colores que cruza el gabinete.",
-  comet: "Un punto con estela; en los ventiladores gira.",
-  sparkle: "LEDs al azar que se prenden y apagan.",
-  fire: "Parpadeo cálido, como una llama.",
-  music: "Pulsa con cada golpe de lo que suena en la PC y cambia de color.",
-  voice: "Respira con la voz de Miku; rosa cuando escucha, barrido cuando piensa.",
-  mood: "El color de su ánimo, más fuerte cuanto más lo siente.",
-  screen: "El color promedio de la pantalla (ambilight).",
-  notify: "Apagado, salvo un destello con cada aviso. Mejor como capa.",
-};
-
 // Qué ajustes usa cada efecto (el resto se esconde).
 const USES: Record<EffectKind, { speed: boolean; size: boolean; direction: boolean; colors: boolean }> = {
   static: { speed: false, size: false, direction: false, colors: true },
   breathe: { speed: true, size: false, direction: false, colors: true },
   heartbeat: { speed: true, size: false, direction: false, colors: true },
   flow: { speed: true, size: true, direction: true, colors: true },
-  rainbow: { speed: true, size: false, direction: true, colors: false },
+  rainbow: { speed: true, size: false, direction: true, colors: true },
   wave: { speed: true, size: true, direction: true, colors: true },
   comet: { speed: true, size: true, direction: true, colors: true },
   sparkle: { speed: false, size: true, direction: false, colors: true },
-  fire: { speed: true, size: false, direction: false, colors: false },
+  fire: { speed: true, size: false, direction: false, colors: true },
   // El tamaño solo cuenta en "Golpe" (cuánto dura el pulso).
   music: { speed: false, size: true, direction: false, colors: true },
   voice: { speed: false, size: false, direction: false, colors: true },
@@ -100,7 +87,12 @@ const PALETTE = [
   { hex: "#FF8A3D", name: "Naranja" },
   { hex: "#FF3B3B", name: "Rojo" },
 ];
-const MAX_COLORS = 6;
+const MAX_COLORS = MAX_EFFECT_COLORS;
+
+// Al elegir Fuego o Arcoíris arrancan con su paleta (con los colores de otro
+// efecto no se reconocerían); el resto conserva los que había.
+const withKind = (effect: Effect, kind: EffectKind): Effect =>
+  kind !== effect.kind && DEFAULT_EFFECT_COLORS[kind] ? { ...effect, kind, colors: DEFAULT_EFFECT_COLORS[kind]! } : { ...effect, kind };
 
 // Pestaña Escena del panel Luces (PLAN.md §3.2): los grupos a la
 // izquierda, y a la derecha el efecto del grupo elegido con sus ajustes.
@@ -160,16 +152,7 @@ export function LightsSceneTab({
           const own = mikuRef.current.find((e) => e.id === value);
           if (own) drawRingThumb(canvas, own.effect, id, t);
         } else
-          drawRingThumb(
-            canvas,
-            {
-              ...effectRef.current,
-              kind: value as EffectKind,
-              brightness: 100,
-            },
-            id,
-            t,
-          );
+          drawRingThumb(canvas, { ...withKind(effectRef.current, value as EffectKind), brightness: 100 }, id, t);
       }
       raf = requestAnimationFrame(loop);
     };
@@ -273,7 +256,7 @@ export function LightsSceneTab({
                       role="radio"
                       aria-checked={effect.kind === kind}
                       className={`lights-fx ${effect.kind === kind ? "sel" : ""}`}
-                      onClick={() => update({ kind })}
+                      onClick={() => onChange(withKind(effect, kind), true)}
                     >
                       <canvas ref={thumbRef(`fx:${kind}`)} width={144} height={88} aria-hidden="true" />
                       <span>{EFFECT_NAMES[kind]}</span>
@@ -485,6 +468,23 @@ export function LightsSceneTab({
                   </label>
                   <HexInput value={colors[current]} onCommit={(hex) => setColor(hex)} />
                 </div>
+                <div className="lights-colors">
+                  <span className="lights-colors-label">PALETAS</span>
+                  {COLOR_PALETTES.map((p) => (
+                    <button
+                      key={p.id}
+                      className={`m-btn m-btn-small lights-palette ${JSON.stringify(colors) === JSON.stringify(p.colors) ? "on" : ""}`}
+                      onClick={() => {
+                        update({ colors: p.colors });
+                        setStop(0);
+                      }}
+                      title={`Poner los colores ${p.name}`}
+                    >
+                      <span className="lights-palette-swatch" style={{ background: `linear-gradient(90deg, ${p.colors.join(", ")})` }} aria-hidden="true" />
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
                 {recentColors.length > 0 && (
                   <div className="lights-colors">
                     <span className="lights-colors-label">RECIENTES</span>
@@ -586,12 +586,7 @@ function LayersEditor({
                   className="lights-select lights-layer-fx"
                   value={layer.effect.kind}
                   onChange={(e) =>
-                    set(i, {
-                      effect: {
-                        ...layer.effect,
-                        kind: e.target.value as EffectKind,
-                      },
-                    })
+                    set(i, { effect: withKind(layer.effect, e.target.value as EffectKind) })
                   }
                   aria-label="Efecto de la capa"
                 >

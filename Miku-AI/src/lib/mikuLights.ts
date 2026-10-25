@@ -2,10 +2,12 @@ import { load } from "@tauri-apps/plugin-store";
 import {
   CATEGORIES,
   CategoryId,
+  DEFAULT_EFFECT_COLORS,
   EFFECT_KINDS,
   Effect,
   EffectKind,
   KeyboardStrips,
+  MAX_EFFECT_COLORS,
   STRIP_COLORS,
   STRIP_MODES,
   Scene,
@@ -13,10 +15,12 @@ import {
   loadLightsState,
   makeEffect,
   normalizeScene,
+  paletteColors,
   readStrips,
   setMoodColorOverrides,
   setScene,
   withCategoryEffect,
+  withSetupOf,
 } from "./lights";
 
 // Lo de Miku en las luces (fase 6 de docs/luces-argb/PLAN.md):
@@ -122,7 +126,7 @@ export async function setMikuDecides(on: boolean) {
     await saveMikuLights({ ...state, decides: { on: true, savedScene: scene, lastNote: null, lastAt: null } });
   } else {
     // Vuelve lo que había antes de dejarla decidir.
-    if (state.decides.savedScene) await setScene(state.decides.savedScene);
+    if (state.decides.savedScene) await setScene(withSetupOf(state.decides.savedScene, (await loadLightsState()).scene));
     await saveMikuLights({ ...state, decides: { on: false, savedScene: null, lastNote: null, lastAt: null } });
   }
 }
@@ -133,7 +137,7 @@ export type LightsChoice = {
   grupos?: Partial<Record<"todo" | "ventiladores" | "ram" | "placa" | "perifericos", ChoiceEffect>>;
   tiras?: { modo?: string; color?: string };
 };
-type ChoiceEffect = { efecto?: string; suyo?: string; colores?: string[]; velocidad?: number; brillo?: number };
+type ChoiceEffect = { efecto?: string; suyo?: string; colores?: string[]; paleta?: string; velocidad?: number; brillo?: number };
 
 const GROUP_IDS: Record<string, CategoryId | "all"> = { todo: "all", ventiladores: "fans", ram: "ram", placa: "board", perifericos: "periph" };
 const HEX = /^#?([0-9a-f]{6})$/i;
@@ -161,10 +165,14 @@ function choiceToEffect(choice: ChoiceEffect, base: Effect, mine: MikuLightsStat
   }
   const kind = (choice.efecto ?? base.kind) as EffectKind;
   if (!EFFECT_KINDS.includes(kind)) return null;
-  const colors = (choice.colores ?? []).map((c) => String(c).match(HEX)).filter(Boolean).map((m) => `#${m![1].toUpperCase()}`);
+  const colors =
+    (choice.paleta ? paletteColors(String(choice.paleta)) : null) ??
+    (choice.colores ?? []).map((c) => String(c).match(HEX)).filter(Boolean).map((m) => `#${m![1].toUpperCase()}`);
   const clamp = (v: unknown, min: number, max: number, fallback: number) =>
     typeof v === "number" && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : fallback;
-  return makeEffect(kind, colors.length > 0 ? colors.slice(0, 6) : base.colors, {
+  // Sin colores: los de antes, salvo que pase a fuego o arcoíris (su paleta).
+  const fallback = kind !== base.kind && DEFAULT_EFFECT_COLORS[kind] ? DEFAULT_EFFECT_COLORS[kind]! : base.colors;
+  return makeEffect(kind, colors.length > 0 ? colors.slice(0, MAX_EFFECT_COLORS) : fallback, {
     speed: clamp(choice.velocidad, 1, 100, 50),
     brightness: clamp(choice.brillo, 0, 100, 100),
   });

@@ -10,6 +10,7 @@ export interface BuildLightsDecisionPromptParams {
   mood: string;
   currentScene: string;
   effectKinds: string;
+  palettes: string;
   ownEffects: string;
   stripModes: string;
   stripColors: string;
@@ -32,7 +33,9 @@ ${p.lastNote ? `La última vez elegiste: ${p.lastNote}\n` : ""}
 Así están ahora:
 ${p.currentScene}
 
-Efectos base: ${p.effectKinds}.
+Efectos base:
+${p.effectKinds}
+Un efecto lleva de 1 a 6 colores, o una paleta lista: ${p.palettes}.
 ${p.ownEffects ? `Tus propios efectos (los diseñaste tú): ${p.ownEffects}.\n` : ""}Tiras del teclado (opcional): modos ${p.stripModes}; colores ${p.stripColors}. Cada cambio de las tiras hace parpadear el teclado, así que cámbialas solo si de verdad quieres.
 
 Si te gustan como están, o el momento no pide nada, responde únicamente: SILENCIO
@@ -41,6 +44,7 @@ Si quieres cambiarlas, responde SOLO con un JSON así (pon solo los grupos que c
 {"nota": "por qué, en pocas palabras, como lo dirías tú", "grupos": {"todo": {"efecto": "breathe", "colores": ["#8A5CF6"], "velocidad": 30}}, "tiras": {"modo": "Respirar", "color": "Rosa"}}
 - Grupos posibles: "todo", "ventiladores", "ram", "placa", "perifericos".
 - En vez de "efecto" puedes usar uno tuyo: {"suyo": "nombre"}.
+- En vez de "colores" puedes poner "paleta": {"efecto": "wave", "paleta": "fuego"}.
 - velocidad de 1 a 100 (50 normal); brillo de 0 a 100 (opcional).
 Nada de texto fuera del JSON.`;
 }

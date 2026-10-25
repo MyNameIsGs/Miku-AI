@@ -22,6 +22,15 @@ function gradientAt(colors: string[], t: number): Rgb {
   return mix(hexToRgb(colors[i % colors.length]), hexToRgb(colors[(i + 1) % colors.length]), x - i);
 }
 
+// Del primer color al último, sin dar la vuelta (la llama).
+function rampAt(colors: string[], t: number): Rgb {
+  if (colors.length === 0) return mix([255, 60, 0], [255, 190, 40], t);
+  if (colors.length === 1) return hexToRgb(colors[0]);
+  const x = Math.max(0, Math.min(1, t)) * (colors.length - 1);
+  const i = Math.min(Math.floor(x), colors.length - 2);
+  return mix(hexToRgb(colors[i]), hexToRgb(colors[i + 1]), x - i);
+}
+
 function hue(h: number): Rgb {
   const f = (n: number) => {
     const k = (n + (((h % 1) + 1) % 1) * 6) % 6;
@@ -51,7 +60,7 @@ export function effectColor(effect: Effect, id: string, pos: number, i: number, 
       return gradientAt(colors, 0).map((x) => x * (0.08 + 0.92 * k)) as Rgb;
     }
     case "rainbow":
-      return hue(t * sp * 0.15 + along * dir);
+      return colors.length >= 2 ? gradientAt(colors, t * sp * 0.15 + along * dir) : hue(t * sp * 0.15 + along * dir);
     case "flow": {
       const stretch = 0.3 + effect.size / 60;
       return gradientAt(colors, along / stretch - t * sp * 0.2 * dir);
@@ -78,7 +87,7 @@ export function effectColor(effect: Effect, id: string, pos: number, i: number, 
     }
     case "fire": {
       const f = 0.55 + 0.45 * Math.sin(t * 9 * sp + i * 1.7 + Math.sin(t * 3 + i));
-      return mix([255, 60, 0], [255, 190, 40], f).map((x) => x * (0.5 + f / 2)) as Rgb;
+      return rampAt(colors, f).map((x) => x * (0.5 + f / 2)) as Rgb;
     }
     // Reactivos: en las miniaturas no hay música ni voz de verdad, así que
     // se simulan (un golpe a 120 BPM, una voz hablando, un ánimo que va y

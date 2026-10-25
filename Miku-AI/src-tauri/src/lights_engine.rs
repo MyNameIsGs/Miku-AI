@@ -454,6 +454,20 @@ fn gradient_at(colors: &[[u8; 3]], t: f32) -> [f32; 3] {
     }
 }
 
+// Un punto (0 a 1, sin dar la vuelta) del primer color al último: la
+// llama va de sus colores oscuros a los claros.
+fn ramp_at(colors: &[[u8; 3]], t: f32) -> [f32; 3] {
+    match colors.len() {
+        0 => mix([255.0, 60.0, 0.0], [255.0, 190.0, 40.0], t),
+        1 => to_f(colors[0]),
+        n => {
+            let x = t.clamp(0.0, 1.0) * (n - 1) as f32;
+            let i = (x.floor() as usize).min(n - 2);
+            mix(to_f(colors[i]), to_f(colors[i + 1]), x - i as f32)
+        }
+    }
+}
+
 fn hue(h: f32) -> [f32; 3] {
     let f = |n: f32| {
         let k = (n + h.rem_euclid(1.0) * 6.0) % 6.0;
@@ -515,6 +529,8 @@ impl Renderer {
                 let k = (pulse(0.1) + 0.65 * pulse(0.32)).min(1.0);
                 gradient_at(colors, 0.0).map(|x| x * (0.08 + 0.92 * k))
             }
+            // Con dos colores o más, los recorre; si no, el espectro entero.
+            "rainbow" if colors.len() >= 2 => gradient_at(colors, t * sp * 0.15 + along * dir),
             "rainbow" => hue(t * sp * 0.15 + along * dir),
             // Degradado animado: los colores se mezclan y corren a lo largo
             // de cada zona (la ola, en cambio, cruza el gabinete entero).
@@ -553,7 +569,7 @@ impl Renderer {
             }
             "fire" => {
                 let f = 0.55 + 0.45 * (t * 9.0 * sp + i as f32 * 1.7 + (t * 3.0 + i as f32).sin()).sin();
-                mix([255.0, 60.0, 0.0], [255.0, 190.0, 40.0], f).map(|x| x * (0.5 + f / 2.0))
+                ramp_at(colors, f).map(|x| x * (0.5 + f / 2.0))
             }
             // Música: pulsa con cada golpe y cambia de color con el
             // siguiente; sin un pulso claro (voz, ruido), sigue el volumen.
