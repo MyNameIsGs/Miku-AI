@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { drawRingThumb } from "../../lib/lightEffects";
 import {
+  BLEND_NAMES,
   CATEGORIES,
   CategoryId,
   EFFECT_KINDS,
   EFFECT_NAMES,
   Effect,
   EffectKind,
+  Layer,
+  LayerBlend,
+  REACTIVE_KINDS,
   Scene,
   categoryEffect,
+  categoryLayers,
+  makeEffect,
   normalizeHex,
 } from "../../lib/lights";
 
@@ -21,6 +27,8 @@ type LightsSceneTabProps = {
   // Cambia el efecto del grupo elegido. `final`: el cambio terminó (soltar
   // un deslizador, un clic): ahí se anota para deshacer.
   onChange: (effect: Effect, final: boolean) => void;
+  // Las capas del grupo elegido (fase 4).
+  onLayersChange: (layers: Layer[], final: boolean) => void;
   recentColors: string[];
   zoneCounts: Record<CategoryId, number>;
 };
@@ -33,6 +41,11 @@ const EFFECT_HINTS: Record<EffectKind, string> = {
   comet: "Un punto con estela; en los ventiladores gira.",
   sparkle: "LEDs al azar que se prenden y apagan.",
   fire: "Parpadeo cálido, como una llama.",
+  music: "Pulsa con cada golpe de lo que suena en la PC y cambia de color.",
+  voice: "Respira con la voz de Miku; rosa cuando escucha, barrido cuando piensa.",
+  mood: "El color de su ánimo, más fuerte cuanto más lo siente.",
+  screen: "El color promedio de la pantalla (ambilight).",
+  notify: "Apagado, salvo un destello con cada aviso. Mejor como capa.",
 };
 
 // Qué ajustes usa cada efecto (el resto se esconde).
@@ -44,6 +57,19 @@ const USES: Record<EffectKind, { speed: boolean; size: boolean; direction: boole
   comet: { speed: true, size: true, direction: true, colors: true },
   sparkle: { speed: false, size: true, direction: false, colors: true },
   fire: { speed: true, size: false, direction: false, colors: false },
+  music: { speed: false, size: true, direction: false, colors: true },
+  voice: { speed: false, size: false, direction: false, colors: true },
+  mood: { speed: false, size: false, direction: false, colors: true },
+  screen: { speed: false, size: false, direction: false, colors: false },
+  notify: { speed: false, size: false, direction: false, colors: true },
+};
+
+const BADGES: Partial<Record<EffectKind, string>> = {
+  music: "REACTIVO",
+  screen: "REACTIVO",
+  notify: "REACTIVO",
+  voice: "MIKU",
+  mood: "MIKU",
 };
 
 const PALETTE = [
@@ -61,8 +87,9 @@ const MAX_COLORS = 6;
 
 // Pestaña Escena del panel Luces (PLAN.md §3.2): los grupos a la
 // izquierda, y a la derecha el efecto del grupo elegido con sus ajustes.
-export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColors, zoneCounts }: LightsSceneTabProps) {
+export function LightsSceneTab({ scene, selected, onSelect, onChange, onLayersChange, recentColors, zoneCounts }: LightsSceneTabProps) {
   const effect = categoryEffect(scene, selected);
+  const layers = categoryLayers(scene, selected);
   const uses = USES[effect.kind];
   // Qué color del degradado se está editando.
   const [stop, setStop] = useState(0);
@@ -71,6 +98,8 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
   effectRef.current = effect;
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   useEffect(() => setStop(0), [selected]);
 
@@ -83,7 +112,20 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
       for (const [id, canvas] of thumbs.current) {
         const [kind, value] = id.split(":");
         if (kind === "group") drawRingThumb(canvas, categoryEffect(sceneRef.current, value as Selection), id, t);
-        else drawRingThumb(canvas, { ...effectRef.current, kind: value as EffectKind, brightness: 100 }, id, t);
+        else if (kind === "layer") {
+          const layer = categoryLayers(sceneRef.current, selectedRef.current)[Number(value)];
+          if (layer) drawRingThumb(canvas, layer.effect, id, t);
+        } else
+          drawRingThumb(
+            canvas,
+            {
+              ...effectRef.current,
+              kind: value as EffectKind,
+              brightness: 100,
+            },
+            id,
+            t,
+          );
       }
       raf = requestAnimationFrame(loop);
     };
@@ -106,8 +148,16 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
   };
 
   const groups: { id: Selection; name: string; count: number }[] = [
-    { id: "all", name: "Todo", count: Object.values(zoneCounts).reduce((a, b) => a + b, 0) },
-    ...CATEGORIES.map((c) => ({ id: c.id, name: c.name, count: zoneCounts[c.id] })),
+    {
+      id: "all",
+      name: "Todo",
+      count: Object.values(zoneCounts).reduce((a, b) => a + b, 0),
+    },
+    ...CATEGORIES.map((c) => ({
+      id: c.id,
+      name: c.name,
+      count: zoneCounts[c.id],
+    })),
   ];
 
   return (
@@ -144,20 +194,32 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
             </span>
             <span className="lights-hint-small">{EFFECT_HINTS[effect.kind]}</span>
           </div>
-          <div className="lights-gallery" role="radiogroup" aria-label="Efecto">
-            {EFFECT_KINDS.map((kind) => (
-              <button
-                key={kind}
-                role="radio"
-                aria-checked={effect.kind === kind}
-                className={`lights-fx ${effect.kind === kind ? "sel" : ""}`}
-                onClick={() => update({ kind })}
-              >
-                <canvas ref={thumbRef(`fx:${kind}`)} width={144} height={88} aria-hidden="true" />
-                <span>{EFFECT_NAMES[kind]}</span>
-              </button>
-            ))}
-          </div>
+          {[
+            {
+              label: "BÁSICOS",
+              kinds: EFFECT_KINDS.filter((k) => !REACTIVE_KINDS.includes(k)),
+            },
+            { label: "REACTIVOS", kinds: REACTIVE_KINDS },
+          ].map((section) => (
+            <div key={section.label}>
+              <span className="lights-colors-label">{section.label}</span>
+              <div className="lights-gallery" role="radiogroup" aria-label={`Efectos ${section.label.toLowerCase()}`}>
+                {section.kinds.map((kind) => (
+                  <button
+                    key={kind}
+                    role="radio"
+                    aria-checked={effect.kind === kind}
+                    className={`lights-fx ${effect.kind === kind ? "sel" : ""}`}
+                    onClick={() => update({ kind })}
+                  >
+                    <canvas ref={thumbRef(`fx:${kind}`)} width={144} height={88} aria-hidden="true" />
+                    <span>{EFFECT_NAMES[kind]}</span>
+                    {BADGES[kind] && <span className="lights-fx-badge">{BADGES[kind]}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
 
           <div className="lights-section">
             <span className="lights-module-title">
@@ -167,10 +229,25 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
               {uses.speed && (
                 <Slider label="Velocidad" value={effect.speed} min={1} max={100} onChange={(v, f) => update({ speed: v }, f)} />
               )}
-              <Slider label="Brillo del grupo" value={effect.brightness} min={0} max={100} suffix="%" onChange={(v, f) => update({ brightness: v }, f)} />
+              <Slider
+                label="Brillo del grupo"
+                value={effect.brightness}
+                min={0}
+                max={100}
+                suffix="%"
+                onChange={(v, f) => update({ brightness: v }, f)}
+              />
               {uses.size && (
                 <Slider
-                  label={effect.kind === "sparkle" ? "Cantidad" : effect.kind === "comet" ? "Estela" : "Ancho"}
+                  label={
+                    effect.kind === "sparkle"
+                      ? "Cantidad"
+                      : effect.kind === "comet"
+                        ? "Estela"
+                        : effect.kind === "music"
+                          ? "Duración del golpe"
+                          : "Ancho"
+                  }
                   value={effect.size}
                   min={1}
                   max={100}
@@ -201,7 +278,9 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
               <div className="lights-gradient-row">
                 <div
                   className="lights-gradient"
-                  style={{ background: colors.length > 1 ? `linear-gradient(90deg, ${colors.join(", ")})` : colors[0] }}
+                  style={{
+                    background: colors.length > 1 ? `linear-gradient(90deg, ${colors.join(", ")})` : colors[0],
+                  }}
                   title="Doble clic agrega un color"
                   onDoubleClick={() => {
                     if (colors.length >= MAX_COLORS) return;
@@ -213,7 +292,10 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
                     <button
                       key={i}
                       className={`lights-stop ${i === current ? "sel" : ""}`}
-                      style={{ left: `${colors.length > 1 ? (i / (colors.length - 1)) * 100 : 50}%`, ["--c" as string]: c }}
+                      style={{
+                        left: `${colors.length > 1 ? (i / (colors.length - 1)) * 100 : 50}%`,
+                        ["--c" as string]: c,
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setStop(i);
@@ -259,7 +341,13 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
                   />
                 ))}
                 <label className="lights-chip lights-chip-custom" title="Otro color">
-                  <input type="color" value={colors[current].toLowerCase()} onChange={(e) => setColor(e.target.value, false)} onBlur={(e) => setColor(e.target.value)} aria-label="Otro color" />
+                  <input
+                    type="color"
+                    value={colors[current].toLowerCase()}
+                    onChange={(e) => setColor(e.target.value, false)}
+                    onBlur={(e) => setColor(e.target.value)}
+                    aria-label="Otro color"
+                  />
                 </label>
                 <HexInput value={colors[current]} onCommit={(hex) => setColor(hex)} />
               </div>
@@ -267,14 +355,223 @@ export function LightsSceneTab({ scene, selected, onSelect, onChange, recentColo
                 <div className="lights-colors">
                   <span className="lights-colors-label">RECIENTES</span>
                   {recentColors.map((c) => (
-                    <button key={c} className="lights-chip" style={{ background: c }} onClick={() => setColor(c)} aria-label={`Reciente ${c}`} title={c} />
+                    <button
+                      key={c}
+                      className="lights-chip"
+                      style={{ background: c }}
+                      onClick={() => setColor(c)}
+                      aria-label={`Reciente ${c}`}
+                      title={c}
+                    />
                   ))}
                 </div>
               )}
             </div>
           )}
+          <LayersEditor layers={layers} onChange={onLayersChange} thumbRef={thumbRef} />
         </section>
       </div>
+    </div>
+  );
+}
+
+// Capas del grupo (PLAN.md §2): efectos encima del de base. La más útil es
+// "Avisos" (un destello con cada correo o recordatorio, invisible el resto
+// del tiempo); por eso tiene su propio botón.
+function LayersEditor({
+  layers,
+  onChange,
+  thumbRef,
+}: {
+  layers: Layer[];
+  onChange: (layers: Layer[], final: boolean) => void;
+  thumbRef: (id: string) => (el: HTMLCanvasElement | null) => void;
+}) {
+  const set = (i: number, patch: Partial<Layer>, final = true) =>
+    onChange(
+      layers.map((l, k) => (k === i ? { ...l, ...patch } : l)),
+      final,
+    );
+  const move = (i: number, d: number) => {
+    const next = [...layers];
+    const [l] = next.splice(i, 1);
+    next.splice(i + d, 0, l);
+    onChange(next, true);
+  };
+  const add = (layer: Layer) => onChange([...layers, layer], true);
+  const hasNotify = layers.some((l) => l.effect.kind === "notify");
+  return (
+    <div className="lights-section">
+      <div className="lights-editor-head">
+        <span className="lights-module-title">
+          <span className="lights-n">04</span>CAPAS
+        </span>
+        <div className="lights-zone-actions">
+          {!hasNotify && (
+            <button
+              className="m-btn m-btn-small"
+              onClick={() =>
+                add({
+                  effect: makeEffect("notify", ["#F0508F"]),
+                  opacity: 100,
+                  blend: "normal",
+                  visible: true,
+                })
+              }
+              title="Un destello rosa con cada aviso (correo, recordatorio, evento)"
+            >
+              + Avisos
+            </button>
+          )}
+          <button
+            className="m-btn m-btn-small"
+            onClick={() =>
+              add({
+                effect: makeEffect("sparkle", ["#FFFFFF"], { size: 25 }),
+                opacity: 60,
+                blend: "add",
+                visible: true,
+              })
+            }
+          >
+            + Capa
+          </button>
+        </div>
+      </div>
+      {layers.length === 0 ? (
+        <span className="lights-hint-small lights-left">Sin capas: solo el efecto de base.</span>
+      ) : (
+        <ul className="lights-layers">
+          {[...layers].reverse().map((layer, r) => {
+            const i = layers.length - 1 - r;
+            return (
+              <li key={i} className={`lights-layer ${layer.visible ? "" : "hidden"}`}>
+                <canvas ref={thumbRef(`layer:${i}`)} width={60} height={60} aria-hidden="true" />
+                <select
+                  className="lights-select lights-layer-fx"
+                  value={layer.effect.kind}
+                  onChange={(e) =>
+                    set(i, {
+                      effect: {
+                        ...layer.effect,
+                        kind: e.target.value as EffectKind,
+                      },
+                    })
+                  }
+                  aria-label="Efecto de la capa"
+                >
+                  {EFFECT_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {EFFECT_NAMES[k]}
+                    </option>
+                  ))}
+                </select>
+                <label
+                  className="lights-chip lights-layer-color"
+                  style={{ background: layer.effect.colors[0] ?? "#FFFFFF" }}
+                  title="Color de la capa"
+                >
+                  <input
+                    type="color"
+                    value={(layer.effect.colors[0] ?? "#FFFFFF").toLowerCase()}
+                    onChange={(e) =>
+                      set(
+                        i,
+                        {
+                          effect: {
+                            ...layer.effect,
+                            colors: [normalizeHex(e.target.value), ...layer.effect.colors.slice(1)],
+                          },
+                        },
+                        false,
+                      )
+                    }
+                    onBlur={(e) =>
+                      set(i, {
+                        effect: {
+                          ...layer.effect,
+                          colors: [normalizeHex(e.target.value), ...layer.effect.colors.slice(1)],
+                        },
+                      })
+                    }
+                    aria-label="Color de la capa"
+                  />
+                </label>
+                <div className="lights-layer-bottom">
+                  <select
+                    className="lights-select"
+                    value={layer.blend}
+                    onChange={(e) => set(i, { blend: e.target.value as LayerBlend })}
+                    aria-label="Cómo se mezcla"
+                  >
+                    {(Object.keys(BLEND_NAMES) as LayerBlend[]).map((b) => (
+                      <option key={b} value={b}>
+                        {BLEND_NAMES[b]}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={layer.opacity}
+                    onChange={(e) => set(i, { opacity: Number(e.target.value) }, false)}
+                    onPointerUp={(e) =>
+                      set(i, {
+                        opacity: Number((e.target as HTMLInputElement).value),
+                      })
+                    }
+                    aria-label="Opacidad de la capa"
+                    title={`Opacidad ${Math.round(layer.opacity)}%`}
+                  />
+                  <div className="lights-layer-actions">
+                    <button
+                      className="m-btn m-btn-small m-btn-icon"
+                      onClick={() => move(i, 1)}
+                      disabled={i === layers.length - 1}
+                      aria-label="Subir la capa"
+                      title="Subir"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="m-btn m-btn-small m-btn-icon"
+                      onClick={() => move(i, -1)}
+                      disabled={i === 0}
+                      aria-label="Bajar la capa"
+                      title="Bajar"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      className={`m-btn m-btn-small m-btn-icon ${layer.visible ? "" : "on"}`}
+                      onClick={() => set(i, { visible: !layer.visible })}
+                      aria-pressed={!layer.visible}
+                      aria-label={layer.visible ? "Ocultar la capa" : "Mostrar la capa"}
+                      title={layer.visible ? "Ocultar" : "Mostrar"}
+                    >
+                      {layer.visible ? "◉" : "○"}
+                    </button>
+                    <button
+                      className="m-btn m-btn-small m-btn-icon"
+                      onClick={() =>
+                        onChange(
+                          layers.filter((_, k) => k !== i),
+                          true,
+                        )
+                      }
+                      aria-label="Quitar la capa"
+                      title="Quitar"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

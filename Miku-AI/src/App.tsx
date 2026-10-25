@@ -53,7 +53,8 @@ import { AppLauncherPanel } from "./components/AppLauncherPanel";
 import { QuirksPanel } from "./components/QuirksPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { LightsPanel } from "./components/LightsPanel";
-import { restoreLights } from "./lib/lights";
+import { restoreLights, sendMikuState, sendMood, sendVoiceLevel } from "./lib/lights";
+import { getCurrentMood, getMoodLevel, onMoodChange } from "./lib/mood";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { TopBar, Presence } from "./components/TopBar";
 import { usePresenceMotion } from "./hooks/usePresenceMotion";
@@ -632,6 +633,27 @@ function App() {
         : isThinking
           ? "thinking"
           : "idle";
+
+  // Luces (fase 4, ver lib/lights.ts y lights_engine.rs): el motor de
+  // efectos sabe si Miku escucha, piensa o habla, cuánto suena su voz y su
+  // ánimo, para los efectos "Su voz" y "Su ánimo".
+  useEffect(() => {
+    sendMikuState(avatarState);
+    if (avatarState !== "speaking") return;
+    const id = window.setInterval(() => sendVoiceLevel(speech.speechLevelRef.current), 50);
+    return () => clearInterval(id);
+  }, [avatarState]);
+  useEffect(() => {
+    const send = () => getCurrentMood().then((mood) => sendMood(mood, getMoodLevel()));
+    send();
+    // El nivel se va apagando solo con el tiempo: se manda cada minuto.
+    const id = window.setInterval(send, 60_000);
+    const off = onMoodChange(() => send());
+    return () => {
+      clearInterval(id);
+      off();
+    };
+  }, []);
 
   // Creado antes que useIdleQuirks: idea #21, los pendientes vencidos que
   // el loop idle decide mencionar ya no hablan directo -- se encolan acá,

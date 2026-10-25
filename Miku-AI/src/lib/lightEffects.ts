@@ -70,6 +70,29 @@ export function effectColor(effect: Effect, id: string, pos: number, i: number, 
       const f = 0.55 + 0.45 * Math.sin(t * 9 * sp + i * 1.7 + Math.sin(t * 3 + i));
       return mix([255, 60, 0], [255, 190, 40], f).map((x) => x * (0.5 + f / 2)) as Rgb;
     }
+    // Reactivos: en las miniaturas no hay música ni voz de verdad, así que
+    // se simulan (un golpe a 120 BPM, una voz hablando, un ánimo que va y
+    // viene, una pantalla que cambia, un aviso cada tanto).
+    case "music": {
+      const beat = Math.floor(t / 0.5);
+      const pulse = Math.exp(-((t % 0.5) * 1000) / (60 + effect.size * 4));
+      return gradientAt(colors, beat / Math.max(1, colors.length) + (pos + along * 0.2) * 0.3).map((x) => x * (0.08 + 0.92 * pulse)) as Rgb;
+    }
+    case "voice": {
+      const v = Math.abs(Math.sin(t * 7) * Math.sin(t * 2.3));
+      return gradientAt(colors, 0).map((x) => x * (0.15 + 0.85 * v)) as Rgb;
+    }
+    case "mood": {
+      const k = (Math.sin(t * 0.6) + 1) / 2;
+      return mix(gradientAt(colors, 0), [255, 209, 102], k).map((x) => x * (0.45 + 0.45 * k)) as Rgb;
+    }
+    case "screen":
+      return mix(hue(t * 0.05), [128, 128, 128], 0.35);
+    case "notify": {
+      const ms = (t % 2.5) * 1000;
+      const amount = ms < 1400 ? Math.abs(Math.sin((ms / 1400) * Math.PI * 4)) * (1 - ms / 1400) : 0;
+      return gradientAt(colors.length ? colors : ["#F0508F"], 0).map((x) => x * amount) as Rgb;
+    }
     default:
       return gradientAt(colors, along);
   }

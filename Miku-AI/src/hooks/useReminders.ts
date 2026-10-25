@@ -1,5 +1,6 @@
 import { RefObject, useEffect } from "react";
 import { registerReminderFireHandler, checkDueReminders, loadReminders, reminderSpeech } from "../lib/reminders/store";
+import { flashLights } from "../lib/lights";
 
 type UseRemindersParams = {
   // Misma firma que speech.speak -- ya encolada (ver useSpeech.ts), así
@@ -24,6 +25,8 @@ export function useReminders({
     // D6: recupera los que quedaron guardados al cerrar la app.
     loadReminders();
     registerReminderFireHandler((reminder) => {
+      // Las luces con una capa "Avisos" destellan (ver lib/lights.ts).
+      flashLights();
       speak(
         reminderSpeech(reminder),
         voicePitchRef.current,

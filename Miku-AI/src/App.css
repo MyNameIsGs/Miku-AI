@@ -3260,7 +3260,7 @@ a:hover {
 /* Escena */
 .lights-scene {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: 164px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -3724,4 +3724,97 @@ a:hover {
 }
 .lights-map-side p {
   margin: 4px 0 0;
+}
+
+/* Luces, fase 4: efectos reactivos y capas. */
+.lights-fx-badge {
+  font-family: var(--m-font-label);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--m-pink);
+}
+.lights-gallery + .lights-colors-label,
+.lights-editor .lights-colors-label {
+  display: block;
+  margin: 8px 0 6px;
+}
+.lights-left {
+  text-align: left;
+}
+.lights-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+}
+.lights-layers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lights-layer {
+  /* Dos líneas: arriba qué efecto y su color; abajo cómo se mezcla, su
+     opacidad y los botones (en una sola, el selector de efecto quedaba
+     sin espacio). */
+  display: grid;
+  grid-template-columns: 28px minmax(140px, 1fr) 26px;
+  grid-template-areas:
+    "thumb fx color"
+    "blend blend blend";
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(157, 185, 182, 0.14);
+  border-radius: 10px;
+}
+.lights-layer.hidden {
+  opacity: 0.5;
+}
+.lights-layer canvas {
+  grid-area: thumb;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.m-panel .lights-select {
+  height: 28px;
+  min-width: 0;
+  padding: 0 6px;
+  font-family: var(--m-font-body);
+  font-size: 12px;
+  color: var(--m-text);
+  background: #0f1c1f;
+  border: 1px solid var(--m-line-soft);
+  border-radius: 8px;
+}
+.lights-layer-fx {
+  grid-area: fx;
+}
+.lights-layer-color {
+  grid-area: color;
+}
+.lights-layer-bottom {
+  grid-area: blend;
+  display: grid;
+  grid-template-columns: 110px minmax(60px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.lights-layer-actions {
+  display: flex;
+  gap: 4px;
+}
+.lights-layer-actions .m-btn-icon {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
 }

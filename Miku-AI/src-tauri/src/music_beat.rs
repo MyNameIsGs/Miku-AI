@@ -231,6 +231,9 @@ pub fn escuchar_musica(window: WebviewWindow) {
     std::thread::spawn(move || loop {
         let result = unsafe {
             capture_loop(&mut |beat| {
+                // Las luces que siguen la música leen lo mismo desde Rust
+                // (ver lights_engine.rs): funciona con Miku escondida.
+                crate::lights_engine::music_beat(&beat);
                 let _ = window.emit("musica", beat);
             })
         };

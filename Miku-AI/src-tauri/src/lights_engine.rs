@@ -58,6 +58,30 @@ fn default_direction() -> f32 {
 pub struct Group {
     pub zones: Vec<String>,
     pub effect: Effect,
+    // Fase 4: efectos apilados encima del de base (el de abajo primero).
+    #[serde(default)]
+    pub layers: Vec<Layer>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Layer {
+    pub effect: Effect,
+    // 0-100.
+    #[serde(default = "default_brightness")]
+    pub opacity: f32,
+    // normal | add | multiply | screen
+    #[serde(default = "default_blend")]
+    pub blend: String,
+    #[serde(default = "yes")]
+    pub visible: bool,
+}
+
+fn default_blend() -> String {
+    "normal".into()
+}
+fn yes() -> bool {
+    true
 }
 
 #[derive(Deserialize, Serialize, Clone, Default)]
@@ -172,6 +196,11 @@ static STATE: Mutex<EngineState> = Mutex::new(EngineState {
 });
 static STARTED: AtomicBool = AtomicBool::new(false);
 static STOPPED: AtomicBool = AtomicBool::new(false);
+// La PC se está suspendiendo o apagando (pedido de Sebastián: que las luces
+// no se queden prendidas): el motor no manda nada hasta que despierte.
+static SUSPENDED: AtomicBool = AtomicBool::new(false);
+static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+static POWER_WATCH_STARTED: AtomicBool = AtomicBool::new(false);
 
 const PREVIEW_EVERY: Duration = Duration::from_millis(50);
 const RECONNECT_AFTER: Duration = Duration::from_secs(3);
@@ -182,6 +211,155 @@ const REFRESH_EVERY: Duration = Duration::from_secs(2);
 // Medido en la PC de Sebastián: en la placa (IT5711) el cambio de modo se
 // procesa después y apagaba el conector ARGB que se acababa de pintar.
 const AFTER_MODE_CHANGE: Duration = Duration::from_millis(400);
+
+// --- Señales para los efectos reactivos (fase 4) ---
+//
+// Las escriben otros: el analizador de música (music_beat.rs) desde Rust,
+// y la voz, el estado y el ánimo de Miku y los avisos desde el frontend
+// (lib/lights.ts). El motor las lee una vez por cuadro.
+
+struct SignalInputs {
+    music: Option<(crate::music_beat::MusicBeat, Instant)>,
+    voice: f32,
+    voice_at: Option<Instant>,
+    miku_state: String,
+    mood: [u8; 3],
+    mood_strength: f32,
+    flash: Option<([u8; 3], Instant)>,
+    screen: [f32; 3],
+}
+
+static SIGNALS: Mutex<SignalInputs> = Mutex::new(SignalInputs {
+    music: None,
+    voice: 0.0,
+    voice_at: None,
+    miku_state: String::new(),
+    mood: [57, 197, 187],
+    mood_strength: 0.0,
+    flash: None,
+    screen: [0.0, 0.0, 0.0],
+});
+// El ambilight solo captura la pantalla mientras algún efecto la usa.
+static SCREEN_WANTED: AtomicBool = AtomicBool::new(false);
+static SCREEN_STARTED: AtomicBool = AtomicBool::new(false);
+
+const FLASH_MS: f32 = 1400.0;
+// Sin novedades de la voz por esto, se da por callada.
+const VOICE_STALE: Duration = Duration::from_millis(400);
+
+// Las señales de este cuadro, ya calculadas.
+#[derive(Clone)]
+struct Signals {
+    // 0-1: cae después de cada golpe de la música.
+    beat_pulse: f32,
+    // Cuántos golpes van: para cambiar de color con cada uno.
+    beat_count: f32,
+    // Volumen de lo que suena, 0-1.
+    music_level: f32,
+    music_confident: bool,
+    voice: f32,
+    miku_state: String,
+    mood: [f32; 3],
+    mood_strength: f32,
+    screen: [f32; 3],
+    // Color del destello de aviso y cuánto se ve ahora (0-1).
+    flash: ([f32; 3], f32),
+}
+
+impl Default for Signals {
+    fn default() -> Self {
+        Signals {
+            beat_pulse: 0.0,
+            beat_count: 0.0,
+            music_level: 0.0,
+            music_confident: false,
+            voice: 0.0,
+            miku_state: "idle".into(),
+            mood: [57.0, 197.0, 187.0],
+            mood_strength: 0.0,
+            screen: [0.0, 0.0, 0.0],
+            flash: ([240.0, 80.0, 143.0], 0.0),
+        }
+    }
+}
+
+fn read_signals(now: Instant, decay_ms: f32) -> Signals {
+    let s = SIGNALS.lock().unwrap();
+    let mut out = Signals::default();
+    if let Some((beat, at)) = &s.music {
+        let since_estimate = now.duration_since(*at).as_secs_f32() * 1000.0;
+        let period = 60_000.0 / beat.bpm.max(30.0);
+        let since_beat = (beat.last_beat_ms_ago + since_estimate).rem_euclid(period);
+        out.beat_pulse = (-since_beat / decay_ms.max(40.0)).exp();
+        out.beat_count = ((beat.last_beat_ms_ago + since_estimate) / period).floor();
+        out.music_level = (beat.level * 4.0).clamp(0.0, 1.0);
+        out.music_confident = beat.confidence > 0.3 && since_estimate < 2000.0;
+        if since_estimate > 2000.0 {
+            out.music_level = 0.0;
+        }
+    }
+    let fresh_voice = s.voice_at.map(|at| now.duration_since(at) < VOICE_STALE).unwrap_or(false);
+    out.voice = if fresh_voice { s.voice.clamp(0.0, 1.0) } else { 0.0 };
+    if !s.miku_state.is_empty() {
+        out.miku_state = s.miku_state.clone();
+    }
+    out.mood = to_f(s.mood);
+    out.mood_strength = s.mood_strength.clamp(0.0, 1.0);
+    out.screen = s.screen;
+    if let Some((color, at)) = s.flash {
+        let ms = now.duration_since(at).as_secs_f32() * 1000.0;
+        if ms < FLASH_MS {
+            // Dos pulsos que se apagan.
+            let pulse = ((ms / FLASH_MS) * std::f32::consts::PI * 4.0).sin().abs();
+            out.flash = (to_f(color), pulse * (1.0 - ms / FLASH_MS));
+        }
+    }
+    out
+}
+
+// Promedio de colores de la pantalla principal, unas 8 veces por segundo,
+// solo mientras un efecto "screen" esté en uso.
+fn start_screen_sampler() {
+    if SCREEN_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(|| loop {
+        if !SCREEN_WANTED.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(500));
+            continue;
+        }
+        let monitors = xcap::Monitor::all().unwrap_or_default();
+        let primary = monitors.iter().find(|m| m.is_primary().unwrap_or(false)).or(monitors.first());
+        if let Some(image) = primary.and_then(|m| m.capture_image().ok()) {
+            let (w, h) = image.dimensions();
+            let step = 24;
+            let (mut sum, mut n) = ([0f64; 3], 0f64);
+            for y in (0..h).step_by(step) {
+                for x in (0..w).step_by(step) {
+                    let p = image.get_pixel(x, y).0;
+                    sum[0] += p[0] as f64;
+                    sum[1] += p[1] as f64;
+                    sum[2] += p[2] as f64;
+                    n += 1.0;
+                }
+            }
+            if n > 0.0 {
+                let avg = [sum[0] / n, sum[1] / n, sum[2] / n].map(|x| x as f32);
+                // Más saturado: el promedio de una pantalla tiende al gris.
+                let gray = (avg[0] + avg[1] + avg[2]) / 3.0;
+                let vivid = avg.map(|x| (gray + (x - gray) * 1.8).clamp(0.0, 255.0));
+                let mut s = SIGNALS.lock().unwrap();
+                s.screen = mix(s.screen, vivid, 0.5);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(120));
+    });
+}
+
+// Lo llama music_beat.rs con cada estimación (unas 4 por segundo).
+pub fn music_beat(beat: &crate::music_beat::MusicBeat) {
+    SIGNALS.lock().unwrap().music = Some((beat.clone(), Instant::now()));
+}
 
 // Una zona ya resuelta contra lo que ve OpenRGB ahora.
 struct ResolvedZone {
@@ -262,7 +440,20 @@ impl Renderer {
         (self.rng >> 40) as f32 / (1u64 << 24) as f32
     }
 
-    fn color(&mut self, effect: &Effect, zone_key: &str, pos: f32, i: usize, n: usize, t: f32) -> [f32; 3] {
+    // El color de un LED y cuánto se ve (alpha 0-1: solo "notify" es
+    // transparente cuando no hay aviso, para usarlo como capa).
+    #[allow(clippy::too_many_arguments)]
+    fn color(&mut self, effect: &Effect, zone_key: &str, pos: f32, i: usize, n: usize, t: f32, sig: &Signals) -> ([f32; 3], f32) {
+        if effect.kind == "notify" {
+            let (color, amount) = sig.flash;
+            let c = if effect.colors.is_empty() { color } else { to_f(effect.colors[0]) };
+            return (c, amount);
+        }
+        (self.solid(effect, zone_key, pos, i, n, t, sig), 1.0)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn solid(&mut self, effect: &Effect, zone_key: &str, pos: f32, i: usize, n: usize, t: f32, sig: &Signals) -> [f32; 3] {
         let sp = effect.speed.max(1.0) / 50.0;
         let along = if n > 1 { i as f32 / n as f32 } else { 0.0 };
         let dir = if effect.direction < 0.0 { -1.0 } else { 1.0 };
@@ -309,6 +500,39 @@ impl Renderer {
                 let f = 0.55 + 0.45 * (t * 9.0 * sp + i as f32 * 1.7 + (t * 3.0 + i as f32).sin()).sin();
                 mix([255.0, 60.0, 0.0], [255.0, 190.0, 40.0], f).map(|x| x * (0.5 + f / 2.0))
             }
+            // Música: pulsa con cada golpe y cambia de color con el
+            // siguiente; sin un pulso claro (voz, ruido), sigue el volumen.
+            "music" => {
+                let c = gradient_at(colors, sig.beat_count / colors.len().max(1) as f32 + (pos + along * 0.2) * 0.3);
+                let k = if sig.music_confident { sig.beat_pulse.max(sig.music_level * 0.35) } else { sig.music_level };
+                c.map(|x| x * (0.08 + 0.92 * k))
+            }
+            // La voz de Miku: hablando, el brillo sigue su voz; escuchando,
+            // rosa que respira; pensando, un barrido turquesa; en reposo,
+            // su color tenue.
+            "voice" => {
+                let base = gradient_at(colors, 0.0);
+                match sig.miku_state.as_str() {
+                    "speaking" => base.map(|x| x * (0.15 + 0.85 * sig.voice)),
+                    "listening" => [240.0, 80.0, 143.0].map(|x| x * (0.35 + 0.35 * ((t * 4.0).sin() + 1.0))),
+                    "thinking" => {
+                        let head = (t * 0.9).rem_euclid(1.0);
+                        let d = (along - head).rem_euclid(1.0).min((head - along).rem_euclid(1.0));
+                        [57.0, 197.0, 187.0].map(|x| x * (0.15 + 0.85 * (1.0 - d * 5.0).max(0.0)))
+                    }
+                    _ => base.map(|x| x * 0.25),
+                }
+            }
+            // Su ánimo: el color de su ánimo, más fuerte cuanto más lo
+            // siente, con una respiración lenta.
+            "mood" => {
+                let neutral = gradient_at(colors, 0.0);
+                let c = mix(neutral, sig.mood, sig.mood_strength);
+                let k = 0.35 + 0.55 * sig.mood_strength + 0.1 * (t * 0.8).sin();
+                c.map(|x| x * k)
+            }
+            // Ambilight: el color promedio de la pantalla.
+            "screen" => sig.screen,
             // "static" y cualquiera desconocido: el degradado quieto.
             _ => gradient_at(colors, along),
         }
@@ -319,7 +543,19 @@ fn scale(c: [f32; 3], k: f32) -> [u8; 3] {
     c.map(|x| (x * k).round().clamp(0.0, 255.0) as u8)
 }
 
+fn blend(base: [f32; 3], top: [f32; 3], alpha: f32, mode: &str) -> [f32; 3] {
+    let a = alpha.clamp(0.0, 1.0);
+    let mixed = match mode {
+        "add" => [0, 1, 2].map(|c| (base[c] + top[c]).min(255.0)),
+        "multiply" => [0, 1, 2].map(|c| base[c] * top[c] / 255.0),
+        "screen" => [0, 1, 2].map(|c| 255.0 - (255.0 - base[c]) * (255.0 - top[c]) / 255.0),
+        _ => top,
+    };
+    mix(base, mixed, a)
+}
+
 // Un cuadro: el color de cada LED de cada zona que tiene algo que hacer.
+#[allow(clippy::too_many_arguments)]
 fn render(
     renderer: &mut Renderer,
     scene: &Scene,
@@ -327,11 +563,12 @@ fn render(
     overrides: &BTreeMap<String, Vec<[u8; 3]>>,
     resolved: &Resolved,
     t: f32,
+    sig: &Signals,
 ) -> HashMap<String, Vec<[u8; 3]>> {
     let mut frame = HashMap::new();
     let total = resolved.order.len().max(1) as f32;
+    let master = if global.on { global.brightness / 100.0 } else { 0.0 };
     for group in &scene.groups {
-        let k = if global.on { global.brightness / 100.0 * group.effect.brightness / 100.0 } else { 0.0 };
         for key in &group.zones {
             let Some(zone) = resolved.zones.get(key) else { continue };
             if zone.leds == 0 {
@@ -349,7 +586,15 @@ fn render(
                     let (fan, i, n) = map_led(p, zone.leds, &options);
                     // Cada ventilador un poco más allá en el mapa: la ola
                     // pasa de uno al siguiente.
-                    let c = scale(renderer.color(&group.effect, key, pos + fan as f32 * 0.06, i, n, t), k);
+                    let pos = pos + fan as f32 * 0.06;
+                    let (base, alpha) = renderer.color(&group.effect, key, pos, i, n, t, sig);
+                    let mut c = base.map(|x| x * alpha * group.effect.brightness / 100.0);
+                    for layer in group.layers.iter().filter(|l| l.visible) {
+                        let (top, a) = renderer.color(&layer.effect, key, pos, i, n, t, sig);
+                        let top = top.map(|x| x * layer.effect.brightness / 100.0);
+                        c = blend(c, top, a * layer.opacity / 100.0, &layer.blend);
+                    }
+                    let c = scale(c, master);
                     [0, 1, 2].map(|ch| (c[ch] as f32 * options.gain[ch].clamp(0.0, 1.0)).round() as u8)
                 })
                 .collect();
@@ -363,6 +608,22 @@ fn render(
         }
     }
     frame
+}
+
+fn uses_kind(scene: &Scene, kind: &str) -> bool {
+    scene.groups.iter().any(|g| g.effect.kind == kind || g.layers.iter().any(|l| l.visible && l.effect.kind == kind))
+}
+
+// Lo rápido que se apaga el pulso de la música: el "tamaño" del primer
+// efecto música que haya.
+fn music_decay(scene: &Scene) -> f32 {
+    scene
+        .groups
+        .iter()
+        .flat_map(|g| std::iter::once(&g.effect).chain(g.layers.iter().map(|l| &l.effect)))
+        .find(|e| e.kind == "music")
+        .map(|e| 60.0 + e.size * 4.0)
+        .unwrap_or(220.0)
 }
 
 #[derive(Serialize, Clone)]
@@ -425,6 +686,13 @@ async fn run() {
             tokio::time::sleep(frame_time).await;
             continue;
         };
+        if SUSPENDED.load(Ordering::SeqCst) || SHUTTING_DOWN.load(Ordering::SeqCst) {
+            // La conexión puede no sobrevivir a la suspensión: al despertar
+            // se abre una nueva.
+            link = None;
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            continue;
+        }
         if link.is_none() {
             let opened = async {
                 let mut conn = openrgb::connect().await?;
@@ -467,7 +735,13 @@ async fn run() {
             sent.clear();
         }
         let (conn, resolved) = link.as_mut().unwrap();
-        let frame = render(&mut renderer, &scene, &global, &overrides, resolved, t);
+        let wants_screen = uses_kind(&scene, "screen");
+        SCREEN_WANTED.store(wants_screen, Ordering::SeqCst);
+        if wants_screen {
+            start_screen_sampler();
+        }
+        let signals = read_signals(now, music_decay(&scene));
+        let frame = render(&mut renderer, &scene, &global, &overrides, resolved, t, &signals);
 
         let mut failed = false;
         for (key, colors) in &frame {
@@ -506,6 +780,117 @@ pub fn start(app: AppHandle) {
     if !STARTED.swap(true, Ordering::SeqCst) {
         tauri::async_runtime::spawn(run());
     }
+    start_power_watch();
+}
+
+// Todas las zonas que maneja Miku, apagadas. Corto y con tiempo límite: se
+// llama justo antes de que Windows suspenda o apague, cuando hay un par de
+// segundos nada más.
+fn lights_off_now() {
+    let scene = STATE.lock().unwrap().scene.clone();
+    let Some(scene) = scene else { return };
+    let finish = async move {
+        let mut conn = openrgb::connect().await?;
+        let (_, resolved) = read_devices(&mut conn).await?;
+        let off = Global { on: false, ..Global::default() };
+        let mut renderer = Renderer { rng: 1, sparkles: HashMap::new() };
+        let frame = render(&mut renderer, &scene, &off, &BTreeMap::new(), &resolved, 0.0, &Signals::default());
+        for (key, colors) in &frame {
+            let zone = &resolved.zones[key];
+            conn.send(zone.device, openrgb::UPDATEZONELEDS, &openrgb::zone_leds_payload(zone.zone, colors)).await?;
+        }
+        use tokio::io::AsyncWriteExt;
+        let _ = conn.stream.flush().await;
+        Ok::<(), String>(())
+    };
+    let result = tauri::async_runtime::block_on(async { tokio::time::timeout(Duration::from_millis(1500), finish).await });
+    if let Ok(Err(e)) = result {
+        eprintln!("[LUCES] No se pudieron apagar: {e}");
+    }
+}
+
+// Avisos de energía de Windows: una ventana invisible de nivel superior
+// (las ventanas solo-mensajes no reciben estos avisos) con su propio bucle.
+// - Suspender (PBT_APMSUSPEND): luces apagadas y el motor quieto.
+// - Despertar (PBT_APMRESUMEAUTOMATIC / PBT_APMRESUMESUSPEND): el motor
+//   vuelve a conectar y redibuja la escena.
+// - Cerrar sesión o apagar (WM_QUERYENDSESSION): luces apagadas.
+fn start_power_watch() {
+    if POWER_WATCH_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(|| unsafe {
+        use windows::core::w;
+        use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+        use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW, TranslateMessage, MSG,
+            PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, WINDOW_EX_STYLE, WM_ENDSESSION,
+            WM_POWERBROADCAST, WM_QUERYENDSESSION, WNDCLASSW, WS_OVERLAPPED,
+        };
+
+        unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+            match msg {
+                WM_POWERBROADCAST => {
+                    match wparam.0 as u32 {
+                        PBT_APMSUSPEND => {
+                            SUSPENDED.store(true, Ordering::SeqCst);
+                            lights_off_now();
+                        }
+                        PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMESUSPEND => {
+                            SUSPENDED.store(false, Ordering::SeqCst);
+                        }
+                        _ => {}
+                    }
+                    LRESULT(1)
+                }
+                WM_QUERYENDSESSION => {
+                    if !SHUTTING_DOWN.swap(true, Ordering::SeqCst) {
+                        lights_off_now();
+                    }
+                    LRESULT(1)
+                }
+                WM_ENDSESSION => {
+                    // wparam = 0: se canceló el apagado; las luces vuelven.
+                    if wparam.0 == 0 {
+                        SHUTTING_DOWN.store(false, Ordering::SeqCst);
+                    }
+                    LRESULT(0)
+                }
+                _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+            }
+        }
+
+        let Ok(module) = GetModuleHandleW(None) else { return };
+        let class = WNDCLASSW { lpfnWndProc: Some(proc), hInstance: module.into(), lpszClassName: w!("MikuLucesEnergia"), ..Default::default() };
+        if RegisterClassW(&class) == 0 {
+            eprintln!("[LUCES] No se pudo registrar la ventana de avisos de energía.");
+            return;
+        }
+        let created = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            w!("MikuLucesEnergia"),
+            w!("Miku luces"),
+            WS_OVERLAPPED,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(module.into()),
+            None,
+        );
+        if created.is_err() {
+            eprintln!("[LUCES] No se pudo crear la ventana de avisos de energía.");
+            return;
+        }
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    });
 }
 
 // Lo llama rgb_redimensionar_zona: cambió la cantidad de LEDs de una zona.
@@ -518,6 +903,15 @@ pub fn devices_changed() {
 // congeladas en el último cuadro de un efecto.
 pub fn on_exit() {
     STOPPED.store(true, Ordering::SeqCst);
+    // Si es Windows el que se apaga, las luces se apagan (ya lo hizo el
+    // aviso de energía, pero por las dudas); si es Miku la que se cierra,
+    // quedan en el color fijo de la escena.
+    let windows_closing = SHUTTING_DOWN.load(Ordering::SeqCst)
+        || unsafe { windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_SHUTTINGDOWN) } != 0;
+    if windows_closing {
+        lights_off_now();
+        return;
+    }
     let (scene, global) = {
         let state = STATE.lock().unwrap();
         (state.scene.clone(), state.global.clone())
@@ -533,6 +927,7 @@ pub fn on_exit() {
                 .groups
                 .iter()
                 .map(|g| Group {
+                    layers: Vec::new(),
                     zones: g.zones.clone(),
                     effect: Effect {
                         kind: "static".into(),
@@ -546,7 +941,7 @@ pub fn on_exit() {
             excluded: scene.excluded.clone(),
         };
         let mut renderer = Renderer { rng: 1, sparkles: HashMap::new() };
-        let frame = render(&mut renderer, &still, &global, &BTreeMap::new(), &resolved, 0.0);
+        let frame = render(&mut renderer, &still, &global, &BTreeMap::new(), &resolved, 0.0, &Signals::default());
         for (key, colors) in &frame {
             let zone = &resolved.zones[key];
             conn.send(zone.device, openrgb::UPDATEZONELEDS, &openrgb::zone_leds_payload(zone.zone, colors)).await?;
@@ -593,6 +988,36 @@ pub fn luces_vista_previa(activa: bool) {
     STATE.lock().unwrap().preview = activa;
 }
 
+// --- Señales que manda el frontend (ver lib/lights.ts) ---
+
+// Nivel de la voz de Miku mientras habla (0-1, el mismo que mueve su boca).
+#[tauri::command]
+pub fn luces_voz(nivel: f32) {
+    let mut s = SIGNALS.lock().unwrap();
+    s.voice = nivel;
+    s.voice_at = Some(Instant::now());
+}
+
+// idle | listening | thinking | speaking
+#[tauri::command]
+pub fn luces_estado_miku(estado: String) {
+    SIGNALS.lock().unwrap().miku_state = estado;
+}
+
+// El color de su ánimo y cuánto lo siente (0-1).
+#[tauri::command]
+pub fn luces_animo(color: [u8; 3], fuerza: f32) {
+    let mut s = SIGNALS.lock().unwrap();
+    s.mood = color;
+    s.mood_strength = fuerza;
+}
+
+// Un aviso (correo, recordatorio, evento): destello en las capas "notify".
+#[tauri::command]
+pub fn luces_destello(color: Option<[u8; 3]>) {
+    SIGNALS.lock().unwrap().flash = Some((color.unwrap_or([240, 80, 143]), Instant::now()));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -604,10 +1029,32 @@ mod tests {
     #[test]
     fn el_estatico_es_el_degradado_quieto() {
         let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
-        let a = r.color(&effect("static"), "z", 0.0, 0, 8, 0.0);
-        let b = r.color(&effect("static"), "z", 0.0, 0, 8, 5.0);
+        let a = r.color(&effect("static"), "z", 0.0, 0, 8, 0.0, &Signals::default()).0;
+        let b = r.color(&effect("static"), "z", 0.0, 0, 8, 5.0, &Signals::default()).0;
         assert_eq!(a, b);
         assert_eq!(scale(a, 1.0), [57, 197, 187]);
+    }
+
+    #[test]
+    fn el_aviso_es_transparente_sin_destello_y_las_capas_mezclan() {
+        let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
+        let (_, alpha) = r.color(&effect("notify"), "z", 0.0, 0, 8, 0.0, &Signals::default());
+        assert_eq!(alpha, 0.0);
+        let flashing = Signals { flash: ([255.0, 0.0, 0.0], 1.0), ..Signals::default() };
+        let (c, alpha) = r.color(&Effect { colors: vec![], ..effect("notify") }, "z", 0.0, 0, 8, 0.0, &flashing);
+        assert_eq!((c, alpha), ([255.0, 0.0, 0.0], 1.0));
+        assert_eq!(blend([100.0, 100.0, 100.0], [200.0, 0.0, 0.0], 0.5, "normal"), [150.0, 50.0, 50.0]);
+        assert_eq!(blend([200.0, 200.0, 200.0], [100.0, 100.0, 100.0], 1.0, "add"), [255.0, 255.0, 255.0]);
+    }
+
+    #[test]
+    fn la_musica_pulsa_con_el_golpe() {
+        let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
+        let on_beat = Signals { beat_pulse: 1.0, music_confident: true, ..Signals::default() };
+        let between = Signals { beat_pulse: 0.0, music_confident: true, ..Signals::default() };
+        let a = r.color(&effect("music"), "z", 0.0, 0, 8, 0.0, &on_beat).0;
+        let b = r.color(&effect("music"), "z", 0.0, 0, 8, 0.0, &between).0;
+        assert!(a[1] > b[1] * 5.0);
     }
 
     #[test]
@@ -632,8 +1079,8 @@ mod tests {
     #[test]
     fn la_ola_se_mueve_con_el_tiempo() {
         let mut r = Renderer { rng: 1, sparkles: HashMap::new() };
-        let a = r.color(&effect("wave"), "z", 0.3, 0, 8, 0.0);
-        let b = r.color(&effect("wave"), "z", 0.3, 0, 8, 0.7);
+        let a = r.color(&effect("wave"), "z", 0.3, 0, 8, 0.0, &Signals::default()).0;
+        let b = r.color(&effect("wave"), "z", 0.3, 0, 8, 0.7, &Signals::default()).0;
         assert_ne!(scale(a, 1.0), scale(b, 1.0));
     }
 }

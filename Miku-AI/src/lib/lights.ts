@@ -30,7 +30,23 @@ export type RgbDevice = {
   activeMode: number;
 };
 
-export const EFFECT_KINDS = ["static", "breathe", "rainbow", "wave", "comet", "sparkle", "fire"] as const;
+export const EFFECT_KINDS = [
+  "static",
+  "breathe",
+  "rainbow",
+  "wave",
+  "comet",
+  "sparkle",
+  "fire",
+  // Reactivos (fase 4): la música de la PC, la voz y el ánimo de Miku, la
+  // pantalla, y los avisos (transparente salvo el destello: para capas).
+  "music",
+  "voice",
+  "mood",
+  "screen",
+  "notify",
+] as const;
+export const REACTIVE_KINDS: EffectKind[] = ["music", "voice", "mood", "screen", "notify"];
 export type EffectKind = (typeof EFFECT_KINDS)[number];
 
 export const EFFECT_NAMES: Record<EffectKind, string> = {
@@ -41,6 +57,11 @@ export const EFFECT_NAMES: Record<EffectKind, string> = {
   comet: "Cometa",
   sparkle: "Destellos",
   fire: "Fuego",
+  music: "Música",
+  voice: "Su voz",
+  mood: "Su ánimo",
+  screen: "Pantalla",
+  notify: "Avisos",
 };
 
 export type Effect = {
@@ -55,7 +76,12 @@ export type Effect = {
 // `category`: grupo del panel (ver CATEGORIES). Sin category, es una zona
 // con su propio efecto (un color elegido a mano en Dispositivos), que se
 // dibuja encima de su grupo. El motor no mira estos campos.
-export type LightGroup = { zones: string[]; effect: Effect; category?: CategoryId };
+export type LightGroup = { zones: string[]; effect: Effect; category?: CategoryId; layers?: Layer[] };
+
+// Un efecto apilado encima del de base del grupo (fase 4).
+export type LayerBlend = "normal" | "add" | "multiply" | "screen";
+export type Layer = { effect: Effect; opacity: number; blend: LayerBlend; visible: boolean };
+export const BLEND_NAMES: Record<LayerBlend, string> = { normal: "Normal", add: "Sumar", multiply: "Multiplicar", screen: "Aclarar" };
 // Cómo está armada una zona de verdad (fase 3, ver ZoneOptions en
 // lights_engine.rs): ventiladores encadenados en un conector, dónde está
 // el LED 1 de cada uno, el sentido, y la corrección de color (0 a 1 por
@@ -124,7 +150,11 @@ export async function saveLightsState(state: LightsState) {
 
 function toEngine(scene: Scene) {
   return {
-    groups: scene.groups.map((g) => ({ zones: g.zones, effect: { ...g.effect, colors: g.effect.colors.map(hexToRgb) } })),
+    groups: scene.groups.map((g) => ({
+      zones: g.zones,
+      effect: { ...g.effect, colors: g.effect.colors.map(hexToRgb) },
+      layers: (g.layers ?? []).map((l) => ({ ...l, effect: { ...l.effect, colors: l.effect.colors.map(hexToRgb) } })),
+    })),
     positions: scene.positions,
     zones: scene.zones ?? {},
     excluded: scene.excluded ?? [],
@@ -244,6 +274,37 @@ export function withCategoryEffect(scene: Scene, category: CategoryId | "all", e
       .filter((g) => g.category || !g.zones.some((z) => touched.has(z))),
   };
 }
+
+export function categoryLayers(scene: Scene, category: CategoryId | "all"): Layer[] {
+  const id = category === "all" ? "fans" : category;
+  return scene.groups.find((g) => g.category === id)?.layers ?? [];
+}
+
+export function withCategoryLayers(scene: Scene, category: CategoryId | "all", layers: Layer[]): Scene {
+  const ids = category === "all" ? CATEGORIES.map((c) => c.id) : [category];
+  return { ...scene, groups: scene.groups.map((g) => (g.category && ids.includes(g.category) ? { ...g, layers } : g)) };
+}
+
+// --- Señales para los efectos reactivos (ver lights_engine.rs) ---
+
+// El color de cada ánimo para el efecto "Su ánimo". Por ahora fijos;
+// la fase 6 deja que los elija ella.
+export const MOOD_COLORS: Record<string, string> = {
+  happy: "#FFD166",
+  angry: "#FF3B3B",
+  sad: "#2F6BFF",
+  relaxed: "#3DDC84",
+  neutral: "#39C5BB",
+};
+const MOOD_STRENGTH: Record<string, number> = { neutral: 0, un_poco: 0.35, normal: 0.7, muy: 1 };
+
+const quiet = (p: Promise<unknown>) => p.catch(() => {});
+export const sendVoiceLevel = (level: number) => quiet(invoke("luces_voz", { nivel: level }));
+export const sendMikuState = (state: string) => quiet(invoke("luces_estado_miku", { estado: state }));
+export const sendMood = (mood: string, level: string) =>
+  quiet(invoke("luces_animo", { color: hexToRgb(MOOD_COLORS[mood] ?? MOOD_COLORS.neutral), fuerza: MOOD_STRENGTH[level] ?? 0 }));
+// Destello en las capas "Avisos" (correo, recordatorio, evento).
+export const flashLights = (hex?: string) => quiet(invoke("luces_destello", { color: hex ? hexToRgb(hex) : null }));
 
 export function categoryEffect(scene: Scene, category: CategoryId | "all"): Effect {
   const id = category === "all" ? "fans" : category;

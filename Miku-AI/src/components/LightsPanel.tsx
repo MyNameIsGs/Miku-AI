@@ -22,6 +22,7 @@ import {
   sendScene,
   setPreview,
   withCategoryEffect,
+  withCategoryLayers,
   zoneKey,
   zonesByCategory,
 } from "../lib/lights";
@@ -311,7 +312,15 @@ export function LightsPanel({ onClose, motion }: LightsPanelProps) {
           </div>
         )}
         {devices && devices.length > 0 && scene && tab === "escena" && (
-          <LightsSceneTab scene={scene} selected={group} onSelect={setGroup} onChange={changeGroupEffect} recentColors={recent} zoneCounts={zoneCounts} />
+          <LightsSceneTab
+            scene={scene}
+            selected={group}
+            onSelect={setGroup}
+            onChange={changeGroupEffect}
+            onLayersChange={(layers, final) => changeScene(withCategoryLayers(scene, group, layers), final)}
+            recentColors={recent}
+            zoneCounts={zoneCounts}
+          />
         )}
         {devices && devices.length > 0 && scene && tab === "dispositivos" && (
           <LightsDevicesTab

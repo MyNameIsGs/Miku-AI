@@ -1,4 +1,5 @@
 import { RefObject, useRef } from "react";
+import { flashLights } from "../lib/lights";
 import { NOTIFICATION_DIGEST_INTERVAL_MS } from "../config/constants";
 import { shouldHoldAnnouncements } from "../lib/quietHours";
 
@@ -30,6 +31,8 @@ export function useNotificationDigest({
 
   function queueAnnouncement(text: string) {
     pendingRef.current.push(text);
+    // Las luces con una capa "Avisos" destellan (ver lib/lights.ts).
+    flashLights();
   }
 
   // Se llama desde onBeforeRender con el "now" del frame -- mismo patrón
