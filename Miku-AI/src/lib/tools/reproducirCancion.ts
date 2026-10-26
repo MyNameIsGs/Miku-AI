@@ -35,7 +35,13 @@ export const reproducirCancion: ToolDefinition = {
         return `No encontré ninguna canción para "${consulta}".`;
       }
       const top = tracks[0];
-      await playTrack(top);
+      const result = await playTrack(top);
+      if (result.kind === "queued_behind") {
+        return `Sebastián tenía canciones en la cola de Spotify, así que "${top.name}" de ${top.artists} quedó esperando detrás de ellas (no se pueden saltar sin perder las suyas). Avísale.`;
+      }
+      if (result.kind === "album_fallback") {
+        return `Reproduciendo "${top.name}" de ${top.artists}, pero dentro de su álbum: al terminar va a seguir el resto. Para que suene sola, Sebastián tiene que reconectar Spotify desde Config (falta un permiso nuevo). Avísale.`;
+      }
       return `Reproduciendo "${top.name}" de ${top.artists}.`;
     } catch (err) {
       return `Error al reproducir en Spotify: ${

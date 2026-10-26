@@ -12,8 +12,10 @@ const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/callback`;
 // búsqueda pública de Spotify apenas encuentra contenido privado del
 // usuario. Si esto se agrega DESPUÉS de que Sebastián ya conectó Spotify,
 // el token viejo no va a tener el permiso nuevo -- hace falta reconectar.
+// playlist-modify-private: la playlist propia de Miku de una sola canción
+// (ver playTrack en api.ts), agregado 2026-10-25.
 const SCOPES =
-  "user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative";
+  "user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative playlist-modify-private";
 const STORE_KEY = "spotifyTokens";
 
 export type SpotifyTokens = {

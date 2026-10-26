@@ -1,3 +1,4 @@
+import { load } from "@tauri-apps/plugin-store";
 import { getValidAccessToken } from "./auth";
 
 export type SpotifyTrack = {
@@ -136,7 +137,9 @@ export async function findPlaylist(query: string): Promise<SpotifyPlaylist | nul
   const normalized = query.trim().toLowerCase();
   if (!normalized) return null;
 
-  const mine = await listMyPlaylists();
+  // Sin la playlist de una canción de Miku (ver playTrack): "la playlist
+  // de Miku" tiene que encontrar "Miku y Teto", no esa.
+  const mine = (await listMyPlaylists()).filter((p) => p.name !== MIKU_PLAYLIST_NAME);
   const ownMatch = mine.find((p) => p.name.toLowerCase().includes(normalized));
   if (ownMatch) return ownMatch;
 
@@ -240,17 +243,124 @@ async function playWithDeviceFallback(body: Record<string, unknown>): Promise<vo
   }
 }
 
-// La app de escritorio de Spotify acepta { uris: [canción] } con un 204
-// pero no la reproduce: corta lo que sonaba y deja el reproductor vacío
-// (probado 2026-10-25 contra la API real, con el dispositivo inactivo y
-// activo; context_uri sí arranca). Por eso la canción se pone dentro de su
-// álbum, empezando en ella -- al terminar sigue el resto del álbum. Sin
-// álbum conocido queda el camino viejo.
-export async function playTrack(track: SpotifyTrack): Promise<void> {
-  if (track.albumUri) {
+// La app de escritorio de Spotify (desde la actualización del
+// 2026-10-23, versión 1.306) acepta { uris: [canción] } con un 204 pero no
+// la reproduce: corta lo que sonaba y deja el reproductor vacío. Probado
+// contra la API real con seis variantes (device_id, position_ms, varias
+// uris, offset, transferir antes...), todas igual; solo arranca lo que va
+// dentro de un contexto, o lo que entra por la cola. Por eso:
+// - Si ya está sonando algo: se encola y se salta a ella. Al terminar
+//   vuelve lo que sonaba.
+// - Si no: se toca la playlist privada de Miku, que se vacía y queda solo
+//   con esta canción -- al terminar se para (o sigue la reproducción
+//   automática de Spotify, como antes).
+// - Sin el permiso de editar playlists (token de antes de 2026-10-25): el
+//   álbum de la canción empezando en ella, y se avisa que hay que
+//   reconectar.
+export type PlayTrackResult =
+  | { kind: "now" }
+  | { kind: "queued_behind" }
+  | { kind: "album_fallback" };
+
+const MIKU_PLAYLIST_STORE_KEY = "spotifyMikuPlaylistId";
+const MIKU_PLAYLIST_NAME = "Miku – sonando ahora";
+
+class MissingPlaylistScopeError extends Error {}
+
+async function isSomethingPlaying(): Promise<boolean> {
+  const response = await spotifyFetch("/me/player");
+  if (response.status !== 200) return false;
+  const data = await response.json();
+  return data.is_playing === true && data.item != null;
+}
+
+// La API no distingue en /me/player/queue lo que encoló el usuario de lo
+// que sigue del álbum/playlist, así que no se puede saber de antemano si
+// Sebastián tenía canciones encoladas. Se encola y se mira dónde quedó: si
+// quedó primera, se salta a ella; si quedó detrás de las suyas, se deja ahí
+// (la API no permite sacar algo de la cola, y saltar varias veces se
+// comería las de él).
+async function queueAndSkip(uri: string): Promise<"now" | "queued_behind"> {
+  await addToQueue(uri);
+  let position = -1;
+  for (let attempt = 0; attempt < 3 && position === -1; attempt++) {
+    await sleep(400);
+    const response = await spotifyFetch("/me/player/queue");
+    if (!response.ok) continue;
+    const data = await response.json();
+    const uris: string[] = (data.queue ?? []).map((item: { uri: string }) => item.uri);
+    position = uris.indexOf(uri);
+  }
+  if (position !== 0) return "queued_behind";
+
+  const response = await spotifyFetch("/me/player/next", { method: "POST" });
+  if (!response.ok && response.status !== 204) {
+    throw new Error(`Error al saltar a la canción en Spotify: ${await response.text()}`);
+  }
+  return "now";
+}
+
+async function createMikuPlaylist(): Promise<string> {
+  const response = await spotifyFetch("/me/playlists", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: MIKU_PLAYLIST_NAME,
+      public: false,
+      description: "La usa Miku para poner una canción suelta. Se vacía sola cada vez.",
+    }),
+  });
+  if (response.status === 401 || response.status === 403) throw new MissingPlaylistScopeError();
+  if (!response.ok) {
+    throw new Error(`Error creando la playlist de Miku: ${await response.text()}`);
+  }
+  const id: string = (await response.json()).id;
+  const store = await load(".settings.dat", { autoSave: false });
+  await store.set(MIKU_PLAYLIST_STORE_KEY, id);
+  await store.save();
+  return id;
+}
+
+function replaceMikuPlaylistItems(playlistId: string, uri: string): Promise<Response> {
+  return spotifyFetch(`/playlists/${playlistId}/items`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uris: [uri] }),
+  });
+}
+
+async function playViaMikuPlaylist(uri: string): Promise<void> {
+  const store = await load(".settings.dat", { autoSave: false });
+  let playlistId = (await store.get<string>(MIKU_PLAYLIST_STORE_KEY)) ?? (await createMikuPlaylist());
+
+  let response = await replaceMikuPlaylistItems(playlistId, uri);
+  // Si Sebastián la borró desde Spotify, se crea de nuevo.
+  if (response.status === 404) {
+    playlistId = await createMikuPlaylist();
+    response = await replaceMikuPlaylistItems(playlistId, uri);
+  }
+  if (response.status === 401 || response.status === 403) throw new MissingPlaylistScopeError();
+  if (!response.ok) {
+    throw new Error(`Error preparando la playlist de Miku: ${await response.text()}`);
+  }
+
+  await playWithDeviceFallback({
+    context_uri: `spotify:playlist:${playlistId}`,
+    offset: { uri },
+  });
+}
+
+export async function playTrack(track: SpotifyTrack): Promise<PlayTrackResult> {
+  if (await isSomethingPlaying()) {
+    return { kind: await queueAndSkip(track.uri) };
+  }
+  try {
+    await playViaMikuPlaylist(track.uri);
+    return { kind: "now" };
+  } catch (err) {
+    if (!(err instanceof MissingPlaylistScopeError) || !track.albumUri) throw err;
     await playWithDeviceFallback({ context_uri: track.albumUri, offset: { uri: track.uri } });
-  } else {
-    await playWithDeviceFallback({ uris: [track.uri] });
+    return { kind: "album_fallback" };
   }
 }
 
