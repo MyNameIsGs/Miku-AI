@@ -4,6 +4,8 @@ export type SpotifyTrack = {
   name: string;
   artists: string;
   uri: string;
+  // Para reproducirla dentro de su álbum -- ver playTrack.
+  albumUri?: string;
 };
 
 export type SpotifyPlaylist = {
@@ -59,11 +61,13 @@ export async function searchTracks(query: string, limit = 5): Promise<SpotifyTra
       name: string;
       artists?: { name: string }[];
       uri: string;
+      album?: { uri?: string };
     };
     return {
       name: track.name,
       artists: (track.artists ?? []).map((a) => a.name).join(", "),
       uri: track.uri,
+      albumUri: track.album?.uri,
     };
   });
 }
@@ -236,8 +240,18 @@ async function playWithDeviceFallback(body: Record<string, unknown>): Promise<vo
   }
 }
 
-export async function playTrack(uri: string): Promise<void> {
-  await playWithDeviceFallback({ uris: [uri] });
+// La app de escritorio de Spotify acepta { uris: [canción] } con un 204
+// pero no la reproduce: corta lo que sonaba y deja el reproductor vacío
+// (probado 2026-10-25 contra la API real, con el dispositivo inactivo y
+// activo; context_uri sí arranca). Por eso la canción se pone dentro de su
+// álbum, empezando en ella -- al terminar sigue el resto del álbum. Sin
+// álbum conocido queda el camino viejo.
+export async function playTrack(track: SpotifyTrack): Promise<void> {
+  if (track.albumUri) {
+    await playWithDeviceFallback({ context_uri: track.albumUri, offset: { uri: track.uri } });
+  } else {
+    await playWithDeviceFallback({ uris: [track.uri] });
+  }
 }
 
 // Playlists y álbumes se reproducen como "contexto" (context_uri), no

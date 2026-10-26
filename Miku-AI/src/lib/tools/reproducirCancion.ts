@@ -35,7 +35,7 @@ export const reproducirCancion: ToolDefinition = {
         return `No encontré ninguna canción para "${consulta}".`;
       }
       const top = tracks[0];
-      await playTrack(top.uri);
+      await playTrack(top);
       return `Reproduciendo "${top.name}" de ${top.artists}.`;
     } catch (err) {
       return `Error al reproducir en Spotify: ${
