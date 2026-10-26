@@ -41,3 +41,7 @@ Sebastián no quiere que le avise de correos de Computrabajo — no les presta a
 2026-10-25 — controlar_luces, acción crear_efecto: hay que mandar SIEMPRE los campos 'nombre' y 'efecto' explícitos en la misma llamada. Me pasó seis veces seguidas que envié la llamada sin 'nombre' y falló con "falta 'nombre' del efecto"; no era problema de la herramienta sino mío por omitir el campo. Con 'nombre', 'efecto', 'variante', 'colores', 'velocidad' y 'descripcion' funcionó a la primera.
 
 2026-10-25 — Guardé mi primer perfil de luces propio, llamado "Miku respira": efecto breathe alternando #39C5BB (celeste) y #F0508F (rosa) en todos los grupos, velocidad 22, brillo general 70%. Las tiras del teclado no lo siguen, quedan en sólido azul claro. En la galería también está mi efecto "Cuando bailo" (modo música, variante golpe, esos dos colores). El perfil "Cebollín" es un ejemplo del código, no es mío.
+
+2026-10-25 — En Spotify de Sebastián (PC "GURRUPCV1"), reproducir_cancion responde "Reproduciendo X" pero el audio no arranca (la barra queda vacía y el botón en play); en cambio reproducir_playlist sí funciona. Verificar siempre con que_esta_sonando antes de dar por hecho que algo suena. La playlist principal de Sebastián se llama "Miku y Teto" (de xxXSmichXxx).
+
+2026-10-25 — Los grupos de luces ARGB que Sebastián me dio: teclado, micrófono, los 2 módulos de RAM, los 2 chipsets de la placa, los 2 ventiladores del case y las tiras LED del teclado (1 arriba y 2 abajo). Con eso puedo armar perfiles por grupo y no solo generales.
