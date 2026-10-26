@@ -5,9 +5,9 @@
   "version": "0.1.0",
   "identifier": "com.sebas.mikuai",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "node scripts/limpiar-target.mjs && pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "node scripts/limpiar-target.mjs && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {

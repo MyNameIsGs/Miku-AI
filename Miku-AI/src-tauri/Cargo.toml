@@ -12,7 +12,13 @@ edition = "2021"
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "pnpm_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Sin "staticlib": solo sirve para iOS y en Windows dejaba un .lib de ~1,4 GB por compilación.
+crate-type = ["cdylib", "rlib"]
+
+# Las dependencias se compilan sin info de depuración: es la mayor parte del peso de
+# target/debug y nunca se depura dentro de ellas. El código propio la conserva.
+[profile.dev.package."*"]
+debug = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
