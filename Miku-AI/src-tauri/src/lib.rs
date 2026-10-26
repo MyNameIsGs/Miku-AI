@@ -351,6 +351,8 @@ pub fn run() {
             window_control::minimizar_ventana,
             window_control::mover_ventana,
             window_control::modo_foco,
+            window_control::cerrar_aplicacion,
+            window_control::forzar_cierre_aplicacion,
             file_search::buscar_archivos,
             mcp_client::mcp_connect,
             mcp_client::mcp_call_tool,

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { ToolDefinition } from "./types";
 import { getAppLauncherState, findAppByName, areDesktopActionsDisabled } from "./appLauncherStore";
 
@@ -167,6 +168,75 @@ export function buildModoFocoTool(): ToolDefinition {
         return `Listo, modo foco en "${nombre}" -- minimicé ${count} otra${count === 1 ? "" : "s"} ventana${count === 1 ? "" : "s"}.`;
       } catch (err) {
         return `Error al activar el modo foco en "${nombre}": ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  };
+}
+
+// Cerrar apps. El cierre normal es como apretar la X (la app puede
+// preguntar si guardar), así que no pide confirmación. El forzado mata el
+// proceso sin dejar guardar nada -- ese sí pasa por la confirmación de la
+// Tarea 6.5, pero desde execute y no con requiresConfirmation, porque solo
+// aplica cuando forzar=true.
+export function buildCerrarAplicacionTool(): ToolDefinition {
+  const { apps } = getAppLauncherState();
+  const appNames = apps.map((app) => app.name).join(", ");
+
+  return {
+    schema: {
+      type: "function",
+      function: {
+        name: "cerrar_aplicacion",
+        description:
+          apps.length > 0
+            ? `Cierra una aplicación abierta en la PC de Sebastián, por nombre. Por defecto es como apretar la X (la app puede preguntar si guardar). Aplicaciones disponibles ahora mismo: ${appNames}. Usa forzar=true solo si Sebastián lo pide o si el cierre normal no funcionó (por ejemplo, la app quedó colgada o solo vive en la bandeja) -- forzar no deja guardar nada y le pide confirmación a Sebastián.`
+            : "Cierra una aplicación abierta. Ahora mismo no hay ninguna aplicación descubierta -- no llames a esta herramienta.",
+        parameters: {
+          type: "object",
+          properties: {
+            nombre: {
+              type: "string",
+              description: "Nombre exacto de la aplicación, tal como aparece en la lista de disponibles.",
+            },
+            forzar: {
+              type: "boolean",
+              description: "true para terminar el proceso a la fuerza. Por defecto false.",
+            },
+          },
+          required: ["nombre"],
+        },
+      },
+    },
+    execute: async (args) => {
+      if (areDesktopActionsDisabled()) {
+        return "Las acciones del escritorio están desactivadas en este momento (interruptor global apagado, o modo stream activo porque OBS está transmitiendo o grabando).";
+      }
+
+      const nombre = String(args.nombre ?? "").trim();
+      const forzar = args.forzar === true || args.forzar === "true";
+      const resolved = resolveProcessName(nombre);
+      if ("error" in resolved) return resolved.error;
+
+      try {
+        if (!forzar) {
+          const count = await invoke<number>("cerrar_aplicacion", {
+            nombreProceso: resolved.processName,
+          });
+          return `Le pedí a "${nombre}" que se cierre (${count} ventana${count === 1 ? "" : "s"}). Si tenía algo sin guardar, puede que esté preguntando.`;
+        }
+
+        const approved = await ask(
+          `Miku quiere forzar el cierre de "${nombre}". Lo que no esté guardado se pierde.`,
+          { title: "Miku pide confirmación", kind: "warning" },
+        );
+        if (!approved) return "El usuario rechazó esta acción.";
+
+        const count = await invoke<number>("forzar_cierre_aplicacion", {
+          nombreProceso: resolved.processName,
+        });
+        return `Listo, forcé el cierre de "${nombre}" (${count} proceso${count === 1 ? "" : "s"}).`;
+      } catch (err) {
+        return `Error al cerrar "${nombre}": ${err instanceof Error ? err.message : String(err)}`;
       }
     },
   };

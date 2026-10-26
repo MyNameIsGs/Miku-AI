@@ -1,13 +1,16 @@
 use windows::core::BOOL;
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, WPARAM};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
     TH32CS_SNAPPROCESS,
 };
+use windows::Win32::System::Threading::{
+    GetCurrentProcessId, OpenProcess, TerminateProcess, PROCESS_TERMINATE,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindow, GetWindowTextLengthW, GetWindowThreadProcessId, IsIconic,
-    IsWindowVisible, SetWindowPos, ShowWindow, GW_OWNER, SW_MINIMIZE, SW_RESTORE, SWP_NOACTIVATE,
-    SWP_NOZORDER,
+    IsWindowVisible, PostMessageW, SetWindowPos, ShowWindow, GW_OWNER, SW_MINIMIZE, SW_RESTORE,
+    SWP_NOACTIVATE, SWP_NOZORDER, WM_CLOSE,
 };
 use xcap::Monitor;
 
@@ -103,8 +106,9 @@ fn windows_for_process(process_name: &str) -> Vec<HWND> {
 
 // Minimizar/mover no son destructivos (se deshacen en un clic) -- no pasan
 // por la Tarea 6.5 de confirmación humana, mismo criterio que abrir apps.
-// Cerrar una ventana/proceso, si se agrega más adelante, sí debería pasar
-// por ahí.
+// Cerrar: ver cerrar_aplicacion abajo -- el cierre normal es como apretar
+// la X (la app puede preguntar si guardar), solo el forzado pide
+// confirmación (desde el lado TS, ver windowControl.ts).
 
 #[tauri::command]
 pub fn minimizar_ventana(nombre_proceso: String) -> Result<u32, String> {
@@ -194,4 +198,64 @@ pub fn modo_foco(nombre_proceso: String) -> Result<u32, String> {
         minimized += 1;
     }
     Ok(minimized)
+}
+
+// Cierre normal: le manda WM_CLOSE a cada ventana principal de la app, lo
+// mismo que apretar la X -- la app decide (puede preguntar si guardar, o
+// esconderse en la bandeja como Discord/Steam). Devuelve cuántas ventanas
+// recibieron el pedido.
+#[tauri::command]
+pub fn cerrar_aplicacion(nombre_proceso: String) -> Result<u32, String> {
+    let windows = windows_for_process(&nombre_proceso);
+    if windows.is_empty() {
+        let running = !find_pids_by_process_name(&nombre_proceso).is_empty();
+        return Err(if running {
+            format!(
+                "\"{}\" está corriendo pero no tiene ninguna ventana abierta (seguramente está en la bandeja). Solo se puede cerrar forzándola.",
+                nombre_proceso
+            )
+        } else {
+            format!("\"{}\" no está abierta.", nombre_proceso)
+        });
+    }
+
+    for hwnd in &windows {
+        unsafe {
+            let _ = PostMessageW(Some(*hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+    }
+    Ok(windows.len() as u32)
+}
+
+// Cierre forzado: termina todos los procesos con ese nombre, sin dejar que
+// la app guarde nada. Nunca el proceso de la propia Miku.
+#[tauri::command]
+pub fn forzar_cierre_aplicacion(nombre_proceso: String) -> Result<u32, String> {
+    let own_pid = unsafe { GetCurrentProcessId() };
+    let pids: Vec<u32> = find_pids_by_process_name(&nombre_proceso)
+        .into_iter()
+        .filter(|&pid| pid != own_pid)
+        .collect();
+    if pids.is_empty() {
+        return Err(format!("\"{}\" no está abierta.", nombre_proceso));
+    }
+
+    let mut killed = 0;
+    for pid in pids {
+        unsafe {
+            if let Ok(handle) = OpenProcess(PROCESS_TERMINATE, false, pid) {
+                if TerminateProcess(handle, 1).is_ok() {
+                    killed += 1;
+                }
+                let _ = CloseHandle(handle);
+            }
+        }
+    }
+    if killed == 0 {
+        return Err(format!(
+            "No pude terminar \"{}\" (puede que necesite permisos de administrador).",
+            nombre_proceso
+        ));
+    }
+    Ok(killed)
 }

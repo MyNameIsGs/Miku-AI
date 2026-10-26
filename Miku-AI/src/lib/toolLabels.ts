@@ -42,6 +42,7 @@ const LABELS: Record<string, ToolLabel> = {
   abrir_carpeta_de_apps: { category: "APPS", running: "Abriendo la carpeta…", done: "Abrió la carpeta de apps" },
   minimizar_ventana: { category: "APPS", running: "Minimizando la ventana…", done: "Minimizó la ventana" },
   mover_ventana: { category: "APPS", running: "Moviendo la ventana…", done: "Movió la ventana" },
+  cerrar_aplicacion: { category: "APPS", running: "Cerrando la app…", done: "Cerró la app" },
   modo_foco: { category: "APPS", running: "Preparando el modo foco…", done: "Activó el modo foco" },
   escribir_texto: { category: "APPS", running: "Escribiendo…", done: "Escribió el texto" },
   buscar_archivos: { category: "ARCHIVOS", running: "Buscando archivos…", done: "Buscó en tus archivos" },

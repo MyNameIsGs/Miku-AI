@@ -13,7 +13,7 @@ import { ajustarVolumen } from "./ajustarVolumen";
 import { buildAbrirAplicacionTool } from "./abrirAplicacion";
 import { buildAbrirCarpetaDeAppsTool } from "./abrirCarpetaDeApps";
 import { buildCambiarSalidaAudioTool } from "./cambiarSalidaAudio";
-import { buildMinimizarVentanaTool, buildMoverVentanaTool, buildModoFocoTool } from "./windowControl";
+import { buildMinimizarVentanaTool, buildMoverVentanaTool, buildModoFocoTool, buildCerrarAplicacionTool } from "./windowControl";
 import { buildMcpTools } from "./mcpTools";
 import { verPantalla } from "./verPantalla";
 import { anotarPendiente } from "./anotarPendiente";
@@ -83,6 +83,7 @@ const DYNAMIC_TOOL_BUILDERS: (() => ToolDefinition)[] = [
   buildMinimizarVentanaTool,
   buildMoverVentanaTool,
   buildModoFocoTool,
+  buildCerrarAplicacionTool,
 ];
 
 // Tarea 8.2: a diferencia de los builders de arriba (una tool cada uno),
