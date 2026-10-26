@@ -37,6 +37,27 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
+    <!-- Tool poner_recordatorio (data/Recordatorios.kt): alarma exacta.
+         USE_EXACT_ALARM se concede sola desde Android 13 (app de uso
+         personal, no Play Store); SCHEDULE_EXACT_ALARM cubre el 12. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+
+    <!-- Tool abrir_aplicacion (data/ControlTelefono.kt): sin esto, desde
+         Android 11 la lista de apps instaladas viene casi vacía. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:name=".MikuApp"
         android:allowBackup="true"
@@ -93,6 +114,12 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Suena un recordatorio de poner_recordatorio (ver
+             wakeword/RecordatorioReceiver.kt). -->
+        <receiver
+            android:name=".wakeword.RecordatorioReceiver"
+            android:exported="false" />
 
         <service
             android:name=".wakeword.WakeWordService"

@@ -219,6 +219,11 @@ class WakeWordService : Service() {
         if (intent?.action == ACTION_QUICK_LISTEN) {
             onWakeWordDetected()
         }
+        // poner_recordatorio (ver RecordatorioReceiver): Miku lo dice.
+        if (intent?.action == ACTION_REMINDER) {
+            intent.getStringExtra(EXTRA_REMINDER_TEXT)?.let { pendingReminders.add(it) }
+            speakPendingReminders()
+        }
         // «Pausar» desde la notificación (ronda 2 de diseño): lo mismo que
         // apagar el interruptor de «Hey Miku».
         if (intent?.action == ACTION_PAUSE) {
@@ -257,6 +262,7 @@ class WakeWordService : Service() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(backgroundChecksRunnable)
+        mainHandler.removeCallbacks(remindersRunnable)
         stopCapture()
         speechRecognizer?.destroy()
         VoicePlaybackControl.registerSystemTts(null)
@@ -912,6 +918,27 @@ class WakeWordService : Service() {
         }
     }
 
+    /**
+     * Recordatorios que sonaron: se dicen apenas el wake-word está libre --
+     * si hay una charla en curso, se reintenta cada pocos segundos en vez de
+     * hablarle encima (mismo motivo que el chequeo de fondo de arriba).
+     */
+    private val pendingReminders = mutableListOf<String>()
+    private val remindersRunnable = Runnable { speakPendingReminders() }
+
+    private fun speakPendingReminders() {
+        mainHandler.removeCallbacks(remindersRunnable)
+        if (pendingReminders.isEmpty()) return
+        if (capturing && MikuOverlayState.phase.value is MikuOverlayPhase.Idle) {
+            val text = pendingReminders.joinToString(" ")
+            pendingReminders.clear()
+            stopCapture()
+            speakAndReveal("", text)
+        } else {
+            mainHandler.postDelayed(remindersRunnable, REMINDER_RETRY_MS)
+        }
+    }
+
     private fun scheduleBackgroundChecks() {
         mainHandler.postDelayed(backgroundChecksRunnable, BACKGROUND_CHECK_INTERVAL_MS)
     }
@@ -1057,6 +1084,9 @@ class WakeWordService : Service() {
         const val ACTION_QUICK_LISTEN = "com.sebas.mikuai.ACTION_QUICK_LISTEN"
         // «Pausar» de la notificación del servicio: apaga «Hey Miku».
         const val ACTION_PAUSE = "com.sebas.mikuai.ACTION_PAUSE"
+        const val ACTION_REMINDER = "com.sebas.mikuai.ACTION_REMINDER"
+        const val EXTRA_REMINDER_TEXT = "reminder_text"
+        private const val REMINDER_RETRY_MS = 5000L
 
         fun start(context: Context) {
             val intent = Intent(context, WakeWordService::class.java)

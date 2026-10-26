@@ -278,6 +278,101 @@ object Tools {
                 required = emptyList(),
             )
         )
+        // 2026-10-25: tools de desktop que faltaban en el celular, con el
+        // mismo nombre y parámetros que allá (ver LeerMiDiario.kt,
+        // Recordatorios.kt y ControlTelefono.kt).
+        put(
+            buildTool(
+                name = "leer_mi_diario",
+                description = "Lee tu propio diario (lo que escribes cada noche sobre tu día): sin nada, tus últimas entradas; con fecha, la de esa noche; con búsqueda, las que hablan de eso. Úsala cuando quieras recordar lo que escribiste o te pregunten por un día.",
+                properties = JSONObject().apply {
+                    put("fecha", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Opcional. YYYY-MM-DD (calcúlala desde la fecha de hoy si dice \"ayer\" o \"el lunes\").")
+                    })
+                    put("busqueda", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Opcional. Palabras que tendría que tener la entrada.")
+                    })
+                },
+                required = emptyList(),
+            )
+        )
+        put(
+            buildTool(
+                name = "poner_recordatorio",
+                description = "Programa un aviso de corto plazo, en minutos desde ahora -- un timer real, para cosas como 'avísame en 20 minutos' o 'recuérdame en una hora que...'. No la uses para fechas futuras (mañana, la próxima semana, un plazo de días) -- para eso está anotar_pendiente. Suena aunque la app esté cerrada: llega como notificación y, si \"Hey Miku\" está prendido, lo dices en voz alta.",
+                properties = JSONObject().apply {
+                    put("minutos", JSONObject().apply {
+                        put("type", "number")
+                        put("description", "En cuántos minutos, desde ahora, avisar. Ejemplo: 20 para 'en 20 minutos', 60 para 'en una hora'. Máximo 1440 (24 horas) -- para algo más lejano, usa anotar_pendiente en su lugar.")
+                    })
+                    put("mensaje", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "Qué decir cuando se cumpla el tiempo -- una frase corta y natural, como si la dijeras en ese momento (ejemplo: 'ya se enfrió tu café').")
+                    })
+                },
+                required = listOf("minutos", "mensaje"),
+            )
+        )
+        put(
+            buildTool(
+                name = "control_medios",
+                description = "Controla lo que esté sonando en el celular de Sebastián (pausar/reanudar, siguiente o anterior), sin importar la app: Spotify, YouTube, un podcast. Para buscar o elegir qué poner en Spotify, usa las tools de Spotify.",
+                properties = JSONObject().apply {
+                    put("accion", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray(ControlTelefono.ACCIONES_MEDIOS))
+                        put("description", "play_pausa alterna entre reproducir y pausar; siguiente y anterior cambian de pista.")
+                    })
+                },
+                required = listOf("accion"),
+            )
+        )
+        put(
+            buildTool(
+                name = "ajustar_volumen",
+                description = "Sube, baja, silencia, reactiva o fija el volumen multimedia del celular de Sebastián (el de la música y el de tu voz: si lo silencias, no te va a escuchar).",
+                properties = JSONObject().apply {
+                    put("accion", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray(ControlTelefono.ACCIONES_VOLUMEN))
+                        put("description", "'establecer' fija el volumen exacto que venga en 'nivel'. 'subir'/'bajar' lo mueven esa cantidad de puntos porcentuales (10 por defecto si no se especifica 'nivel'). 'silenciar'/'desilenciar' no usan 'nivel'.")
+                    })
+                    put("nivel", JSONObject().apply {
+                        put("type", "number")
+                        put("description", "Porcentaje 0-100. Para 'establecer', el volumen final. Para 'subir'/'bajar', cuánto moverlo. Se ignora en silenciar/desilenciar.")
+                    })
+                },
+                required = listOf("accion"),
+            )
+        )
+        put(
+            buildTool(
+                name = "abrir_url",
+                description = "Abre una página web en el celular de Sebastián (en el navegador, o en su app si es de YouTube, Instagram, etc.).",
+                properties = JSONObject().apply {
+                    put("url", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "La URL completa a abrir, incluyendo https://.")
+                    })
+                },
+                required = listOf("url"),
+            )
+        )
+        put(
+            buildTool(
+                name = "abrir_aplicacion",
+                description = "Abre una app instalada en el celular de Sebastián por su nombre (\"WhatsApp\", \"cámara\", \"YouTube\"). Si no la encuentra, te devuelve la lista de apps instaladas para que elijas el nombre exacto.",
+                properties = JSONObject().apply {
+                    put("nombre", JSONObject().apply {
+                        put("type", "string")
+                        put("description", "El nombre de la app, como aparece en el celular.")
+                    })
+                },
+                required = listOf("nombre"),
+            )
+        )
     }
 
     suspend fun execute(
@@ -288,6 +383,7 @@ object Tools {
         gmail: GmailApi,
         calendar: CalendarApi,
         openRouter: OpenRouterApi,
+        github: GitHubApi,
         context: Context,
     ): String {
         val args = try {
@@ -427,6 +523,12 @@ object Tools {
                         }
                     }
                 }
+                "leer_mi_diario" -> LeerMiDiario.execute(github, args)
+                "poner_recordatorio" -> Recordatorios.execute(context, args)
+                "control_medios" -> ControlTelefono.controlMedios(context, args)
+                "ajustar_volumen" -> ControlTelefono.ajustarVolumen(context, args)
+                "abrir_url" -> ControlTelefono.abrirUrl(context, args)
+                "abrir_aplicacion" -> ControlTelefono.abrirAplicacion(context, args)
                 else -> "Error: no existe una herramienta llamada \"$name\"."
             }
         } catch (e: Exception) {

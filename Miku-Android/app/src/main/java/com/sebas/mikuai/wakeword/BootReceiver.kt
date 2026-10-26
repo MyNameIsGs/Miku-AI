@@ -14,6 +14,8 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        // Las alarmas de poner_recordatorio no sobreviven a un reinicio.
+        com.sebas.mikuai.data.Recordatorios.rescheduleAll(context)
         if (WakeWordPrefs.isEnabled(context)) {
             WakeWordService.start(context)
         }

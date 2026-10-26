@@ -22,10 +22,16 @@ private const val OR_URL = "https://openrouter.ai/api/v1/chat/completions"
 private const val REFERER = "https://github.com/MyNameIsGs/Miku-AI"
 
 // Tope de vueltas de tool calling, mismo valor y mismo motivo que
-// MAX_TOOL_CALL_ROUNDS en lib/openrouter.ts del lado desktop: corta con
-// error en vez de encadenarse indefinidamente si el modelo no da una
-// respuesta final.
-private const val MAX_TOOL_CALL_ROUNDS = 3
+// MAX_TOOL_CALL_ROUNDS en lib/openrouter.ts del lado desktop: con 3 se
+// cortaban pedidos normales (2026-10-25, subido a 8 allá y acá).
+private const val MAX_TOOL_CALL_ROUNDS = 8
+
+// Al pasar el tope no se tira error: una vuelta más sin herramientas, con
+// este aviso, para que conteste con lo que hizo -- mismo texto que
+// OUT_OF_TOOL_ROUNDS_NOTE de desktop (con tool_choice "none" solo, DeepSeek
+// devolvía vacío; con el aviso, 3 de 3 contaron lo hecho y lo que faltó).
+private const val OUT_OF_TOOL_ROUNDS_NOTE =
+    "Ya usaste todas las herramientas que se pueden en este turno. No pidas más: contesta ahora con lo que hiciste y, si quedó algo sin hacer, dilo."
 
 class OpenRouterApi(private val apiKey: String) {
 
@@ -191,13 +197,17 @@ class OpenRouterApi(private val apiKey: String) {
             put(buildMessageJson("user", userMessage, userImageBase64))
         }
 
-        repeat(MAX_TOOL_CALL_ROUNDS) {
+        for (round in 1..MAX_TOOL_CALL_ROUNDS + 1) {
+            val lastRound = round > MAX_TOOL_CALL_ROUNDS
+            val roundMessages = if (!lastRound) messages else JSONArray(messages.toString()).put(
+                JSONObject().apply { put("role", "system"); put("content", OUT_OF_TOOL_ROUNDS_NOTE) }
+            )
             val bodyJson = JSONObject().apply {
                 put("model", MODEL)
                 put("max_tokens", 4000)
-                put("messages", messages)
+                put("messages", roundMessages)
                 put("tools", tools)
-                put("tool_choice", "auto")
+                put("tool_choice", if (lastRound) "none" else "auto")
             }.toString().toRequestBody("application/json".toMediaType())
 
             val request = Request.Builder()
@@ -208,15 +218,20 @@ class OpenRouterApi(private val apiKey: String) {
                 .build()
 
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) throw IOException("OpenRouter ${response.code}")
+            // El motivo real en el error, como en webSearch (antes solo el código).
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IOException("OpenRouter ${response.code}: ${errorDetail(raw)}")
+            val json = JSONObject(raw)
+            if (!json.has("choices")) throw IOException("OpenRouter sin respuesta: ${errorDetail(raw)}")
 
-            val choice = JSONObject(response.body!!.string()).getJSONArray("choices").getJSONObject(0)
+            val choice = json.getJSONArray("choices").getJSONObject(0)
             val message = choice.getJSONObject("message")
             val finishReason = choice.optString("finish_reason")
             val toolCalls = message.optJSONArray("tool_calls")
 
-            if (finishReason != "tool_calls" || toolCalls == null || toolCalls.length() == 0) {
-                return@withContext message.optString("content", "")
+            // En la última vuelta se ignoran (por si el proveedor no respeta "none").
+            if (lastRound || finishReason != "tool_calls" || toolCalls == null || toolCalls.length() == 0) {
+                return@withContext if (message.isNull("content")) "" else message.getString("content")
             }
 
             // Se agrega el mensaje del assistant TAL CUAL vino, con su
@@ -238,6 +253,7 @@ class OpenRouterApi(private val apiKey: String) {
             }
         }
 
-        throw IOException("Se alcanzó el límite de $MAX_TOOL_CALL_ROUNDS vueltas de tool calling sin llegar a una respuesta final.")
+        // No se llega: la última vuelta siempre devuelve.
+        throw IOException("Ciclo de tool calling terminado sin respuesta final.")
     }
 }

@@ -159,7 +159,7 @@ class MikuRepository(ghToken: String, orKey: String, context: Context, prefs: Se
     ) { name, argumentsJson ->
         onToolEvent?.invoke(name, false)
         try {
-            Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi, orApi, appContext)
+            Tools.execute(name, argumentsJson, pendientesRepo, spotifyApi, gmailApi, calendarApi, orApi, ghApi, appContext)
         } finally {
             onToolEvent?.invoke(name, true)
         }
