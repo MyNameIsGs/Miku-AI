@@ -22,6 +22,7 @@ mod tray;
 mod openrgb;
 mod lights_engine;
 mod keyboard_strips;
+mod hardware_temps;
 
 // Tamaño de toda la app (Miku, barra y paneles), pedido de Sebastián: que
 // ocupe menos pantalla. Es el zoom del webview -- el diseño sigue midiendo
@@ -311,6 +312,8 @@ pub fn run() {
             // Luces RGB: el motor de efectos (ver lights_engine.rs) y OpenRGB
             // abierto con su servidor (ver openrgb.rs).
             lights_engine::start(app.handle().clone());
+            // Avisos de sobrecalentamiento (ver hardware_temps.rs).
+            hardware_temps::start(app.handle().clone());
             tauri::async_runtime::spawn(async {
                 if let Err(e) = openrgb::ensure_server().await {
                     eprintln!("[LUCES] {e}");
@@ -362,6 +365,7 @@ pub fn run() {
             active_window::segundos_sin_usar_pc,
             music_beat::escuchar_musica,
             obs_status::obs_estado,
+            hardware_temps::temperaturas,
             click_through::set_click_through,
             click_through::cursor_position,
             game_mode::set_game_mode_enabled,

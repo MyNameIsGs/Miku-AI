@@ -27,6 +27,7 @@ import { useReminders } from "./hooks/useReminders";
 import { useGmailWatcher } from "./hooks/useGmailWatcher";
 import { useCalendarWatcher } from "./hooks/useCalendarWatcher";
 import { useTaskWatcher } from "./hooks/useTaskWatcher";
+import { useTempWatcher } from "./hooks/useTempWatcher";
 import { useNotificationDigest } from "./hooks/useNotificationDigest";
 import { useLoadingPhrase } from "./hooks/useLoadingPhrase";
 import { useAppLauncher } from "./hooks/useAppLauncher";
@@ -702,6 +703,15 @@ function App() {
 
   const taskWatcher = useTaskWatcher({
     queueAnnouncement: notificationDigest.queueAnnouncement,
+  });
+
+  // Avisos de sobrecalentamiento: urgentes, hablan aunque esté escondida
+  // (ver hooks/useTempWatcher.ts).
+  useTempWatcher({
+    speak: speakOnOwn,
+    voicePitchRef,
+    voiceRateRef,
+    isVoiceReady,
   });
 
   const memoryFiles = useMemoryFiles();
