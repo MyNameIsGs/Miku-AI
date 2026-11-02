@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::WebviewWindow;
-use windows::Win32::Foundation::POINT;
-use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+use windows::Win32::Foundation::{HWND, POINT};
+use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, IsWindowVisible};
 
 // Click-through por zonas. setIgnoreCursorEvents vuelve transparente la
 // ventana ENTERA (Windows no permite hacerlo por partes), así que con Miku
@@ -36,6 +36,10 @@ static STATE: Mutex<State> = Mutex::new(State {
     regions: Vec::new(),
 });
 static WATCHER_STARTED: AtomicBool = AtomicBool::new(false);
+// Todo pasa de largo, haya zonas o no: Miku está invisible (escondiéndose o
+// escondida, ver App.tsx). Aparte de `enabled`, que es el bloqueo que elige
+// Sebastián.
+static FORCED: AtomicBool = AtomicBool::new(false);
 
 const POLL_INTERVAL: Duration = Duration::from_millis(30);
 
@@ -70,8 +74,15 @@ fn start_watcher(window: WebviewWindow) {
             let on_screen = window.is_visible().unwrap_or(false)
                 && !window.is_minimized().unwrap_or(false);
             let over_region = enabled && on_screen && cursor_over_region(&window, &regions);
-            let want_ignore = enabled && !over_region;
-            if applied_ignore != Some(want_ignore) {
+            let want_ignore = FORCED.load(Ordering::SeqCst) || (enabled && !over_region);
+            // Nunca con la ventana escondida: Tauri la cree visible (se
+            // esconde por Win32, ver game_mode.rs) y al cambiar esto la
+            // volvía a mostrar -- Miku reaparecía al instante de esconderla
+            // y el atajo ya no la escondía (2026-11-02). Se aplica al volver.
+            let hidden = window
+                .hwnd()
+                .is_ok_and(|h| !unsafe { IsWindowVisible(HWND(h.0)) }.as_bool());
+            if !hidden && applied_ignore != Some(want_ignore) {
                 let _ = window.set_ignore_cursor_events(want_ignore);
                 applied_ignore = Some(want_ignore);
             }
@@ -102,6 +113,14 @@ pub fn set_click_through(window: WebviewWindow, enabled: bool, regions: Vec<Regi
         state.enabled = enabled;
         state.regions = regions;
     }
+    if !WATCHER_STARTED.swap(true, Ordering::SeqCst) {
+        start_watcher(window);
+    }
+}
+
+#[tauri::command]
+pub fn set_click_through_forced(window: WebviewWindow, forced: bool) {
+    FORCED.store(forced, Ordering::SeqCst);
     if !WATCHER_STARTED.swap(true, Ordering::SeqCst) {
         start_watcher(window);
     }

@@ -938,7 +938,8 @@ fn lights_off_now() {
 // - Suspender (PBT_APMSUSPEND): luces apagadas y el motor quieto.
 // - Despertar (PBT_APMRESUMEAUTOMATIC / PBT_APMRESUMESUSPEND): el motor
 //   vuelve a conectar y redibuja la escena.
-// - Cerrar sesión o apagar (WM_QUERYENDSESSION): luces apagadas.
+// - Cerrar sesión o apagar (WM_QUERYENDSESSION): luces apagadas; y cuando
+//   Windows confirma el apagado (WM_ENDSESSION), Miku se cierra.
 fn start_power_watch() {
     if POWER_WATCH_STARTED.swap(true, Ordering::SeqCst) {
         return;
@@ -978,7 +979,16 @@ fn start_power_watch() {
                     // wparam = 0: se canceló el apagado; las luces vuelven.
                     if wparam.0 == 0 {
                         SHUTTING_DOWN.store(false, Ordering::SeqCst);
+                        return LRESULT(0);
                     }
+                    // El apagado sigue: Miku se cierra sola, ya, para no
+                    // quedar en la lista de "esta app impide apagar". Se
+                    // termina el proceso sin pasar por el cierre normal
+                    // (WebView2 puede trabarse desarmándose a esta altura);
+                    // las luces ya se apagaron con WM_QUERYENDSESSION.
+                    crate::kill_voice_server();
+                    use windows::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+                    let _ = TerminateProcess(GetCurrentProcess(), 0);
                     LRESULT(0)
                 }
                 _ => DefWindowProcW(hwnd, msg, wparam, lparam),

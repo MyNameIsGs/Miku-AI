@@ -37,19 +37,63 @@ fn log_to_terminal(msg: String) {
     println!("{}", msg);
 }
 
+// Nombres del exe del servidor de voz: dev (binaries/) e instalada. Con
+// PyInstaller el lanzador y el proceso de Python llevan el mismo nombre.
+#[cfg(target_os = "windows")]
+const VOICE_SERVER_EXES: &[&str] = &["miku-voice-server.exe", "miku-voice-server-x86_64-pc-windows-msvc.exe"];
+
+// Termina el servidor de voz desde el propio proceso, sin lanzar taskkill:
+// al apagar la PC, Windows no deja arrancar procesos nuevos y el taskkill
+// que se lanzaba al salir quedaba colgado ("no se puede detener taskkill"),
+// trabando el apagado (2026-11-02, pedido de Sebastián).
 #[tauri::command]
 fn kill_voice_server() {
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        use std::process::{Command, Stdio};
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let _ = Command::new("taskkill")
-            .args(["/F", "/T", "/IM", "miku-voice-server*"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
-            .status();
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+        for name in VOICE_SERVER_EXES {
+            for pid in window_control::find_pids_by_process_name(name) {
+                unsafe {
+                    if let Ok(handle) = OpenProcess(PROCESS_TERMINATE, false, pid) {
+                        let _ = TerminateProcess(handle, 1);
+                        let _ = CloseHandle(handle);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// El servidor de voz entra a un "job" de Windows que se cierra con la app:
+// si la app muere de cualquier forma (apagado, cierre forzado, un crash),
+// Windows termina el servidor y lo que él lanzó, sin depender de que la app
+// llegue a ejecutar nada al salir. El handle del job se deja abierto a
+// propósito durante toda la vida del proceso.
+#[cfg(target_os = "windows")]
+fn tie_to_app_lifetime(child: &std::process::Child) {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    unsafe {
+        let Ok(job) = CreateJobObjectW(None, windows::core::PCWSTR::null()) else {
+            eprintln!("[VOZ] No se pudo crear el job del servidor de voz.");
+            return;
+        };
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let configured = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if configured.is_err() || AssignProcessToJobObject(job, HANDLE(child.as_raw_handle())).is_err() {
+            eprintln!("[VOZ] No se pudo atar el servidor de voz a la vida de la app.");
+        }
     }
 }
 // git sin ventana de consola: la app es GUI, y sin CREATE_NO_WINDOW cada
@@ -165,7 +209,7 @@ async fn launch_voice_server(app: tauri::AppHandle) -> Result<(), String> {
             return Ok(());
         }
 
-        Command::new(&server_path)
+        let child = Command::new(&server_path)
             .env("SystemRoot", "C:\\Windows")
             .env("SYSTEMROOT", "C:\\Windows")
             .env("PATH", "C:\\Windows\\System32;C:\\Windows;C:\\ffmpeg\\bin")
@@ -178,6 +222,7 @@ async fn launch_voice_server(app: tauri::AppHandle) -> Result<(), String> {
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("Error al lanzar el servidor: {}", e))?;
+        tie_to_app_lifetime(&child);
     }
     Ok(())
 }
@@ -368,6 +413,7 @@ pub fn run() {
             hardware_temps::temperaturas,
             click_through::set_click_through,
             click_through::cursor_position,
+            click_through::set_click_through_forced,
             game_mode::set_game_mode_enabled,
             game_mode::game_mode_hide,
             game_mode::game_mode_show,

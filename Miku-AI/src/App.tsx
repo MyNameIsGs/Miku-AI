@@ -357,6 +357,7 @@ function App() {
   // (game_mode_hide) y vuelve con «Hey Miku» (lo vigila game_mode.rs) o con
   // Ctrl+Shift+H, que alterna: la esconde si está a la vista.
   const [minimizeAnim, setMinimizeAnim] = useState<"hiding" | "appearing" | null>(null);
+  const gameModeRef = useRef<ReturnType<typeof useGameMode> | null>(null);
   const handleMinimize = () => {
     setMinimizeAnim("hiding");
     window.setTimeout(() => {
@@ -366,10 +367,18 @@ function App() {
   };
   // Esconderla si está a la vista, traerla si está escondida: lo usan
   // Ctrl+Shift+H y el clic en su ícono de la bandeja (ver tray.rs).
+  // En pleno juego la trae igual y se queda a la vista (ver summon en
+  // useGameMode.ts); por el ref, porque el atajo se registra una sola vez.
   const toggleHidden = () => {
+    const game = gameModeRef.current;
+    if (game?.hiddenByGame) {
+      game.summon();
+      return;
+    }
     invoke<boolean>("game_mode_is_hidden")
       .then((hidden) => {
         if (!hidden) {
+          game?.release();
           handleMinimize();
           return;
         }
@@ -1140,6 +1149,17 @@ function App() {
       gameBreaks.check().catch(console.error);
     },
   });
+  gameModeRef.current = gameMode;
+
+  // Mientras está invisible (escondiéndose o escondida, por el juego o por
+  // Minimizar) la ventana deja pasar todos los clics, esté bloqueada o no:
+  // una Miku invisible pero con la ventana a la vista se quedaba con los
+  // clics en esa esquina y le sacaba el foco al juego (2026-11-02, Fortnite).
+  const invisible =
+    minimizeAnim === "hiding" || gameMode.visual === "hiding" || gameMode.visual === "hidden";
+  useEffect(() => {
+    invoke("set_click_through_forced", { forced: invisible }).catch(console.error);
+  }, [invisible]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0 && !freeCamera) {

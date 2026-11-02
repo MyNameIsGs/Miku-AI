@@ -37,6 +37,11 @@ export function useGameMode({ busy, onHiddenHeartbeat }: UseGameModeParams) {
   const [enabled, setEnabledState] = useState(true);
   const [game, setGame] = useState<GameState>({ active: false, title: "", processName: "" });
   const [visual, setVisual] = useState<GameVisual>("shown");
+  // Traída a mano (Ctrl+Shift+H o el ícono de la bandeja) en pleno juego:
+  // se queda a la vista hasta que la escondan a mano o termine el juego
+  // (2026-11-02, pedido de Sebastián: antes el atajo mostraba la ventana
+  // pero ella seguía invisible).
+  const [pinned, setPinned] = useState(false);
   const lastBusyAtRef = useRef(0);
   const heartbeatRef = useRef(onHiddenHeartbeat);
   heartbeatRef.current = onHiddenHeartbeat;
@@ -102,8 +107,31 @@ export function useGameMode({ busy, onHiddenHeartbeat }: UseGameModeParams) {
     if (busy) lastBusyAtRef.current = performance.now();
   }, [busy]);
 
+  // El próximo juego vuelve a esconderla solo.
   useEffect(() => {
-    const shouldBeHidden = game.active && !busy;
+    if (!game.active) setPinned(false);
+  }, [game.active]);
+
+  // ¿Está escondida (o escondiéndose) por el juego? Ahí el atajo la trae.
+  const hiddenByGame = game.active && (visual === "hiding" || visual === "hidden");
+
+  function summon() {
+    setPinned(true);
+    if (visual === "hidden") {
+      // Directo y no esperando al efecto: con la ventana oculta, la página
+      // anda frenada.
+      invoke("game_mode_show").catch(console.error);
+      setVisual("appearing");
+    }
+  }
+
+  // La escondieron a mano: el modo juego vuelve a mandar.
+  function release() {
+    setPinned(false);
+  }
+
+  useEffect(() => {
+    const shouldBeHidden = game.active && !busy && !pinned;
 
     if (visual === "shown" && shouldBeHidden) {
       const recentlyBusy = performance.now() - lastBusyAtRef.current < HIDE_DELAY_AFTER_CONVERSATION_MS;
@@ -138,7 +166,7 @@ export function useGameMode({ busy, onHiddenHeartbeat }: UseGameModeParams) {
       const id = window.setTimeout(() => setVisual("shown"), APPEAR_ANIMATION_MS);
       return () => clearTimeout(id);
     }
-  }, [visual, game.active, busy]);
+  }, [visual, game.active, busy, pinned]);
 
-  return { enabled, setEnabled, game, visual };
+  return { enabled, setEnabled, game, visual, hiddenByGame, summon, release };
 }
