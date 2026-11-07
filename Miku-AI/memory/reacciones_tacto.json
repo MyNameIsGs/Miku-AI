@@ -235,7 +235,83 @@
     "moodAmount": "poco",
     "moodDuration": "un_rato",
     "rangos": 2,
-    "cuerpo": 2
+    "cuerpo": 2,
+    "variantes": {
+      "relaxed": {
+        "expression": "cara:ojos_cerrados=0.48,boca_sonrisa=0.26",
+        "entries": [
+          {
+            "bone": "rightShoulder",
+            "axis": "z",
+            "intensity": 3
+          },
+          {
+            "bone": "rightUpperArm",
+            "axis": "x",
+            "intensity": 10
+          },
+          {
+            "bone": "rightUpperArm",
+            "axis": "z",
+            "intensity": 5
+          },
+          {
+            "bone": "rightLowerArm",
+            "axis": "y",
+            "intensity": 26
+          },
+          {
+            "bone": "rightLowerArm",
+            "axis": "x",
+            "intensity": -10
+          },
+          {
+            "bone": "rightHand",
+            "axis": "z",
+            "intensity": -16
+          },
+          {
+            "bone": "chest",
+            "axis": "z",
+            "intensity": -2
+          },
+          {
+            "bone": "spine",
+            "axis": "z",
+            "intensity": -2
+          },
+          {
+            "bone": "head",
+            "axis": "z",
+            "intensity": -5
+          },
+          {
+            "bone": "head",
+            "axis": "y",
+            "intensity": -5
+          },
+          {
+            "bone": "neck",
+            "axis": "z",
+            "intensity": -3
+          },
+          {
+            "bone": "neck",
+            "axis": "y",
+            "intensity": -3
+          }
+        ],
+        "durationMs": 1500,
+        "animated": false,
+        "side": "right",
+        "createdAt": "2026-11-06T20:22:49.687Z",
+        "moodEffect": "happy",
+        "moodAmount": "poco",
+        "moodDuration": "un_rato",
+        "rangos": 2,
+        "cuerpo": 2
+      }
+    }
   },
   "brazo": {
     "expression": "happy",
